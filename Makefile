@@ -1,7 +1,7 @@
 PROJ_NAME=galactic
 PROJ_VERSION=0.1.0
-CFLAGS=-g -Wall -Wextra -Isrc $(OPTFLAGS)
-LIBS=$(OPTLIBS)
+CFLAGS=-g -ggdb -Wall -Wextra -Isrc $(OPTFLAGS)
+LIBS=lib/libuv.a -pthread $(OPTLIBS)
 PREFIX?=/usr/local
 
 SOURCES=$(wildcard src/**/*.c src/*.c)
@@ -15,8 +15,8 @@ TARGET=build/$(PROJ_NAME)-$(PROJ_VERSION)
 # The Target Build
 all: $(TARGET) tests
 
-$(TARGET): build $(OBJECTS)
-	$(CC) $(OBJECTS) -o $(TARGET)
+$(TARGET): build $(SOURCES)
+	$(CC) $(CFLAGS) -o $(TARGET) $(SOURCES) $(LIBS)
 
 build:
 	@mkdir -p build
