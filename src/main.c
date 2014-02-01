@@ -15,6 +15,6 @@ int main() {
   sigact.sa_handler = catcher;
   sigaction(SIGPIPE, &sigact, NULL );
 
-  return http_server_loop();
+  return http_serve();
 }
 

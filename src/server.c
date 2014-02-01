@@ -12,9 +12,8 @@ static long reads = 0;
 static long writes = 0;
 
 void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t* buf) {
-  UNUSED(handle);
   buf->len = suggested_size;
-  buf->base = calloc(suggested_size, 1);
+  buf->base = malloc(suggested_size);
   http_client_data_t *client_data = handle->data;
   client_data->buf = buf;
   allocs++;
@@ -50,6 +49,7 @@ void on_shutdown(uv_shutdown_t* shutdown_req, int status) {
   http_shutdown_data_t *shutdown_data = shutdown_req->data;
   if (status) {
     fprintf(stderr, "shutdown error: %s\n", uv_strerror(status));
+    on_connection_close((uv_handle_t*)shutdown_data->stream);
   } else {
     fprintf(stderr, "closing...\n");
     uv_close((uv_handle_t*)shutdown_data->stream, on_connection_close);
@@ -83,7 +83,7 @@ void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t* buf) {
 
   client_data->bytes_read += nread;
   client_data->read_frame_seq_num++;
-  //fprintf(stderr, "Read %ld bytes (%ld)\n", nread, client_data->read_frame_seq_num);
+  fprintf(stderr, "Read %ld bytes (%ld)\n", nread, client_data->read_frame_seq_num);
 
   uv_write_t *write_req = malloc(sizeof(uv_write_t));
   http_write_req_data_t *write_req_data = malloc(sizeof(http_write_req_data_t));
@@ -132,7 +132,7 @@ void on_new_connection(uv_stream_t *server, int status) {
   }
 }
 
-int http_server_loop() {
+int http_serve() {
   uv_loop_t* loop = uv_default_loop();
 
   uv_tcp_t server;
