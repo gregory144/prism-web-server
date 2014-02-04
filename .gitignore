@@ -6,6 +6,7 @@ Makefile
 /aclocal.m4
 /autom4te.cache
 /autoscan.log
+/compile
 /config.h
 /config.h.in
 /config.log
@@ -16,5 +17,6 @@ Makefile
 /stamp-h1
 /install-sh
 /missing
+/test-driver
 
 *.o
