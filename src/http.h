@@ -1,7 +1,11 @@
-#include <stdbool.h>
-
 #ifndef HTTP_HTTP_H
 #define HTTP_HTTP_H
+
+#include <stdbool.h>
+
+#include "hpack.h"
+#include "request.h"
+#include "response.h"
 
 /**
  * Frame types
@@ -35,6 +39,7 @@
 #define SETTINGS_ENABLE_PUSH 2
 #define SETTINGS_MAX_CONCURRENT_STREAMS 4
 #define SETTINGS_INITIAL_WINDOW_SIZE 7
+#define SETTINGS_FLOW_CONTROL_OPTIONS 10
 
 #define DEFAULT_HEADER_TABLE_SIZE 4096
 #define DEFAULT_ENABLE_PUSH 1
@@ -158,6 +163,17 @@ typedef struct http_frame_settings_t {
 
 } http_frame_settings_t;
 
+typedef struct http_frame_goaway_t {
+
+  HTTP_FRAME_FIELDS
+
+  uint32_t last_stream_id;
+  uint32_t error_code;
+  
+  char* debug_data;
+
+} http_frame_goaway_t;
+
 typedef struct http_header_fragment_s http_header_fragment_t;
 struct http_header_fragment_s {
   char* buffer;
@@ -180,6 +196,15 @@ typedef struct http_frame_headers_t {
   char* header_block_fragment;
 
 } http_frame_headers_t;
+
+typedef struct http_frame_data_t {
+
+  HTTP_FRAME_FIELDS
+
+  // is this the last frame in the stream?
+  bool end_stream;
+
+} http_frame_data_t;
 
 typedef struct http_stream_s http_stream_t;
 struct http_stream_s {
@@ -207,10 +232,19 @@ struct http_stream_s {
 
   http_header_fragment_t* header_fragments;
 
-  char* headers;
-  size_t headers_length;
+  hpack_headers_t* headers;
+  hpack_context_t* encoding_context;
 
+  hpack_context_t* decoding_context;
 };
+
+typedef void (*request_cb)(http_request_t* request, http_response_t* response);
+
+typedef struct http_request_listener_t {
+
+  request_cb callback;
+
+} http_request_listener_t;
 
 typedef void (*write_cb)(void* data, char* buf, size_t len);
 
@@ -246,15 +280,20 @@ struct http_parser_s {
   bool enable_push;
   size_t max_concurrent_streams;
   size_t initial_window_size;
+  bool disable_flow_control;
 
-  // TOOD - use a better data structure to get a stream
+  // TODO - use a better data structure to get a stream
   http_stream_t **streams;
+
+  http_request_listener_t* request_listener;
 };
 
-http_parser_t* http_parser_init(void* data, write_cb writer, close_cb closer);
+http_parser_t* http_parser_init(void* data, request_cb request_handler, write_cb writer, close_cb closer);
 
 void http_parser_free(http_parser_t* parser);
 
 void http_parser_read(http_parser_t* parser, char* buffer, size_t len);
+
+void http_response_write(http_response_t* response, char* text, size_t text_length);
 
 #endif

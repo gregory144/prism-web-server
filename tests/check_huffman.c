@@ -29,50 +29,6 @@ START_TEST(test_huffman_decode_two_chars_with_eos) {
   ck_assert_str_eq("0-", huffman_decode(buf, 2));
 } END_TEST
 
-START_TEST(test_get_bit_ex1) {
-  char buf[] = { 0x6f }; //0b01101111
-  ck_assert_int_eq(0, get_bit(buf, 0));
-  ck_assert_int_eq(1, get_bit(buf, 1));
-  ck_assert_int_eq(1, get_bit(buf, 2));
-  ck_assert_int_eq(0, get_bit(buf, 3));
-  ck_assert_int_eq(1, get_bit(buf, 4));
-  ck_assert_int_eq(1, get_bit(buf, 5));
-  ck_assert_int_eq(1, get_bit(buf, 6));
-  ck_assert_int_eq(1, get_bit(buf, 7));
-} END_TEST
-
-START_TEST(test_get_bit_ex2) {
-  char buf[] = { 0x3f, 0xfb  }; //0b00111111 11111011
-  ck_assert_int_eq(0, get_bit(buf, 0));
-  ck_assert_int_eq(0, get_bit(buf, 1));
-  ck_assert_int_eq(1, get_bit(buf, 2));
-  ck_assert_int_eq(1, get_bit(buf, 3));
-  ck_assert_int_eq(1, get_bit(buf, 4));
-  ck_assert_int_eq(1, get_bit(buf, 5));
-  ck_assert_int_eq(1, get_bit(buf, 6));
-  ck_assert_int_eq(1, get_bit(buf, 7));
-  ck_assert_int_eq(1, get_bit(buf, 8));
-  ck_assert_int_eq(1, get_bit(buf, 9));
-  ck_assert_int_eq(1, get_bit(buf, 10));
-  ck_assert_int_eq(1, get_bit(buf, 11));
-  ck_assert_int_eq(1, get_bit(buf, 12));
-  ck_assert_int_eq(0, get_bit(buf, 13));
-  ck_assert_int_eq(1, get_bit(buf, 14));
-  ck_assert_int_eq(1, get_bit(buf, 15));
-} END_TEST
-
-START_TEST(test_get_bit_ex3) {
-  char buf[] = { 0x6f }; //0b11100001
-  ck_assert_int_eq(0, get_bit(buf, 0));
-  ck_assert_int_eq(1, get_bit(buf, 1));
-  ck_assert_int_eq(1, get_bit(buf, 2));
-  ck_assert_int_eq(0, get_bit(buf, 3));
-  ck_assert_int_eq(1, get_bit(buf, 4));
-  ck_assert_int_eq(1, get_bit(buf, 5));
-  ck_assert_int_eq(1, get_bit(buf, 6));
-  ck_assert_int_eq(1, get_bit(buf, 7));
-} END_TEST
-
 Suite* suite() {
   Suite *s = suite_create("huffman");
 
@@ -82,8 +38,6 @@ Suite* suite() {
   tcase_add_test(tc_decoder, test_huffman_decode_single_char_with_eos);
   tcase_add_test(tc_decoder, test_huffman_decode_two_chars);
   tcase_add_test(tc_decoder, test_huffman_decode_two_chars_with_eos);
-  tcase_add_test(tc_decoder, test_get_bit_ex1);
-  tcase_add_test(tc_decoder, test_get_bit_ex2);
   suite_add_tcase(s, tc_decoder);
 
   return s;

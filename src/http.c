@@ -10,10 +10,16 @@
 #define FRAME_HEADER_SIZE 8 // octets
 #define DEFAULT_STREAM_PRIORITY 0x40000000 // 2^30
 
+#define HEADERS_FLAG_END_STREAM 0x1
+#define HEADERS_FLAG_END_HEADERS 0x4
+#define HEADERS_FLAG_PRIORITY 0x8
+
+#define DATA_FLAG_END_STREAM 0x1
+
 const char* HTTP_CONNECTION_HEADER = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 const size_t HTTP_CONNECTION_HEADER_LENGTH = 24;
 
-http_parser_t* http_parser_init(void* data, write_cb writer, close_cb closer) {
+http_parser_t* http_parser_init(void* data, request_cb request_handler, write_cb writer, close_cb closer) {
   http_parser_t* parser = malloc(sizeof(http_parser_t));
 
   parser->data = data;
@@ -35,6 +41,9 @@ http_parser_t* http_parser_init(void* data, write_cb writer, close_cb closer) {
 
   parser->streams = calloc(sizeof(http_stream_t*), 1024);
 
+  parser->request_listener = malloc(sizeof(http_request_listener_t));
+  parser->request_listener->callback = request_handler;
+
   return parser;
 }
 
@@ -42,13 +51,56 @@ void http_parser_free(http_parser_t* parser) {
   free(parser);
 }
 
-void http_emit_frame(http_parser_t* parser, http_frame_t* frame) {
-  fprintf(stderr, "http_emit_frame: \n");
-  parser->writer(parser->data, "xxx\n", 4);
+void http_frame_header_write(char* buf, uint16_t length, uint8_t type, uint8_t flags, uint32_t stream_id) {
+  size_t pos = 0;
+
+  buf[pos++] = (length >> 8) & 0x3F; // only the first 6 bits (first 2 bits are reserved)
+  buf[pos++] = (length) & 0xFF;
+
+  buf[pos++] = type;
+
+  buf[pos++] = flags;
+
+  buf[pos++] = (stream_id >> 24) & 0x7F; // only the first 7 bits (first bit is reserved)
+  buf[pos++] = (stream_id >> 16) & 0xFF;
+  buf[pos++] = (stream_id >> 8) & 0xFF;
+  buf[pos++] = (stream_id) & 0xFF;
 }
 
-void http_emit_goaway(http_parser_t* parser, int error_code) {
-  http_emit_frame(parser, NULL);
+void http_emit_headers(http_parser_t* parser, http_stream_t* stream, http_headers_t* headers) {
+  // TODO split large headers into multiple frames
+  size_t headers_length;
+  char* hpack_buf = '\0';
+  if (headers) {
+    hpack_buf = hpack_encode(stream->encoding_context, headers);
+    headers_length = strlen(hpack_buf);
+  }
+  size_t buf_length = FRAME_HEADER_SIZE + headers_length;
+  char* buf = malloc(buf_length);
+  uint8_t flags = 0;
+  bool end_stream = false;
+  bool end_headers = true;
+  bool priority = false;
+  if (end_stream) flags |= HEADERS_FLAG_END_STREAM;
+  if (end_headers) flags |= HEADERS_FLAG_END_HEADERS;
+  if (priority) flags |= HEADERS_FLAG_PRIORITY;
+  http_frame_header_write(buf, headers_length, FRAME_TYPE_HEADERS, flags, stream->id);
+  fprintf(stderr, "Writing headers frame: stream %d, %ld octets\n", stream->id, buf_length);
+  parser->writer(parser->data, buf, buf_length);
+}
+
+void http_emit_data(http_parser_t* parser, http_stream_t* stream, char* text, size_t text_length) {
+  // TODO split large text into multiple frames
+  size_t buf_length = FRAME_HEADER_SIZE + text_length;
+  char* buf = malloc(buf_length);
+  uint8_t flags = 0;
+  bool end_stream = true;
+  if (end_stream) flags |= DATA_FLAG_END_STREAM;
+  http_frame_header_write(buf, text_length, FRAME_TYPE_DATA, flags, stream->id);
+  size_t pos = FRAME_HEADER_SIZE;
+  strncpy(buf + pos, text, text_length);
+  fprintf(stderr, "Writing data frame: stream %d, %ld octets\n", stream->id, buf_length);
+  parser->writer(parser->data, buf, buf_length);
 }
 
 /**
@@ -62,24 +114,6 @@ bool http_parser_recognize_connection_header(http_parser_t* parser) {
         HTTP_CONNECTION_HEADER_LENGTH) == 0;
   }
   return false;
-}
-
-inline uint16_t get_bits16(char* buf, size_t offset, size_t num_bytes, uint16_t mask) {
-  char* curr = buf + offset;
-  uint16_t val = 0;
-  for (; curr < buf + offset + num_bytes; curr++) {
-    val = (val << 8) | *curr;
-  }
-  return val & mask;
-}
-
-inline uint32_t get_bits32(char* buf, size_t offset, size_t num_bytes, uint32_t mask) {
-  char* curr = buf + offset;
-  uint32_t val = 0;
-  for (; curr < buf + offset + num_bytes; curr++) {
-    val = (val << 8) | *curr;
-  }
-  return val & mask;
 }
 
 void http_setting_set(http_parser_t* parser, uint8_t id, uint32_t value) {
@@ -100,6 +134,10 @@ void http_setting_set(http_parser_t* parser, uint8_t id, uint32_t value) {
     case SETTINGS_INITIAL_WINDOW_SIZE:
       fprintf(stderr, "Initial window size: %d\n", value);
       parser->initial_window_size = value;
+      break;
+    case SETTINGS_FLOW_CONTROL_OPTIONS:
+      fprintf(stderr, "Flow control options: %d\n", value);
+      parser->disable_flow_control = value & 0x1; // only first bit matters
       break;
     default:
       // TODO emit PROTOCOL_ERROR
@@ -138,10 +176,29 @@ http_stream_t* http_stream_init(http_parser_t* parser, uint32_t stream_id) {
   stream->state = STREAM_STATE_IDLE;
   stream->header_fragments = NULL;
   stream->headers = NULL;
-  stream->headers_length = 0;
   stream->priority = DEFAULT_STREAM_PRIORITY;
+  stream->encoding_context = hpack_context_init(DEFAULT_HEADER_TABLE_SIZE);
+  stream->decoding_context = hpack_context_init(parser->header_table_size);
 
   return stream;
+}
+
+http_stream_t* http_trigger_request(http_parser_t* parser, http_stream_t* stream) {
+  if (!parser->request_listener) {
+    fprintf(stderr, "No request listener set up\n");
+    abort();
+  }
+
+  http_request_t* request = malloc(sizeof(http_request_t));
+  request->headers = stream->headers;
+  request->params = NULL;
+  request->parser = (_http_parser_t)parser;
+  request->stream = (_http_stream_t)stream;
+
+  http_response_t* response = malloc(sizeof(http_response_t));
+  response->request = request;
+
+  parser->request_listener->callback(request, response);
 }
 
 void http_stream_add_header_fragment(http_stream_t* stream, char* buffer, size_t length) {
@@ -180,14 +237,14 @@ void http_parse_header_fragments(http_parser_t* parser, http_stream_t* stream) {
     free(prev);
   }
   *header_appender = '\0';
-  fprintf(stderr, "Got headers: %s (%ld)\n", headers, headers_length);
-  stream->headers = headers;
-  stream->headers_length = headers_length;
+  fprintf(stderr, "Got headers: %s (%ld), decoding\n", headers, headers_length);
+  stream->headers = hpack_decode(stream->encoding_context, headers, headers_length);
   stream->state = STREAM_STATE_OPEN;
+
+  http_trigger_request(parser, stream);
 }
 
 void http_parse_frame_headers(http_parser_t* parser, http_frame_headers_t* frame) {
-  // TODO - start request parsing!
   char* pos = parser->buffer + parser->buffer_position;
   size_t header_block_fragment_size = frame->length;
   http_stream_t* stream = http_stream_init(parser, frame->stream_id);
@@ -200,6 +257,7 @@ void http_parse_frame_headers(http_parser_t* parser, http_frame_headers_t* frame
   http_stream_add_header_fragment(stream, pos, header_block_fragment_size);
   if (frame->end_headers) {
     // parse the headers
+    fprintf(stderr, "Parsing headers\n");
     http_parse_header_fragments(parser, stream);
   }
 }
@@ -238,20 +296,43 @@ void http_parse_frame_settings(http_parser_t* parser, http_frame_settings_t* fra
   }
 }
 
+void http_parse_frame_goaway(http_parser_t* parser, http_frame_goaway_t* frame) {
+  if (frame->stream_id != 0) {
+    // TODO emit PROTOCOL_ERROR
+    fprintf(stderr, "Invalid stream identifier for goaway frame\n");
+    abort();
+  }
+  char* buf = parser->buffer + parser->buffer_position;
+  frame->last_stream_id = get_bits32(buf, 0, 4, 0x7FFFFFFF);
+  frame->error_code = get_bits32(buf, 4, 4, 0xFFFFFFFF);
+  size_t debug_data_length = (frame->length - 8);
+  frame->debug_data = malloc(sizeof(char) * (debug_data_length + 1));
+  strncpy(frame->debug_data, buf + 8, debug_data_length);
+  frame->debug_data[debug_data_length] = '\0';
+
+  fprintf(stderr, "Received goaway, last stream: %d, error code: %d, debug_data: %s\n", frame->last_stream_id, frame->error_code, frame->debug_data);
+
+  // TODO close all streams
+}
+
 http_frame_t* http_frame_init(uint16_t length, char type, char flags, uint32_t stream_id) {
   http_frame_t* frame;
   switch(type) {
-    /*
     case FRAME_TYPE_DATA:
-      parse_frame_data(parser);
-    */
+    {
+      http_frame_data_t *data_frame = malloc(sizeof(http_frame_data_t));
+      data_frame->end_stream = flags & DATA_FLAG_END_STREAM;
+      // flag 0x2 is reserved
+      frame = (http_frame_t*) data_frame;
+      break;
+    }
     case FRAME_TYPE_HEADERS:
     {
       http_frame_headers_t *headers_frame = malloc(sizeof(http_frame_headers_t));
-      headers_frame->end_stream = flags & 0x1;
+      headers_frame->end_stream = flags & HEADERS_FLAG_END_STREAM;
       // flag 0x2 is reserved
-      headers_frame->end_headers = flags & 0x4;
-      headers_frame->priority = flags & 0x8;
+      headers_frame->end_headers = flags & HEADERS_FLAG_END_HEADERS;
+      headers_frame->priority = flags & HEADERS_FLAG_PRIORITY;
       frame = (http_frame_t*) headers_frame;
       break;
     }
@@ -341,8 +422,11 @@ bool http_parser_add_from_buffer(http_parser_t* parser) {
           parse_frame_push_promise(parser);
         case FRAME_TYPE_PING:
           parse_frame_ping(parser);
+        */
         case FRAME_TYPE_GOAWAY:
-          parse_frame_goaway(parser);
+          http_parse_frame_goaway(parser, (http_frame_goaway_t*) frame);
+          break;
+        /*
         case FRAME_TYPE_WINDOW_UPDATE:
           parse_frame_window_update(parser);
         case FRAME_TYPE_CONTINUATION:
@@ -371,7 +455,6 @@ void http_parser_read(http_parser_t* parser, char* buffer, size_t len) {
     if (http_parser_recognize_connection_header(parser)) {
       parser->received_connection_header = true;
       fprintf(stderr, "Found HTTP2 connection\n");
-      parser->writer(parser->data, "Init\n", 5);
     } else {
       fprintf(stderr, "Found non-HTTP2 connection, closing connection\n");
       parser->closer(parser->data);
@@ -380,5 +463,16 @@ void http_parser_read(http_parser_t* parser, char* buffer, size_t len) {
   }
   while (http_parser_add_from_buffer(parser));
   fprintf(stderr, "What next?\n");
+}
+
+void http_response_write(http_response_t* response, char* text, size_t text_length) {
+  http_parser_t* parser = (http_parser_t*)response->request->parser;
+  http_stream_t* stream = (http_stream_t*)response->request->stream;
+
+  // emit headers frame
+  http_emit_headers(parser, stream, response->headers);
+
+  // emit data frame
+  http_emit_data(parser, stream, text, text_length);
 }
 

@@ -9,22 +9,25 @@ void setup() {
 void teardown() {
 }
 
-START_TEST(test_hpack_decode_int_in_8bit_prefix) {
+START_TEST(test_hpack_decode_quantity_in_8bit_prefix) {
   char buf[] = { 0x2a };
-  int decoded = hpack_decode_int(buf, 1, 0);
-  ck_assert_int_eq(decoded, 42);
+  hpack_decode_quantity_result_t* decoded = hpack_decode_quantity(buf, 1, 0);
+  ck_assert_int_eq(decoded->value, 42);
+  ck_assert_int_eq(decoded->num_bytes, 1);
 } END_TEST
 
-START_TEST(test_hpack_decode_int_in_5bit_prefix) {
+START_TEST(test_hpack_decode_quantity_in_5bit_prefix) {
   char buf[] = { 0xea };
-  int decoded = hpack_decode_int(buf, 1, 3);
-  ck_assert_int_eq(decoded, 10);
+  hpack_decode_quantity_result_t* decoded = hpack_decode_quantity(buf, 1, 3);
+  ck_assert_int_eq(decoded->value, 10);
+  ck_assert_int_eq(decoded->num_bytes, 1);
 } END_TEST
 
-START_TEST(test_hpack_decode_large_int_in_5bit_prefix) {
+START_TEST(test_hpack_decode_large_quantity_in_5bit_prefix) {
   char buf[] = { 0xff, 0x9a, 0x0a };
-  int decoded = hpack_decode_int(buf, 3, 3);
-  ck_assert_int_eq(decoded, 1337);
+  hpack_decode_quantity_result_t* decoded = hpack_decode_quantity(buf, 3, 3);
+  ck_assert_int_eq(decoded->value, 1337);
+  ck_assert_int_eq(decoded->num_bytes, 3);
 } END_TEST
 
 Suite * hpack_suite() {
@@ -32,9 +35,9 @@ Suite * hpack_suite() {
 
   TCase *tc_decoder = tcase_create("decoder");
   tcase_add_checked_fixture(tc_decoder, setup, teardown);
-  tcase_add_test(tc_decoder, test_hpack_decode_int_in_8bit_prefix);
-  tcase_add_test(tc_decoder, test_hpack_decode_int_in_5bit_prefix);
-  tcase_add_test(tc_decoder, test_hpack_decode_large_int_in_5bit_prefix);
+  tcase_add_test(tc_decoder, test_hpack_decode_quantity_in_8bit_prefix);
+  tcase_add_test(tc_decoder, test_hpack_decode_quantity_in_5bit_prefix);
+  tcase_add_test(tc_decoder, test_hpack_decode_large_quantity_in_5bit_prefix);
   suite_add_tcase(s, tc_decoder);
 
   return s;

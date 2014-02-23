@@ -20,3 +20,6 @@ Makefile
 /test-driver
 
 *.o
+
+/tests/*.log
+/tests/*.trs

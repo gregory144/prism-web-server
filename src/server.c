@@ -11,6 +11,20 @@
 static long reads = 0;
 static long writes = 0;
 
+void handle_request(http_request_t* request, http_response_t* response) {
+
+  fprintf(stderr, "Got headers:\n");
+
+  hpack_headers_t* curr = request->headers;
+  while (curr) {
+    fprintf(stderr, "%s: %s\n", curr->name, curr->value);
+    curr = curr->next;
+  }
+
+  char* resp_text = "Hello Greg\n";
+  http_response_write(response, resp_text, strlen(resp_text));
+}
+
 void server_alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t* buf) {
   UNUSED(handle);
   buf->len = suggested_size;
@@ -119,6 +133,12 @@ void server_http_write(void* stream, char* buf, size_t len) {
   // keep track of the buffer so we can free it later
   write_req_data->buf = write_buf;
 
+  fprintf(stderr, "uv_write: %s, %ld\n", buf, len);
+  int i;
+  for (i = 0; i < len; i++) {
+    fprintf(stderr, "%d ", buf[i]);
+  }
+  fprintf(stderr, "\n");
   uv_write(write_req, stream, write_req_data->buf, 1, server_write);
 }
 
@@ -141,7 +161,7 @@ void server_connection_start(uv_stream_t *server, int status) {
   client_data->bytes_written = 0;
   client_data->uv_read_count = 0;
   client_data->stream = (uv_stream_t*)client;
-  client_data->parser = http_parser_init(client, server_http_write, server_http_close);
+  client_data->parser = http_parser_init(client, handle_request, server_http_write, server_http_close);
   client->data = client_data;
   uv_tcp_init(server_data->loop, client);
   if (uv_accept(server, (uv_stream_t*) client) == 0) {

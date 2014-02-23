@@ -5,10 +5,10 @@
  * http://tools.ietf.org/html/draft-ietf-httpbis-header-compression-05
  */
 
-#include <stdbool.h>
-
 #ifndef HUFFMAN_H
 #define HUFFMAN_H 
+
+#include <stdbool.h>
 
 typedef struct huffman_entry_t {
   int index;
@@ -16,8 +16,6 @@ typedef struct huffman_entry_t {
   int left;
   int right;
 } huffman_entry_t;
-
-int get_bit(char* buffer, size_t i);
 
 char* huffman_decode(char* buf, size_t len);
 
