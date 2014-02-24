@@ -109,6 +109,26 @@ hpack_decode_quantity_result_t* hpack_decode_quantity(char* buf, size_t length, 
   return result;
 }
 
+/**
+ *
+ * From the spec:
+ * If I < 2^N - 1, encode I on N bits
+ * Else
+ *     encode 2^N - 1 on N bits
+ *     I = I - (2^N - 1)
+ *     While I >= 128
+ *          Encode (I % 128 + 128) on 8 bits
+ *          I = I / 128
+ *     encode (I) on 8 bits
+ */
+void hpack_encode_quantity(char* buf, size_t offset, size_t quantity) {
+  //uint8_t limit = pow(2, prefix_length) - 1;
+  // TODO
+  uint8_t n = 8; // for now
+  fprintf(stderr, "quantity: %ld\n", quantity);
+  buf[offset/8]  = quantity;
+}
+
 hpack_context_t* hpack_context_init(size_t header_table_size) {
   hpack_context_t* context = malloc(sizeof(hpack_context_t));
   context->header_table_size = header_table_size;
@@ -333,7 +353,32 @@ hpack_headers_t* hpack_decode(hpack_context_t* context, char* buf, size_t length
   return headers;
 }
 
-char* hpack_encode(hpack_context_t* context, hpack_headers_t* headers) {
-  return "";
+hpack_encode_result_t* hpack_encode(hpack_context_t* context, hpack_headers_t* headers) {
+  //naive hpack encoding - never add to the header table
+  char* encoded = malloc(4096); // TODO - we need to construct this dynamically
+  size_t encoded_index = 0;
+  hpack_headers_t* header = headers;
+  while (header) {
+    fprintf(stderr, "Encoding Reponse Header: %s (%ld): %s (%ld)\n", header->name, header->name_length, header->value, header->value_length);
+    encoded[encoded_index++] = 0x40; // 4.3.1. Literal Header Field without Indexing
+
+    hpack_encode_quantity(encoded, encoded_index * 8, header->name_length);
+    encoded_index++; // TODO - name_length might take up more than 1 byte
+    // TODO huffman encode!
+    strncpy(encoded + encoded_index, header->name, header->name_length);
+    encoded_index += header->name_length;
+
+    hpack_encode_quantity(encoded, encoded_index * 8, header->value_length);
+    encoded_index++; // TODO - value_length might take up more than 1 byte
+    // TODO huffman encode!
+    strncpy(encoded + encoded_index, header->value, header->value_length);
+    encoded_index += header->value_length;
+    header = header->next;
+  }
+  hpack_encode_result_t* result = malloc(sizeof(hpack_encode_result_t));
+  result->buf = encoded;
+  result->buf_length = encoded_index;
+  fprintf(stderr, "Encoded headers into %ld bytes\n", encoded_index);
+  return result;
 }
 

@@ -21,6 +21,13 @@ void handle_request(http_request_t* request, http_response_t* response) {
     curr = curr->next;
   }
 
+  response->headers = malloc(sizeof(http_headers_t));
+  response->headers->name = "content-length";
+  response->headers->name_length = strlen("content-length");
+  response->headers->value = "11";
+  response->headers->value_length = strlen("11");
+  response->headers->next = NULL;
+
   char* resp_text = "Hello Greg\n";
   http_response_write(response, resp_text, strlen(resp_text));
 }
@@ -136,7 +143,7 @@ void server_http_write(void* stream, char* buf, size_t len) {
   fprintf(stderr, "uv_write: %s, %ld\n", buf, len);
   int i;
   for (i = 0; i < len; i++) {
-    fprintf(stderr, "%d ", buf[i]);
+    fprintf(stderr, "%02x ", buf[i]);
   }
   fprintf(stderr, "\n");
   uv_write(write_req, stream, write_req_data->buf, 1, server_write);

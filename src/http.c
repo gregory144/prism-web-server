@@ -70,10 +70,11 @@ void http_frame_header_write(char* buf, uint16_t length, uint8_t type, uint8_t f
 void http_emit_headers(http_parser_t* parser, http_stream_t* stream, http_headers_t* headers) {
   // TODO split large headers into multiple frames
   size_t headers_length;
-  char* hpack_buf = '\0';
-  if (headers) {
-    hpack_buf = hpack_encode(stream->encoding_context, headers);
-    headers_length = strlen(hpack_buf);
+  char* hpack_buf = NULL;
+  if (headers != NULL) {
+    hpack_encode_result_t* encoded = hpack_encode(stream->encoding_context, headers);
+    hpack_buf = encoded->buf;
+    headers_length = encoded->buf_length;
   }
   size_t buf_length = FRAME_HEADER_SIZE + headers_length;
   char* buf = malloc(buf_length);
@@ -85,6 +86,12 @@ void http_emit_headers(http_parser_t* parser, http_stream_t* stream, http_header
   if (end_headers) flags |= HEADERS_FLAG_END_HEADERS;
   if (priority) flags |= HEADERS_FLAG_PRIORITY;
   http_frame_header_write(buf, headers_length, FRAME_TYPE_HEADERS, flags, stream->id);
+
+  if (hpack_buf) {
+    size_t pos = FRAME_HEADER_SIZE;
+    strncpy(buf + pos, hpack_buf, headers_length);
+  }
+
   fprintf(stderr, "Writing headers frame: stream %d, %ld octets\n", stream->id, buf_length);
   parser->writer(parser->data, buf, buf_length);
 }
