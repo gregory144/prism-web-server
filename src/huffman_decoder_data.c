@@ -1,9 +1,10 @@
+#include <stdio.h>
 
 #include "huffman.h"
 
 static const size_t huffman_decoder_size = 513;
 
-static const huffman_entry_t huffman_decoder_table[] = {
+static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
 
     {
