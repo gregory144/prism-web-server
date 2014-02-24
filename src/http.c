@@ -16,6 +16,8 @@
 
 #define DATA_FLAG_END_STREAM 0x1
 
+#define SETTINGS_FLAG_ACK 0x1
+
 const char* HTTP_CONNECTION_HEADER = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 const size_t HTTP_CONNECTION_HEADER_LENGTH = 24;
 
@@ -107,6 +109,17 @@ void http_emit_data(http_parser_t* parser, http_stream_t* stream, char* text, si
   size_t pos = FRAME_HEADER_SIZE;
   strncpy(buf + pos, text, text_length);
   fprintf(stderr, "Writing data frame: stream %d, %ld octets\n", stream->id, buf_length);
+  parser->writer(parser->data, buf, buf_length);
+}
+
+void http_emit_settings_ack(http_parser_t* parser) {
+  size_t buf_length = FRAME_HEADER_SIZE;
+  char* buf = malloc(buf_length);
+  uint8_t flags = 0;
+  bool ack = true;
+  if (ack) flags |= SETTINGS_FLAG_ACK;
+  http_frame_header_write(buf, 0, FRAME_TYPE_SETTINGS, flags, 0);
+  fprintf(stderr, "Writing settings ack frame\n");
   parser->writer(parser->data, buf, buf_length);
 }
 
@@ -299,7 +312,8 @@ void http_parse_frame_settings(http_parser_t* parser, http_frame_settings_t* fra
     parser->received_settings = true;
     fprintf(stderr, "Settings: %ld, %d, %ld, %ld\n", parser->header_table_size, parser->enable_push,
         parser->max_concurrent_streams, parser->initial_window_size);
-    // TODO emit settings ACK frame
+
+    http_emit_settings_ack(parser);
   }
 }
 
