@@ -24,8 +24,13 @@ typedef struct huffman_encoder_entry_t {
   uint8_t length;
 } huffman_encoder_entry_t;
 
-char* huffman_decode(char* buf, size_t len);
+typedef struct huffman_result_t {
+  uint8_t* value;
+  size_t length;
+} huffman_result_t;
 
-char* huffman_encode(char* buf, size_t len);
+huffman_result_t* huffman_decode(uint8_t* buf, size_t len);
+
+huffman_result_t* huffman_encode(uint8_t* buf, size_t len);
 
 #endif

@@ -7,9 +7,25 @@
 #include "util.h"
 #include "server.h"
 #include "http.h"
+#include "config.h"
+#include "request.h"
 
 static long reads = 0;
 static long writes = 0;
+
+http_headers_t* add_header(http_headers_t* headers, char* name, char* value) {
+  http_headers_t* header = malloc(sizeof(http_headers_t));
+  header->name = name;
+  header->name_length = strlen(name);
+  header->value = value;
+  header->value_length = strlen(value);
+  if (headers) {
+    header->next = headers;
+  } else {
+    header->next = NULL;
+  }
+  return header;
+}
 
 void handle_request(http_request_t* request, http_response_t* response) {
 
@@ -21,14 +37,22 @@ void handle_request(http_request_t* request, http_response_t* response) {
     curr = curr->next;
   }
 
-  response->headers = malloc(sizeof(http_headers_t));
-  response->headers->name = "content-length";
-  response->headers->name_length = strlen("content-length");
-  response->headers->value = "11";
-  response->headers->value_length = strlen("11");
-  response->headers->next = NULL;
+  char* client_user_agent = http_request_header_get(request, "user-agent");
+  if (!client_user_agent) {
+    client_user_agent = "Unknown";
+  }
+  size_t resp_length = 100 + strlen(client_user_agent);
+  char* resp_text = malloc(sizeof(char) * resp_length);
+  snprintf(resp_text, resp_length, "Hello %s\n", client_user_agent);
 
-  char* resp_text = "Hello Greg\n";
+  char* content_length = malloc(sizeof(char) * 1024);
+  snprintf(content_length, 1024, "%ld", strlen(resp_text));
+
+  response->headers = add_header(response->headers, ":status", "200");
+  response->headers = add_header(response->headers, "content-length", content_length);
+  response->headers = add_header(response->headers, "server", PACKAGE_STRING);
+  response->headers = add_header(response->headers, "date", date_rfc1123());
+
   http_response_write(response, resp_text, strlen(resp_text));
 }
 

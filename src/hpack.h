@@ -17,7 +17,7 @@ typedef struct hpack_decode_quantity_result_t {
 } hpack_decode_quantity_result_t;
 
 typedef struct hpack_encode_result_t {
-  char* buf;
+  uint8_t* buf;
   size_t buf_length;
 } hpack_encode_result_t;
 
@@ -81,13 +81,15 @@ typedef struct hpack_context_t {
 
 } hpack_context_t;
 
-hpack_decode_quantity_result_t* hpack_decode_quantity(char* buf, size_t length, uint8_t offset); 
+hpack_decode_quantity_result_t* hpack_decode_quantity(uint8_t* buf, size_t length, uint8_t offset); 
+
+size_t hpack_encode_quantity(uint8_t* buf, size_t offset, size_t quantity); 
 
 hpack_context_t* hpack_context_init(size_t header_table_size);
 
 void hpack_adjust_header_table_size(hpack_context_t* context);
 
-hpack_headers_t* hpack_decode(hpack_context_t* context, char* buf, size_t length);
+hpack_headers_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length);
 
 hpack_encode_result_t* hpack_encode(hpack_context_t* context, hpack_headers_t* headers);
 

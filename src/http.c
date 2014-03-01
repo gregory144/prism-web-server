@@ -217,6 +217,7 @@ http_stream_t* http_trigger_request(http_parser_t* parser, http_stream_t* stream
 
   http_response_t* response = malloc(sizeof(http_response_t));
   response->request = request;
+  response->headers = NULL;
 
   parser->request_listener->callback(request, response);
 }
