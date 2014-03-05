@@ -41,15 +41,33 @@ http_parser_t* http_parser_init(void* data, request_cb request_handler, write_cb
   parser->max_concurrent_streams = DEFAULT_MAX_CONNCURRENT_STREAMS;
   parser->initial_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
 
-  parser->streams = calloc(sizeof(http_stream_t*), 1024);
+  parser->streams = calloc(sizeof(http_stream_t*), 4096);
 
-  parser->request_listener = malloc(sizeof(http_request_listener_t));
-  parser->request_listener->callback = request_handler;
+  parser->request_listener = request_handler;
+
+  parser->encoding_context = hpack_context_init(DEFAULT_HEADER_TABLE_SIZE);
+  parser->decoding_context = hpack_context_init(parser->header_table_size);
 
   return parser;
 }
 
+void http_stream_close(http_parser_t* parser, http_stream_t* stream) {
+  hpack_headers_free(stream->headers);
+  parser->streams[stream->id] = NULL;
+  free(stream);
+}
+
 void http_parser_free(http_parser_t* parser) {
+  int i;
+  for (i = 0; i < 4096; i++) {
+    http_stream_t* stream = parser->streams[i];
+    if (stream) {
+      http_stream_close(parser, stream);
+    }
+  }
+  free(parser->streams);
+  hpack_context_free(parser->encoding_context);
+  hpack_context_free(parser->decoding_context);
   free(parser);
 }
 
@@ -71,12 +89,13 @@ void http_frame_header_write(char* buf, uint16_t length, uint8_t type, uint8_t f
 
 void http_emit_headers(http_parser_t* parser, http_stream_t* stream, http_headers_t* headers) {
   // TODO split large headers into multiple frames
-  size_t headers_length;
+  size_t headers_length = 0;
   char* hpack_buf = NULL;
   if (headers != NULL) {
-    hpack_encode_result_t* encoded = hpack_encode(stream->encoding_context, headers);
+    hpack_encode_result_t* encoded = hpack_encode(parser->encoding_context, headers);
     hpack_buf = encoded->buf;
     headers_length = encoded->buf_length;
+    free(encoded);
   }
   size_t buf_length = FRAME_HEADER_SIZE + headers_length;
   char* buf = malloc(buf_length);
@@ -91,10 +110,11 @@ void http_emit_headers(http_parser_t* parser, http_stream_t* stream, http_header
 
   if (hpack_buf) {
     size_t pos = FRAME_HEADER_SIZE;
-    strncpy(buf + pos, hpack_buf, headers_length);
+    memcpy(buf + pos, hpack_buf, headers_length);
+    free(hpack_buf);
   }
 
-  fprintf(stderr, "Writing headers frame: stream %d, %ld octets\n", stream->id, buf_length);
+  log_debug("Writing headers frame: stream %d, %ld octets\n", stream->id, buf_length);
   parser->writer(parser->data, buf, buf_length);
 }
 
@@ -107,8 +127,8 @@ void http_emit_data(http_parser_t* parser, http_stream_t* stream, char* text, si
   if (end_stream) flags |= DATA_FLAG_END_STREAM;
   http_frame_header_write(buf, text_length, FRAME_TYPE_DATA, flags, stream->id);
   size_t pos = FRAME_HEADER_SIZE;
-  strncpy(buf + pos, text, text_length);
-  fprintf(stderr, "Writing data frame: stream %d, %ld octets\n", stream->id, buf_length);
+  memcpy(buf + pos, text, text_length);
+  log_debug("Writing data frame: stream %d, %ld octets\n", stream->id, buf_length);
   parser->writer(parser->data, buf, buf_length);
 }
 
@@ -119,7 +139,7 @@ void http_emit_settings_ack(http_parser_t* parser) {
   bool ack = true;
   if (ack) flags |= SETTINGS_FLAG_ACK;
   http_frame_header_write(buf, 0, FRAME_TYPE_SETTINGS, flags, 0);
-  fprintf(stderr, "Writing settings ack frame\n");
+  log_debug("Writing settings ack frame\n");
   parser->writer(parser->data, buf, buf_length);
 }
 
@@ -137,45 +157,47 @@ bool http_parser_recognize_connection_header(http_parser_t* parser) {
 }
 
 void http_setting_set(http_parser_t* parser, uint8_t id, uint32_t value) {
-  fprintf(stderr, "Setting: %d: %d\n", id, value);
+  log_debug("Setting: %d: %d\n", id, value);
   switch (id) {
     case SETTINGS_HEADER_TABLE_SIZE:
-      fprintf(stderr, "Got table size: %d\n", value);
+      log_debug("Got table size: %d\n", value);
       parser->header_table_size = value;
+      hpack_header_table_adjust_size(parser->decoding_context, value);
       break;
     case SETTINGS_ENABLE_PUSH:
-      fprintf(stderr, "Enable push? %d\n", value);
+      log_debug("Enable push? %d\n", value);
       parser->enable_push = value;
       break;
     case SETTINGS_MAX_CONCURRENT_STREAMS:
-      fprintf(stderr, "Max concurrent streams: %d\n", value);
+      log_debug("Max concurrent streams: %d\n", value);
       parser->max_concurrent_streams = value;
       break;
     case SETTINGS_INITIAL_WINDOW_SIZE:
-      fprintf(stderr, "Initial window size: %d\n", value);
+      log_debug("Initial window size: %d\n", value);
       parser->initial_window_size = value;
       break;
     case SETTINGS_FLOW_CONTROL_OPTIONS:
-      fprintf(stderr, "Flow control options: %d\n", value);
+      log_debug("Flow control options: %d\n", value);
       parser->disable_flow_control = value & 0x1; // only first bit matters
       break;
     default:
       // TODO emit PROTOCOL_ERROR
-      fprintf(stderr, "Invalid setting: %d\n", id);
+      log_error("Invalid setting: %d\n", id);
       abort();
   }
 }
 
 http_stream_t* http_stream_get(http_parser_t* parser, uint32_t stream_id) {
   // TODO - use a better data structure than an array
-  http_stream_t* stream = parser->streams[stream_id];
-  if (stream_id >= 1024) {
-    fprintf(stderr, "Unsupported stream identifier (too high): %d\n", stream_id);
+  if (stream_id >= 4096) {
+    log_error("Unsupported stream identifier (too high): %d\n", stream_id);
     abort();
   }
 
+  http_stream_t* stream = parser->streams[stream_id];
+
   if (stream == NULL) {
-    //fprintf(stderr, "Unknown stream identifier: %d\n", stream_id);
+    log_error("Unknown stream identifier: %d\n", stream_id);
   }
 
   return stream;
@@ -186,7 +208,7 @@ http_stream_t* http_stream_init(http_parser_t* parser, uint32_t stream_id) {
   if (stream != NULL) {
     // got a HEADERS frame for an existing stream
     // TODO emit protocol error
-    fprintf(stderr, "Got a headers frame for an existing stream\n");
+    log_error("Got a headers frame for an existing stream\n");
     abort();
   }
   stream = malloc(sizeof(http_stream_t));
@@ -197,15 +219,13 @@ http_stream_t* http_stream_init(http_parser_t* parser, uint32_t stream_id) {
   stream->header_fragments = NULL;
   stream->headers = NULL;
   stream->priority = DEFAULT_STREAM_PRIORITY;
-  stream->encoding_context = hpack_context_init(DEFAULT_HEADER_TABLE_SIZE);
-  stream->decoding_context = hpack_context_init(parser->header_table_size);
 
   return stream;
 }
 
 http_stream_t* http_trigger_request(http_parser_t* parser, http_stream_t* stream) {
   if (!parser->request_listener) {
-    fprintf(stderr, "No request listener set up\n");
+    log_error("No request listener set up\n");
     abort();
   }
 
@@ -219,7 +239,7 @@ http_stream_t* http_trigger_request(http_parser_t* parser, http_stream_t* stream
   response->request = request;
   response->headers = NULL;
 
-  parser->request_listener->callback(request, response);
+  parser->request_listener(request, response);
 }
 
 void http_stream_add_header_fragment(http_stream_t* stream, char* buffer, size_t length) {
@@ -242,14 +262,14 @@ void http_parse_header_fragments(http_parser_t* parser, http_stream_t* stream) {
   size_t headers_length = 0;
   http_header_fragment_t* current = stream->header_fragments;
   for (; current; current = current->next) {
-    fprintf(stderr, "Counting header fragment lengths: %ld\n", current->length);
+    log_debug("Counting header fragment lengths: %ld\n", current->length);
     headers_length += current->length;
   }
   char* headers = malloc(headers_length + 1);
   char* header_appender = headers;
   current = stream->header_fragments;
   while (current) {
-    fprintf(stderr, "Appending header fragment: %s (%ld)\n", current->buffer, current->length);
+    log_debug("Appending header fragment: %s (%ld)\n", current->buffer, current->length);
     memcpy(header_appender, current->buffer, current->length);
     header_appender += current->length;
     http_header_fragment_t* prev = current;
@@ -258,9 +278,11 @@ void http_parse_header_fragments(http_parser_t* parser, http_stream_t* stream) {
     free(prev);
   }
   *header_appender = '\0';
-  fprintf(stderr, "Got headers: %s (%ld), decoding\n", headers, headers_length);
-  stream->headers = hpack_decode(stream->encoding_context, headers, headers_length);
+  log_debug("Got headers: %s (%ld), decoding\n", headers, headers_length);
+  stream->headers = hpack_decode(parser->decoding_context, headers, headers_length);
   stream->state = STREAM_STATE_OPEN;
+
+  free(headers);
 
   http_trigger_request(parser, stream);
 }
@@ -278,7 +300,7 @@ void http_parse_frame_headers(http_parser_t* parser, http_frame_headers_t* frame
   http_stream_add_header_fragment(stream, pos, header_block_fragment_size);
   if (frame->end_headers) {
     // parse the headers
-    fprintf(stderr, "Parsing headers\n");
+    log_debug("Parsing headers\n");
     http_parse_header_fragments(parser, stream);
   }
 }
@@ -286,23 +308,23 @@ void http_parse_frame_headers(http_parser_t* parser, http_frame_headers_t* frame
 void http_parse_frame_settings(http_parser_t* parser, http_frame_settings_t* frame) {
   if (frame->stream_id != 0) {
     // TODO emit PROTOCOL_ERROR
-    fprintf(stderr, "Invalid stream identifier for settings frame\n");
+    log_error("Invalid stream identifier for settings frame\n");
     abort();
   }
   if (frame->ack && frame->length != 0) {
     // TODO emit PROTOCOL_ERROR - FRAME_SIZE_ERROR
-    fprintf(stderr, "Invalid frame size (non-zero) for ACK settings frame\n");
+    log_error("Invalid frame size (non-zero) for ACK settings frame\n");
     abort();
   }
   if (frame->ack) {
     // TODO mark the settings frame we sent as acknowledged
-    fprintf(stderr, "Received settings ACK\n");
+    log_debug("Received settings ACK\n");
     abort();
   } else {
     char* pos = parser->buffer + parser->buffer_position;
     size_t setting_size = 8;
     size_t num_settings = frame->length / setting_size;
-    fprintf(stderr, "Found #%ld settings\n", num_settings);
+    log_debug("Found #%ld settings\n", num_settings);
     size_t i;
     for (i = 0; i < num_settings; i++) {
       char* curr_setting = pos + (i * setting_size);
@@ -311,7 +333,7 @@ void http_parse_frame_settings(http_parser_t* parser, http_frame_settings_t* fra
       http_setting_set(parser, setting_id, setting_value);
     }
     parser->received_settings = true;
-    fprintf(stderr, "Settings: %ld, %d, %ld, %ld\n", parser->header_table_size, parser->enable_push,
+    log_debug("Settings: %ld, %d, %ld, %ld\n", parser->header_table_size, parser->enable_push,
         parser->max_concurrent_streams, parser->initial_window_size);
 
     http_emit_settings_ack(parser);
@@ -321,7 +343,7 @@ void http_parse_frame_settings(http_parser_t* parser, http_frame_settings_t* fra
 void http_parse_frame_goaway(http_parser_t* parser, http_frame_goaway_t* frame) {
   if (frame->stream_id != 0) {
     // TODO emit PROTOCOL_ERROR
-    fprintf(stderr, "Invalid stream identifier for goaway frame\n");
+    log_error("Invalid stream identifier for goaway frame\n");
     abort();
   }
   char* buf = parser->buffer + parser->buffer_position;
@@ -329,12 +351,12 @@ void http_parse_frame_goaway(http_parser_t* parser, http_frame_goaway_t* frame) 
   frame->error_code = get_bits32(buf, 4, 4, 0xFFFFFFFF);
   size_t debug_data_length = (frame->length - 8);
   frame->debug_data = malloc(sizeof(char) * (debug_data_length + 1));
-  strncpy(frame->debug_data, buf + 8, debug_data_length);
+  memcpy(frame->debug_data, buf + 8, debug_data_length);
   frame->debug_data[debug_data_length] = '\0';
 
-  fprintf(stderr, "Received goaway, last stream: %d, error code: %d, debug_data: %s\n", frame->last_stream_id, frame->error_code, frame->debug_data);
+  log_debug("Received goaway, last stream: %d, error code: %d, debug_data: %s\n", frame->last_stream_id, frame->error_code, frame->debug_data);
 
-  // TODO close all streams
+  free(frame->debug_data);
 }
 
 http_frame_t* http_frame_init(uint16_t length, char type, char flags, uint32_t stream_id) {
@@ -376,15 +398,21 @@ http_frame_t* http_frame_init(uint16_t length, char type, char flags, uint32_t s
       parse_frame_push_promise(parser);
     case FRAME_TYPE_PING:
       parse_frame_ping(parser);
+    */
     case FRAME_TYPE_GOAWAY:
-      parse_frame_goaway(parser);
+    {
+      http_frame_goaway_t *goaway_frame = malloc(sizeof(http_frame_goaway_t));
+      frame = (http_frame_t*) goaway_frame;
+      break;
+    }
+    /*
     case FRAME_TYPE_WINDOW_UPDATE:
       parse_frame_window_update(parser);
     case FRAME_TYPE_CONTINUATION:
       parse_frame_continuation(parser);
     */
     default:
-      fprintf(stderr, "Invalid frame type: %d\n", type);
+      log_error("Invalid frame type: %d\n", type);
   }
   frame->type = type;
   frame->length = length;
@@ -396,11 +424,11 @@ bool http_parser_add_from_buffer(http_parser_t* parser) {
   // is there enough in the buffer to read a frame header?
   if (parser->buffer_position + FRAME_HEADER_SIZE > parser->buffer_length) {
     // TODO off-by-one?
-    fprintf(stderr, "Not enough in buffer to read frame header\n");
+    log_error("Not enough in buffer to read frame header\n");
     return false;
   }
 
-  char* pos = parser->buffer + parser->buffer_position;
+  unsigned char* pos = parser->buffer + parser->buffer_position;
 
   // get 14 bits of first 2 bytes
   uint16_t frame_length = get_bits16(pos, 0, 2, 0x3FFF);
@@ -408,9 +436,10 @@ bool http_parser_add_from_buffer(http_parser_t* parser) {
   char frame_flags = pos[3];
   // get 31 bits
   uint32_t stream_id = get_bits32(pos, 4, 4, 0x7FFFFFFF);
+  log_debug("stream id: %x %x %x %x\n", pos[4], pos[5], pos[6], pos[7]);
 
   http_frame_t* frame = http_frame_init(frame_length, frame_type, frame_flags, stream_id);
-  fprintf(stderr, "length: %d, type: %d, id: %d\n", frame->length, frame->type, frame->stream_id);
+  log_debug("length: %d, type: %d, id: %d\n", frame->length, frame->type, frame->stream_id);
 
   parser->buffer_position += FRAME_HEADER_SIZE;
 
@@ -419,7 +448,7 @@ bool http_parser_add_from_buffer(http_parser_t* parser) {
     // TODO off-by-one?
     if (!parser->received_settings && frame->type != FRAME_TYPE_SETTINGS) {
       // TODO emit protocol error?
-      fprintf(stderr, "Expected settings frame as first frame type\n");
+      log_error("Expected settings frame as first frame type\n");
       abort();
     } else {
       switch(frame->type) {
@@ -455,36 +484,37 @@ bool http_parser_add_from_buffer(http_parser_t* parser) {
           parse_frame_continuation(parser);
         */
         default:
-          fprintf(stderr, "Invalid frame type: %d\n", frame->type);
+          log_error("Invalid frame type: %d\n", frame->type);
       }
     }
 
     parser->buffer_position += frame->length;
+    free(frame);
     return true;
   } else {
-    fprintf(stderr, "Not enough in buffer to read frame payload\n");
+    log_error("Not enough in buffer to read frame payload\n");
     abort();
   }
   return false;
 }
 
 void http_parser_read(http_parser_t* parser, char* buffer, size_t len) {
-  fprintf(stderr, "Reading from buffer: %ld\n", len);
+  log_debug("Reading from buffer: %ld\n", len);
   parser->buffer = buffer;
   parser->buffer_length = len;
   parser->buffer_position = 0;
   if (!parser->received_connection_header) {
     if (http_parser_recognize_connection_header(parser)) {
       parser->received_connection_header = true;
-      fprintf(stderr, "Found HTTP2 connection\n");
+      log_debug("Found HTTP2 connection\n");
     } else {
-      fprintf(stderr, "Found non-HTTP2 connection, closing connection\n");
+      log_debug("Found non-HTTP2 connection, closing connection\n");
       parser->closer(parser->data);
       return;
     }
   }
   while (http_parser_add_from_buffer(parser));
-  fprintf(stderr, "What next?\n");
+  log_debug("What next?\n");
 }
 
 void http_response_write(http_response_t* response, char* text, size_t text_length) {
@@ -496,5 +526,8 @@ void http_response_write(http_response_t* response, char* text, size_t text_leng
 
   // emit data frame
   http_emit_data(parser, stream, text, text_length);
+
+  free(text);
+  http_response_free(response);
 }
 

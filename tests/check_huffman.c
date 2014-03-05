@@ -81,7 +81,6 @@ START_TEST(test_huffman_encode_12bit_out) {
 } END_TEST
 
 START_TEST(test_huffman_encode_longer_string) {
-  fprintf(stderr, "HELLO WORLD------------\n");
   // 'H' == 111110000 (9) 1f0
   // 'e' == 10000 (5) 10
   // 'l' == 1110010 (7) 72
@@ -109,6 +108,50 @@ START_TEST(test_huffman_encode_longer_string) {
   ck_assert(strncmp(encoded, result->value, result->length) == 0);
 } END_TEST
 
+START_TEST(test_huffman_encode_date) {
+  // 'W' == 11110011 (8) f3
+  // 'e' == 10000 (5) 10
+  // 'd' == 101011 (6) 2b
+  // ',' == 100010 (6) 22
+  // ' ' == 0000 (4) 0
+  // '0' == 0001 (4) 1
+  // '5' == 01010 (5) a
+  // ' ' == 0000 (4) 0
+  // 'M' == 101000 (6) 28
+  // 'a' == 01111 (5) f
+  // 'r' == 110001 (6) 31
+  // ' ' == 0000 (4) 0
+  // '2' == 0011 (4) 3
+  // '0' == 0001 (4) 1
+  // '1' == 0010 (4) 2
+  // '4' == 01001 (4) 9
+  // ' ' == 0000 (4) 0
+  // '0' == 0001 (4) 1
+  // '9' == 01100 (5) c
+  // ':' == 01101 (5) d
+  // '2' == 0011 (4) 3
+  // '0' == 0001 (4) 1
+  // ':' == 01101 (5) d
+  // '5' == 01010 (5) a
+  // '8' == 01011 (5) b
+  // ' ' == 0000 (4) 0
+  // 'G' == 100111 (6) 27
+  // 'M' == 101000 (6) 28
+  // 'T' == 01110 (5) e
+  //
+  char buf[] = "Wed, 05 Mar 2014 09:20:58 GMT";
+  char encoded[] = {
+    0xf3, 0x85, 0x71, 0x00,
+    0xa8, 0x28, 0x7e, 0x20,
+    0x62, 0x49, 0x01, 0x63,
+    0x4c, 0x5a, 0xa5, 0x84,
+    0xf4, 0x0e 
+  }; // padded with 1s
+  huffman_result_t* result = huffman_encode(buf, strlen(buf));
+  ck_assert_int_eq(18, result->length);
+  ck_assert(strncmp(encoded, result->value, result->length) == 0);
+} END_TEST
+
 Suite* suite() {
   Suite *s = suite_create("huffman");
 
@@ -125,6 +168,7 @@ Suite* suite() {
   tcase_add_test(tc_decoder, test_huffman_encode_single_10bit_char);
   tcase_add_test(tc_decoder, test_huffman_encode_12bit_out);
   tcase_add_test(tc_decoder, test_huffman_encode_longer_string);
+  tcase_add_test(tc_decoder, test_huffman_encode_date);
 
   suite_add_tcase(s, tc_decoder);
 

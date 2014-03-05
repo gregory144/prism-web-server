@@ -11,4 +11,6 @@ typedef struct http_response_t {
 
 } http_response_t;
 
+void http_response_free(http_response_t* response);
+
 #endif

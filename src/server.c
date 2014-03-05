@@ -15,10 +15,19 @@ static long writes = 0;
 
 http_headers_t* add_header(http_headers_t* headers, char* name, char* value) {
   http_headers_t* header = malloc(sizeof(http_headers_t));
-  header->name = name;
-  header->name_length = strlen(name);
-  header->value = value;
-  header->value_length = strlen(value);
+
+  size_t name_length = strlen(name);
+  header->name = malloc(sizeof(char) * (name_length + 1));
+  strncpy(header->name, name, name_length);
+  header->name[name_length] = '\0';
+  header->name_length = name_length;
+
+  size_t value_length = strlen(value);
+  header->value = malloc(sizeof(char) * (value_length + 1));
+  strncpy(header->value, value, value_length);
+  header->value[value_length] = '\0';
+  header->value_length = value_length;
+
   if (headers) {
     header->next = headers;
   } else {
@@ -29,11 +38,11 @@ http_headers_t* add_header(http_headers_t* headers, char* name, char* value) {
 
 void handle_request(http_request_t* request, http_response_t* response) {
 
-  fprintf(stderr, "Got headers:\n");
+  log_debug("Got headers:\n");
 
   hpack_headers_t* curr = request->headers;
   while (curr) {
-    fprintf(stderr, "%s: %s\n", curr->name, curr->value);
+    log_debug("%s: %s\n", curr->name, curr->value);
     curr = curr->next;
   }
 
@@ -50,8 +59,11 @@ void handle_request(http_request_t* request, http_response_t* response) {
 
   response->headers = add_header(response->headers, ":status", "200");
   response->headers = add_header(response->headers, "content-length", content_length);
+  free(content_length);
   response->headers = add_header(response->headers, "server", PACKAGE_STRING);
-  response->headers = add_header(response->headers, "date", date_rfc1123());
+  char* date = date_rfc1123();
+  response->headers = add_header(response->headers, "date", date);
+  free(date);
 
   http_response_write(response, resp_text, strlen(resp_text));
 }
@@ -69,12 +81,11 @@ void server_write(uv_write_t *req, int status) {
   http_client_data_t *client_data = write_req_data->stream->data;
 
   if (status < 0) {
-    fprintf(stderr, "uv_write error: %s, %ld\n", uv_strerror(status), client_data->uv_write_count);
+    log_error("uv_write error: %s, %ld\n", uv_strerror(status), client_data->uv_write_count);
   } else {
     client_data->uv_write_count++;
     client_data->bytes_written += write_req_data->buf->len;
     writes++;
-    //fprintf(stderr, "Wrote %ld bytes (%ld)\n", write_req_data->buf->len, write_req_data->uv_write_count);
   }
   free(write_req_data->buf->base);
   free(write_req_data->buf);
@@ -84,32 +95,30 @@ void server_write(uv_write_t *req, int status) {
 
 void server_connection_close(uv_handle_t* handle) {
   http_client_data_t *client_data = handle->data;
-  fprintf(stderr, "Closing client handle: (%ld = %ld)\n", client_data->bytes_read, client_data->bytes_written);
+  log_info("Closing client handle: (%ld = %ld)\n", client_data->bytes_read, client_data->bytes_written);
   free(client_data->stream);
   http_parser_free(client_data->parser);
   free(client_data);
-  fprintf(stderr, "Stats: reads %ld, writes %ld\n", reads, writes);
+  log_info("Stats: reads %ld, writes %ld\n", reads, writes);
 }
 
 void server_connection_shutdown(uv_shutdown_t* shutdown_req, int status) {
   http_shutdown_data_t *shutdown_data = shutdown_req->data;
   if (status) {
-    fprintf(stderr, "shutdown error: %s\n", uv_strerror(status));
+    log_error("shutdown error: %s\n", uv_strerror(status));
     server_connection_close((uv_handle_t*)shutdown_data->stream);
   } else {
-    fprintf(stderr, "closing...\n");
     uv_close((uv_handle_t*)shutdown_data->stream, server_connection_close);
   }
   free(shutdown_data);
   free(shutdown_req);
 }
 
-
 void server_parse(uv_stream_t *client, char* buffer, size_t len) {
   http_client_data_t *client_data = client->data;
   client_data->bytes_read += len;
   client_data->uv_read_count++;
-  fprintf(stderr, "Read %ld bytes (%ld)\n", len, client_data->uv_read_count);
+  log_info("Read %ld bytes (%ld)\n", len, client_data->uv_read_count);
 
   http_parser_t* parser = client_data->parser;
   http_parser_read(parser, buffer, len);
@@ -119,7 +128,7 @@ void server_parse(uv_stream_t *client, char* buffer, size_t len) {
 
 void server_stream_shutdown(uv_stream_t* stream) {
   http_client_data_t *client_data = stream->data;
-  fprintf(stderr, "shutting down... (%ld)\n", client_data->uv_read_count);
+  log_info("shutting down... (%ld)\n", client_data->uv_read_count);
   uv_shutdown_t *shutdown_req = malloc(sizeof(uv_shutdown_t));
   http_shutdown_data_t *shutdown_data = malloc(sizeof(http_shutdown_data_t));
   shutdown_data->stream = stream;
@@ -138,7 +147,7 @@ void server_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t* buf) {
   } else if (nread < 0) {
     free(buf->base);
 
-    fprintf(stderr, "read error: %s\n", uv_strerror(nread));
+    log_error("read error: %s\n", uv_strerror(nread));
     uv_close((uv_handle_t*)stream, server_connection_close);
 
     return;
@@ -164,13 +173,14 @@ void server_http_write(void* stream, char* buf, size_t len) {
   // keep track of the buffer so we can free it later
   write_req_data->buf = write_buf;
 
-  fprintf(stderr, "uv_write: %s, %ld\n", buf, len);
+  log_debug("uv_write: %s, %ld\n", buf, len);
   int i;
   for (i = 0; i < len; i++) {
-    fprintf(stderr, "%02x ", buf[i]);
+    log_debug("%02x ", (unsigned char)buf[i]);
   }
-  fprintf(stderr, "\n");
+  log_debug("\n");
   uv_write(write_req, stream, write_req_data->buf, 1, server_write);
+  free(buf);
 }
 
 void server_http_close(void* stream) {
@@ -198,7 +208,7 @@ void server_connection_start(uv_stream_t *server, int status) {
   if (uv_accept(server, (uv_stream_t*) client) == 0) {
     int err = uv_read_start((uv_stream_t*) client, server_alloc_buffer, server_read);
     if (err < 0)
-      fprintf(stderr, "Read error: %s\n", uv_strerror(err));
+      log_error("Read error: %s\n", uv_strerror(err));
   }
   else {
     uv_close((uv_handle_t*) client, server_connection_close);
@@ -219,7 +229,7 @@ int server_start() {
   uv_tcp_bind(&server, (struct sockaddr*)&bind_addr, 0);
   int err = uv_listen((uv_stream_t*) &server, 128, server_connection_start);
   if (err < 0) {
-    fprintf(stderr, "Listen error: %s\n", uv_strerror(err));
+    log_error("Listen error: %s\n", uv_strerror(err));
     return 1;
   }
   int ret = uv_run(loop, UV_RUN_DEFAULT);

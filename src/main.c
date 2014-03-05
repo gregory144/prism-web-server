@@ -2,9 +2,10 @@
 #include <stdio.h>
 
 #include "server.h"
+#include "util.h"
 
 void catcher(int sig) {
-  fprintf(stderr, "caught signal %d\n", sig);
+  log_error("caught signal %d\n", sig);
 }
 
 int main() {

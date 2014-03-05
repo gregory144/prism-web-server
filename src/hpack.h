@@ -31,6 +31,8 @@ typedef struct hpack_header_table_entry_t {
 
   size_t index;
 
+  size_t size_in_table;
+
   bool from_static_table;
 
   struct hpack_header_table_entry_t* prev;
@@ -40,9 +42,20 @@ typedef struct hpack_header_table_entry_t {
 
 typedef struct hpack_header_table_t {
 
-  size_t length;
+  // maxiumum size in octets
+  size_t max_size;
+
+  // current size in octets as defined by
+  // the spec
+  size_t current_size;
 
   hpack_header_table_entry_t* entries;
+
+  // number of entries
+  size_t length;
+
+  // number of entries that have been evicted
+  size_t num_evicted;
 
 } hpack_header_table_t;
 
@@ -50,13 +63,15 @@ typedef struct hpack_reference_set_entry_t {
 
   hpack_header_table_entry_t* entry;
 
+  bool added_on_current_request;
+
   struct hpack_reference_set_entry_t* next;
 
 } hpack_reference_set_entry_t;
 
 typedef struct hpack_reference_set_t {
 
-  hpack_reference_set_entry_t* first;
+  hpack_reference_set_entry_t* entries;
 
 } hpack_reference_set_t;
 
@@ -74,7 +89,6 @@ typedef struct hpack_headers_t {
 
 typedef struct hpack_context_t {
 
-  size_t header_table_size;
   hpack_header_table_t* header_table;
 
   hpack_reference_set_t* reference_set;
@@ -86,6 +100,10 @@ hpack_decode_quantity_result_t* hpack_decode_quantity(uint8_t* buf, size_t lengt
 size_t hpack_encode_quantity(uint8_t* buf, size_t offset, size_t quantity); 
 
 hpack_context_t* hpack_context_init(size_t header_table_size);
+
+void hpack_context_free(hpack_context_t* context);
+
+void hpack_headers_free(hpack_headers_t* headers);
 
 void hpack_adjust_header_table_size(hpack_context_t* context);
 

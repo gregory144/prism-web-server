@@ -1,8 +1,9 @@
-#include <stdint.h>
-#include <stdlib.h>
 #include <stdbool.h>
-#include <time.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "util.h"
 
@@ -13,8 +14,8 @@ inline string_and_length_t* string_and_length(char* string, size_t length) {
   return sl;
 }
 
-inline bool get_bit(char* buffer, size_t total_bit_index) {
-  char* at_byte = buffer + (total_bit_index / 8);
+inline bool get_bit(uint8_t* buffer, size_t total_bit_index) {
+  uint8_t* at_byte = buffer + (total_bit_index / 8);
   size_t bit_index = total_bit_index % 8;
 
   int b = *at_byte;
@@ -23,8 +24,8 @@ inline bool get_bit(char* buffer, size_t total_bit_index) {
   return res;
 }
 
-inline uint8_t get_bits8(char* buf, size_t offset, size_t num_bytes, uint8_t mask) {
-  char* curr = buf + offset;
+inline uint8_t get_bits8(uint8_t* buf, size_t offset, size_t num_bytes, uint8_t mask) {
+  uint8_t* curr = buf + offset;
   uint8_t val = 0;
   for (; curr < buf + offset + num_bytes; curr++) {
     val = (val << 8) | *curr;
@@ -32,8 +33,8 @@ inline uint8_t get_bits8(char* buf, size_t offset, size_t num_bytes, uint8_t mas
   return val & mask;
 }
 
-inline uint16_t get_bits16(char* buf, size_t offset, size_t num_bytes, uint16_t mask) {
-  char* curr = buf + offset;
+inline uint16_t get_bits16(uint8_t* buf, size_t offset, size_t num_bytes, uint16_t mask) {
+  uint8_t* curr = buf + offset;
   uint16_t val = 0;
   for (; curr < buf + offset + num_bytes; curr++) {
     val = (val << 8) | *curr;
@@ -41,8 +42,8 @@ inline uint16_t get_bits16(char* buf, size_t offset, size_t num_bytes, uint16_t 
   return val & mask;
 }
 
-inline uint32_t get_bits32(char* buf, size_t offset, size_t num_bytes, uint32_t mask) {
-  char* curr = buf + offset;
+inline uint32_t get_bits32(uint8_t* buf, size_t offset, size_t num_bytes, uint32_t mask) {
+  uint8_t* curr = buf + offset;
   uint32_t val = 0;
   for (; curr < buf + offset + num_bytes; curr++) {
     val = (val << 8) | *curr;
@@ -70,4 +71,45 @@ char* date_rfc1123() {
     memcpy(buf+8, MONTH_NAMES[tm->tm_mon], 3);
 
     return buf;
+}
+
+#define LOG_WITH_LEVEL(level) \
+  va_list ap; \
+  va_start(ap, format); \
+  size_t needed = vsnprintf(NULL, 0, format, ap); \
+  va_end(ap); \
+  char* buffer = malloc(sizeof(char) * (needed + 1)); \
+  va_start(ap, format); \
+  vsnprintf(buffer, needed, format, ap); \
+  va_end(ap); \
+  fprintf(stderr, "%s\t%s\n", level, buffer);
+
+void log_fatal(char* format, ...) {
+#ifdef LOG_FATAL
+  LOG_WITH_LEVEL("FATAL")
+#endif
+}
+
+void log_warning(char* format, ...) {
+#ifdef LOG_WARN
+  LOG_WITH_LEVEL("WARN")
+#endif
+}
+
+void log_error(char* format, ...) {
+#ifdef LOG_ERROR
+  LOG_WITH_LEVEL("ERROR")
+#endif
+}
+
+void log_info(char* format, ...) {
+#ifdef LOG_INFO
+  LOG_WITH_LEVEL("INFO")
+#endif
+}
+
+void log_debug(char* format, ...) {
+#ifdef LOG_DEBUG
+  LOG_WITH_LEVEL("DEBUG")
+#endif
 }

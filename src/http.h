@@ -233,18 +233,9 @@ struct http_stream_s {
   http_header_fragment_t* header_fragments;
 
   hpack_headers_t* headers;
-  hpack_context_t* encoding_context;
-
-  hpack_context_t* decoding_context;
 };
 
 typedef void (*request_cb)(http_request_t* request, http_response_t* response);
-
-typedef struct http_request_listener_t {
-
-  request_cb callback;
-
-} http_request_listener_t;
 
 typedef void (*write_cb)(void* data, char* buf, size_t len);
 
@@ -258,6 +249,7 @@ struct http_parser_s {
   void* data;
   write_cb writer;
   close_cb closer;
+  request_cb request_listener;
 
   /**
    * Parser state
@@ -285,7 +277,8 @@ struct http_parser_s {
   // TODO - use a better data structure to get a stream
   http_stream_t **streams;
 
-  http_request_listener_t* request_listener;
+  hpack_context_t* encoding_context;
+  hpack_context_t* decoding_context;
 };
 
 http_parser_t* http_parser_init(void* data, request_cb request_handler, write_cb writer, close_cb closer);

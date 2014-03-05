@@ -24,4 +24,6 @@ typedef struct http_request_t {
 
 char* http_request_header_get(http_request_t* request, char* name);
 
+void http_request_free(http_request_t* request);
+
 #endif
