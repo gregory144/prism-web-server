@@ -33,14 +33,15 @@ START_TEST(test_hpack_decode_large_quantity_in_5bit_prefix) {
 } END_TEST
 
 START_TEST(test_hpack_encode_10_in_5bit_prefix) {
-  unsigned char buf[1024];
+  fprintf(stderr, "10 in 5bit_prefix\n");
+  unsigned char buf[1024] = {0};
   size_t size = hpack_encode_quantity(buf, 3, 10);
   ck_assert_int_eq(size, 1);
   ck_assert_int_eq(buf[0], 0xA);
 } END_TEST
 
 START_TEST(test_hpack_encode_10_in_5bit_prefix_already_filled_in) {
-  unsigned char buf[1024];
+  unsigned char buf[1024] = {0};
   buf[0] = 0xE0;
   size_t size = hpack_encode_quantity(buf, 3, 10);
   ck_assert_int_eq(size, 1);
@@ -48,7 +49,7 @@ START_TEST(test_hpack_encode_10_in_5bit_prefix_already_filled_in) {
 } END_TEST
 
 START_TEST(test_hpack_encode_1337_quantity_in_5bit_prefix) {
-  unsigned char buf[1024];
+  unsigned char buf[1024] = {0};
   size_t size = hpack_encode_quantity(buf, 3, 1337);
   ck_assert_int_eq(size, 3);
   ck_assert_int_eq(buf[0], 0x1F);
@@ -57,14 +58,14 @@ START_TEST(test_hpack_encode_1337_quantity_in_5bit_prefix) {
 } END_TEST
 
 START_TEST(test_hpack_encode_42_quantity_in_8bit_prefix) {
-  unsigned char buf[1024];
+  unsigned char buf[1024] = {0};
   size_t size = hpack_encode_quantity(buf, 8, 42);
   ck_assert_int_eq(size, 1);
   ck_assert_int_eq(buf[1], 0x2A);
 } END_TEST
 
 START_TEST(test_hpack_encode_and_decode_smaller_numbers) {
-  unsigned char buf[1024];
+  unsigned char buf[1024] = {0};
   size_t i;
   for (i = 0; i < INT_MAX; i += 1000000) {
     hpack_encode_quantity(buf, 0, i);
@@ -74,7 +75,7 @@ START_TEST(test_hpack_encode_and_decode_smaller_numbers) {
 } END_TEST
 
 START_TEST(test_hpack_encode_and_decode_small_numbers) { // 1 - 2^16
-  unsigned char buf[1024];
+  unsigned char buf[1024] = {0};
   size_t i;
   for (i = 0; i < 2 << 15; i++) {
     hpack_encode_quantity(buf, 0, i);
@@ -84,7 +85,7 @@ START_TEST(test_hpack_encode_and_decode_small_numbers) { // 1 - 2^16
 } END_TEST
 
 START_TEST(test_hpack_encode_and_decode_large_numbers) {
-  unsigned char buf[1024];
+  unsigned char buf[1024] = {0};
   int i;
   size_t value = 1;
   int multiplier = 2;
