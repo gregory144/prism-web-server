@@ -4,6 +4,21 @@
 
 #include "../src/huffman.h"
 
+void check_encoded_val(unsigned char expected[], size_t expected_length, unsigned char result[], size_t length) {
+  ck_assert_int_eq(expected_length, length);
+  size_t l = length + 1;
+  unsigned char expected_cstr[l];
+  memcpy(expected_cstr, expected, length);
+  expected_cstr[length] = 0;
+  unsigned char result_cstr[l];
+  memcpy(result_cstr, result, length);
+  result_cstr[length] = 0;
+  int i = 0;
+  for (i = 0; i < expected_length; i++) {
+    ck_assert_uint_eq(expected_cstr[i], result_cstr[i]);
+  }
+}
+
 void setup() {
 }
 
@@ -39,117 +54,84 @@ START_TEST(test_huffman_decode_two_chars_with_eos) {
 } END_TEST
 
 START_TEST(test_huffman_encode_single_8bit_char) {
-  // 'E' == 0xed
+  // 'E' == 0xee
   char buf[] = { 'E' };
-  char encoded[] = { 0xed };
+  unsigned char encoded[] = { 0xee };
 
   huffman_result_t* result = huffman_encode(buf, 1);
-  ck_assert_int_eq(1, result->length);
-  ck_assert(strncmp(encoded, result->value, result->length) == 0);
+  check_encoded_val(encoded, 1, result->value, result->length);
 } END_TEST
 
 START_TEST(test_huffman_encode_single_5bit_char) {
-  // 'T' == 0xe
-  char buf[] = { 'T' };
-  char encoded[] = { 0x77 }; // padded with 1s
+  // 'p' == 0xe
+  char buf[] = { 'p' };
+  unsigned char encoded[] = { 0x77 }; // padded with 1s
 
   huffman_result_t* result = huffman_encode(buf, 1);
-  ck_assert_int_eq(1, result->length);
-  ck_assert(strncmp(encoded, result->value, result->length) == 0);
+  check_encoded_val(encoded, 1, result->value, result->length);
 } END_TEST
 
 START_TEST(test_huffman_encode_single_10bit_char) {
-  // 'K' == 0x3f9 0b1111111001
-  // 1111 1110 0111 1111
-  char buf[] = { 'K' };
-  char encoded[] = { 0xFE, 0x7F }; // padded with 1s
+  // 'Z' == 0x3fc 0b1111111100
+  // 1111 1111 0011 1111
+  char buf[] = { 'Z' };
+  unsigned char encoded[] = { 0xFF, 0x3F }; // padded with 1s
 
   huffman_result_t* result = huffman_encode(buf, 1);
-  ck_assert_int_eq(2, result->length);
-  ck_assert(strncmp(encoded, result->value, result->length) == 0);
+  check_encoded_val(encoded, 2, result->value, result->length);
 } END_TEST
 
 START_TEST(test_huffman_encode_12bit_out) {
-  // 'M' == 0x28 101000
-  // 'G' == 0x27 100111
+  // '5' == 0x28 101000
+  // '4' == 0x27 100111
   // 1010 0010 0111 1111
-  char buf[] = { 'M', 'G' };
-  char encoded[] = { 0xA2, 0x7F }; // padded with 1s
+  char buf[] = { '5', '4' };
+  unsigned char encoded[] = { 0xA2, 0x7F }; // padded with 1s
   huffman_result_t* result = huffman_encode(buf, 2);
-  ck_assert_int_eq(2, result->length);
-  ck_assert(strncmp(encoded, result->value, result->length) == 0);
+  check_encoded_val(encoded, 2, result->value, result->length);
 } END_TEST
 
 START_TEST(test_huffman_encode_longer_string) {
-  // 'H' == 111110000 (9) 1f0
-  // 'e' == 10000 (5) 10
-  // 'l' == 1110010 (7) 72
-  // 'l' == 1110010 (7) 72
-  // 'o' == 101111 (6) 2f
-  // ' ' == 0000 (4) 0
-  // 'W' == 11110011 (8) f3
-  // 'o' == 101111 (6) 2f
-  // 'r' == 110001 (6) 31
-  // 'l' == 1110010 (7) 72
-  // 'd' == 101011 (6) 2b
-  // '!' == 111111111010 (12) ffa
+  // 'H' == 111101111 (9) 1ef
+  // 'e' == 0001 (4) 1
+  // 'l' == 01011 (5) b
+  // 'l' == 01011 (5) b
+  // 'o' == 01101 (5) d
+  // ' ' == 11101000 (8) e8
+  // 'W' == 111111010 (9) 1fa
+  // 'o' == 01101 (5) d
+  // 'r' == 01111 (5) f
+  // 'l' == 01011 (5) b
+  // 'd' == 110000 (6) 30
+  // '!' == 111111111100 (12) ffc
   //
-  // 1111 1000 0100 0011 1001 0111 0010 1011
-  // 1100 0011 1100 1110 1111 1100 0111 1001
-  // 0101 0111 1111 1111 0101 1111
-  char buf[] = "Hello World!";
-  char encoded[] = {
-    0xF8, 0x43, 0x97, 0x2B,
-    0xC3, 0xCE, 0xFC, 0x79,
-    0x57, 0xFF, 0x5F
+  // 1111 0111 1000 1010 1101 0110
+  // 1101 1110 1000 1111 1101 0011
+  // 0101 1110 1011 1100 0011 1111
+  // 1111 0011
+  unsigned char buf[] = "Hello World!";
+  unsigned char encoded[] = {
+    0xf7, 0x8a, 0xd6, 0xde,
+    0x8f, 0xd3, 0x5e, 0xbc,
+    0x3f, 0xf3
   }; // padded with 1s
   huffman_result_t* result = huffman_encode(buf, 12);
-  ck_assert_int_eq(11, result->length);
-  ck_assert(strncmp(encoded, result->value, result->length) == 0);
+  check_encoded_val(encoded, 10, result->value, result->length);
 } END_TEST
 
 START_TEST(test_huffman_encode_date) {
-  // 'W' == 11110011 (8) f3
-  // 'e' == 10000 (5) 10
-  // 'd' == 101011 (6) 2b
-  // ',' == 100010 (6) 22
-  // ' ' == 0000 (4) 0
-  // '0' == 0001 (4) 1
-  // '5' == 01010 (5) a
-  // ' ' == 0000 (4) 0
-  // 'M' == 101000 (6) 28
-  // 'a' == 01111 (5) f
-  // 'r' == 110001 (6) 31
-  // ' ' == 0000 (4) 0
-  // '2' == 0011 (4) 3
-  // '0' == 0001 (4) 1
-  // '1' == 0010 (4) 2
-  // '4' == 01001 (4) 9
-  // ' ' == 0000 (4) 0
-  // '0' == 0001 (4) 1
-  // '9' == 01100 (5) c
-  // ':' == 01101 (5) d
-  // '2' == 0011 (4) 3
-  // '0' == 0001 (4) 1
-  // ':' == 01101 (5) d
-  // '5' == 01010 (5) a
-  // '8' == 01011 (5) b
-  // ' ' == 0000 (4) 0
-  // 'G' == 100111 (6) 27
-  // 'M' == 101000 (6) 28
-  // 'T' == 01110 (5) e
-  //
   char buf[] = "Wed, 05 Mar 2014 09:20:58 GMT";
   char encoded[] = {
-    0xf3, 0x85, 0x71, 0x00,
-    0xa8, 0x28, 0x7e, 0x20,
-    0x62, 0x49, 0x01, 0x63,
-    0x4c, 0x5a, 0xa5, 0x84,
-    0xf4, 0x0e 
+    0xfd, 0x0e, 0x1d, 0x3d,
+    0x05, 0xa3, 0xa3, 0xbd,
+    0x0f, 0xe8, 0x39, 0x4d,
+    0x3f, 0x41, 0x6c, 0xf6,
+    0x1c, 0xbe, 0xca, 0x2b,
+    0xe8, 0xf7, 0x77, 0xf8,
+    0xff,
   }; // padded with 1s
   huffman_result_t* result = huffman_encode(buf, strlen(buf));
-  ck_assert_int_eq(18, result->length);
-  ck_assert(strncmp(encoded, result->value, result->length) == 0);
+  check_encoded_val(encoded, 25, result->value, result->length);
 } END_TEST
 
 Suite* suite() {

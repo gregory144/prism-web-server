@@ -39,7 +39,7 @@ end
 
 # read binary strings from input
 value = 0
-text = File.open('huffman_requests.txt').read
+text = File.open('huffman.txt').read
 table = []
 text.each_line do |line|
   components = line.split(/\s+/)
