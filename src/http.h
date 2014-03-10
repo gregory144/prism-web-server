@@ -37,14 +37,38 @@
  */
 #define SETTINGS_HEADER_TABLE_SIZE 1
 #define SETTINGS_ENABLE_PUSH 2
-#define SETTINGS_MAX_CONCURRENT_STREAMS 4
-#define SETTINGS_INITIAL_WINDOW_SIZE 7
-#define SETTINGS_FLOW_CONTROL_OPTIONS 10
+#define SETTINGS_MAX_CONCURRENT_STREAMS 3
+#define SETTINGS_INITIAL_WINDOW_SIZE 4
 
+/**
+ * Default setting values
+ */
 #define DEFAULT_HEADER_TABLE_SIZE 4096
 #define DEFAULT_ENABLE_PUSH 1
 #define DEFAULT_MAX_CONNCURRENT_STREAMS 100
 #define DEFAULT_INITIAL_WINDOW_SIZE 65535
+
+/**
+ * Frame flags
+ */
+
+// headers
+#define HEADERS_FLAG_END_STREAM 0x1
+#define HEADERS_FLAG_END_SEGMENT 0x2
+#define HEADERS_FLAG_END_HEADERS 0x4
+#define HEADERS_FLAG_PRIORITY 0x8
+#define HEADERS_FLAG_PAD_LOW 0x10
+#define HEADERS_FLAG_PAD_HIGH 0x20
+
+// data
+#define DATA_FLAG_END_STREAM 0x1
+#define DATA_FLAG_END_SEGMENT 0x2
+#define DATA_FLAG_PAD_LOW 0x10
+#define DATA_FLAG_PAD_HIGH 0x20
+
+//settings
+#define SETTINGS_FLAG_ACK 0x1
+
 
 /**
  * HTTP errors
@@ -272,7 +296,6 @@ struct http_parser_s {
   bool enable_push;
   size_t max_concurrent_streams;
   size_t initial_window_size;
-  bool disable_flow_control;
 
   // TODO - use a better data structure to get a stream
   http_stream_t **streams;

@@ -10,14 +10,6 @@
 #define FRAME_HEADER_SIZE 8 // octets
 #define DEFAULT_STREAM_PRIORITY 0x40000000 // 2^30
 
-#define HEADERS_FLAG_END_STREAM 0x1
-#define HEADERS_FLAG_END_HEADERS 0x4
-#define HEADERS_FLAG_PRIORITY 0x8
-
-#define DATA_FLAG_END_STREAM 0x1
-
-#define SETTINGS_FLAG_ACK 0x1
-
 const char* HTTP_CONNECTION_HEADER = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 const size_t HTTP_CONNECTION_HEADER_LENGTH = 24;
 
@@ -120,6 +112,7 @@ void http_emit_headers(http_parser_t* parser, http_stream_t* stream, http_header
 
 void http_emit_data(http_parser_t* parser, http_stream_t* stream, char* text, size_t text_length) {
   // TODO split large text into multiple frames
+  // TODO support adding padding?
   size_t buf_length = FRAME_HEADER_SIZE + text_length;
   char* buf = malloc(buf_length);
   uint8_t flags = 0;
@@ -175,10 +168,6 @@ void http_setting_set(http_parser_t* parser, uint8_t id, uint32_t value) {
     case SETTINGS_INITIAL_WINDOW_SIZE:
       log_debug("Initial window size: %d\n", value);
       parser->initial_window_size = value;
-      break;
-    case SETTINGS_FLOW_CONTROL_OPTIONS:
-      log_debug("Flow control options: %d\n", value);
-      parser->disable_flow_control = value & 0x1; // only first bit matters
       break;
     default:
       // TODO emit PROTOCOL_ERROR
@@ -328,8 +317,8 @@ void http_parse_frame_settings(http_parser_t* parser, http_frame_settings_t* fra
     size_t i;
     for (i = 0; i < num_settings; i++) {
       char* curr_setting = pos + (i * setting_size);
-      uint32_t setting_id = get_bits32(curr_setting, 1, 3, 0x0FFF);
-      uint32_t setting_value = get_bits32(curr_setting, 4, 4, 0xFFFF);
+      uint32_t setting_id = get_bits32(curr_setting, 0, 1, 0x0FF);
+      uint32_t setting_value = curr_setting[1];
       http_setting_set(parser, setting_id, setting_value);
     }
     parser->received_settings = true;
