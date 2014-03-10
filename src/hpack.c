@@ -280,7 +280,8 @@ void hpack_header_table_evict(hpack_context_t* context) {
       hpack_header_table_entry_free(entry);
 
       header_table->current_size -= entry->size_in_table;
-      circular_buffer_evict(header_table->entries);
+      hpack_header_table_entry_t* evicted = circular_buffer_evict(header_table->entries);
+      hpack_header_table_entry_free(evicted);
     }
   }
 }

@@ -1,3 +1,6 @@
+#include <stdio.h>
+#include <string.h>
+
 #include "circular_buffer.h"
 
 circular_buffer_t* circular_buffer_init(size_t capacity) {
@@ -11,9 +14,31 @@ circular_buffer_t* circular_buffer_init(size_t capacity) {
   return buf;
 }
 
-circular_buffer_t* circular_buffer_resize(circular_buffer_t* buf, size_t new_capacity) {
-  buf->entries = realloc(buf->entries, sizeof(circular_buffer_t));
-  buf->capacity = new_capacity;
+circular_buffer_t* circular_buffer_grow(circular_buffer_t* buf) {
+  buf->entries = realloc(buf->entries, sizeof(void*) * buf->capacity * 2);
+  // If the buffer wraps around the end of the array, we need to move the data around
+  // so that we can still compute the indices correctly.
+  // Say the buffer wraps around and splits the data into 2 segments:
+  // segment a and segment b:
+  // seg_a   seg_b
+  // ---     ******
+  // We need to reconfigure the data so that it looks like:
+  // seg_bseg_a
+  // *****-----
+  size_t shift = buf->shift;
+  size_t length = buf->length;
+  size_t capacity = buf->capacity;
+  if (shift + length > capacity) {
+    size_t seg_a_length = shift + length - capacity;
+    size_t seg_b_length = length - seg_a_length;
+    void** temp = malloc(sizeof(void*) * seg_a_length);
+    memcpy(temp, buf->entries, seg_a_length);
+    memcpy(buf->entries, buf->entries + shift, seg_b_length);
+    memcpy(buf->entries + seg_b_length, temp, seg_a_length);
+    free(temp);
+    buf->shift = 0;
+  }
+  buf->capacity *= 2;
   return buf;
 }
 
@@ -25,8 +50,8 @@ size_t circular_buffer_target_index(circular_buffer_t* buf, size_t index) {
 }
 
 bool circular_buffer_add(circular_buffer_t* buf, void* entry) {
-  if (buf->length + 1 > buf->capacity) {
-    if (!circular_buffer_resize(buf, buf->capacity * 2)) {
+  if (buf->length >= buf->capacity) {
+    if (!circular_buffer_grow(buf)) {
       return false;
     }
   }
@@ -36,22 +61,25 @@ bool circular_buffer_add(circular_buffer_t* buf, void* entry) {
   return true;
 }
 
-bool circular_buffer_evict(circular_buffer_t* buf) {
-  buf->length--;
-  buf->shift = (buf->shift + 1) % buf->capacity;
-  return true;
-}
-
 void* circular_buffer_get(circular_buffer_t* buf, size_t index) {
   size_t target_index = circular_buffer_target_index(buf, index);
   return buf->entries[target_index];
 }
 
+void* circular_buffer_evict(circular_buffer_t* buf) {
+  void* last = circular_buffer_get(buf, buf->length);
+  buf->length--;
+  buf->shift = (buf->shift + 1) % buf->capacity;
+  return last;
+}
+
 void circular_buffer_free(circular_buffer_t* buf, void (free_entry)(void*)) {
-  while (buf->length > 0) {
-    void* entry = circular_buffer_get(buf, buf->length);
-    free_entry(entry);
-    circular_buffer_evict(buf);
+  size_t length = buf->length;
+  size_t shift = buf->shift;
+  size_t i;
+  for (i = 0; i < length; i++) {
+    void** entry = buf->entries + ( (shift + i) % buf->capacity );
+    free_entry(*entry);
   }
   free(buf->entries);
   free(buf);
