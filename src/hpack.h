@@ -11,7 +11,14 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "circular_buffer.h"
+
 #define HEADER_TABLE_OVERHEAD 32
+
+#define ESTIMATED_HEADER_NAME_SIZE 10
+#define ESTIMATED_HEADER_VALUE_SIZE 20
+#define ESTIMATED_HEADER_ENTRY_SIZE HEADER_TABLE_OVERHEAD + \
+  ESTIMATED_HEADER_NAME_SIZE + ESTIMATED_HEADER_VALUE_SIZE
 
 typedef struct hpack_decode_quantity_result_t {
   size_t num_bytes;
@@ -31,8 +38,6 @@ typedef struct hpack_header_table_entry_t {
   char* value;
   size_t value_length;
 
-  size_t index;
-
   size_t size_in_table;
 
   bool from_static_table;
@@ -51,13 +56,7 @@ typedef struct hpack_header_table_t {
   // the spec
   size_t current_size;
 
-  hpack_header_table_entry_t* entries;
-
-  // number of entries
-  size_t length;
-
-  // number of entries that have been evicted
-  size_t num_evicted;
+  circular_buffer_t* entries;
 
 } hpack_header_table_t;
 

@@ -132,8 +132,7 @@ size_t hpack_encode_quantity(uint8_t* buf, size_t offset, size_t i) {
   uint8_t n = 8 - byte_offset;
   uint8_t bitmask = ((1 << byte_offset) - 1) << n;
   uint8_t first_byte = buf[buf_index] & bitmask;
-  //uint8_t p = (1 << n) - 1; // 2^n - 1
-  uint8_t p = (2 << (n - 1)) - 1; // 2^n - 1
+  uint8_t p = (1 << n) - 1; // 2^n - 1
 
   if (i < p) {
     buf[buf_index++] = first_byte | i;
@@ -158,23 +157,23 @@ hpack_context_t* hpack_context_init(size_t header_table_size) {
   context->header_table = malloc(sizeof(hpack_header_table_t));
   context->header_table->max_size = header_table_size;
   context->header_table->current_size = 0;
-  context->header_table->length = 0;
-  context->header_table->num_evicted = 0;
-  context->header_table->entries = NULL;
+  context->header_table->entries = circular_buffer_init(header_table_size / ESTIMATED_HEADER_ENTRY_SIZE);
 
   return context;
 }
 
-void hpack_header_table_entry_free(hpack_header_table_entry_t* entry) {
-  while (entry) {
-    hpack_header_table_entry_t* current = entry;
-    entry = entry->next;
-    if (!current->from_static_table) {
-      free(current->name);
-      free(current->value);
-    }
-    free(current);
+void hpack_header_table_entry_free(void* entry) {
+  hpack_header_table_entry_t* header = entry;
+  if (!header->from_static_table) {
+    free(header->name);
+    free(header->value);
   }
+  free(header);
+}
+
+void hpack_header_table_free(hpack_header_table_t* header_table) {
+  circular_buffer_free(header_table->entries, hpack_header_table_entry_free);
+  free(header_table);
 }
 
 void hpack_reference_set_entry_free(hpack_reference_set_entry_t* entry) {
@@ -190,10 +189,7 @@ void hpack_context_free(hpack_context_t* context) {
     hpack_reference_set_entry_free(context->reference_set->entries);
   }
   free(context->reference_set);
-  if (context->header_table->entries) {
-    hpack_header_table_entry_free(context->header_table->entries);
-  }
-  free(context->header_table);
+  hpack_header_table_free(context->header_table);
   free(context);
 }
 
@@ -205,14 +201,6 @@ void hpack_headers_free(hpack_headers_t* headers) {
     free(header->value);
     free(header);
   }
-}
-
-size_t hpack_header_table_adjusted_index(hpack_context_t* context, size_t index) {
-  size_t length = context->header_table->length;
-  size_t num_evicted = context->header_table->num_evicted;
-  size_t end = length + num_evicted;
-  log_debug("index: %ld, length %ld, num_evicted: %ld, end: %ld, result: %ld\n", index,  length, num_evicted, end, end - index + 1);
-  return end - index + 1;
 }
 
 void hpack_reference_set_add(hpack_context_t* context,
@@ -233,12 +221,11 @@ void hpack_reference_set_clear(hpack_context_t* context) {
   context->reference_set->entries = NULL;
 }
 
-void hpack_reference_set_remove(hpack_context_t* context, size_t index) {
+void hpack_reference_set_remove(hpack_context_t* context, hpack_header_table_entry_t* entry) {
   hpack_reference_set_entry_t* iter = context->reference_set->entries;
   hpack_reference_set_entry_t* prev = NULL;
-  size_t target_index = hpack_header_table_adjusted_index(context, index);
   for (; iter; iter = iter->next) {
-    if (iter->entry->index == target_index) {
+    if (iter->entry == entry) {
       if (!prev) {
         context->reference_set->entries = iter->next;
       } else {
@@ -250,67 +237,51 @@ void hpack_reference_set_remove(hpack_context_t* context, size_t index) {
   }
 }
 
-bool hpack_reference_set_contains(hpack_context_t* context, size_t index) {
-  size_t target_index = hpack_header_table_adjusted_index(context, index);
-
+bool hpack_reference_set_contains(hpack_context_t* context, hpack_header_table_entry_t* entry) {
   hpack_reference_set_entry_t* iter = context->reference_set->entries;
   for (; iter; iter = iter->next) {
-    if (iter->entry->index == target_index) {
+    if (iter->entry == entry) {
       return true;
     }
   }
   return false;
 }
 
+hpack_header_table_entry_t* hpack_header_table_get(hpack_context_t* context, size_t index);
 
 void hpack_header_table_evict(hpack_context_t* context) {
   hpack_header_table_t* header_table = context->header_table;
 
-  hpack_header_table_entry_t* trailer = NULL;
-  hpack_header_table_entry_t* iter = header_table->entries;
-  hpack_header_table_entry_t* last = NULL;
+  size_t last_index = header_table->entries->length;
+  if (last_index > 0) {
+    hpack_header_table_entry_t* entry = hpack_header_table_get(context, last_index);
+    if (entry) {
 
-  size_t last_index = header_table->length;
-  size_t target_index = hpack_header_table_adjusted_index(context, last_index);
-
-  while (iter) {
-    if (iter->index == target_index) {
-      last = iter;
-      break;
-    }
-    trailer = iter;
-    iter = iter->next;
-  }
-
-  if (last) {
-    if (trailer) {
-      trailer->next = last->next;
-    }
-    header_table->current_size -= last->size_in_table;
-    header_table->length--;
-
-    // remove from reference set as well
-    hpack_reference_set_entry_t* refset_iter = context->reference_set->entries;
-    hpack_reference_set_entry_t* refset_trailer = NULL;
-    hpack_reference_set_entry_t* refset_target = NULL;
-    while (refset_iter) {
-      if (refset_iter->entry == last) {
-        refset_target = refset_iter;
-        break;
+      // remove from reference set as well
+      hpack_reference_set_entry_t* refset_iter = context->reference_set->entries;
+      hpack_reference_set_entry_t* refset_trailer = NULL;
+      hpack_reference_set_entry_t* refset_target = NULL;
+      while (refset_iter) {
+        if (refset_iter->entry == entry) {
+          refset_target = refset_iter;
+          break;
+        }
+        refset_trailer = refset_iter;
+        refset_iter = refset_iter->next;
       }
-      refset_trailer = refset_iter;
-      refset_iter = refset_iter->next;
-    }
 
-    if (refset_target) {
-      if (refset_trailer) {
-        refset_trailer->next = refset_target->next;
+      if (refset_target) {
+        if (refset_trailer) {
+          refset_trailer->next = refset_target->next;
+        }
+        free(refset_target);
       }
-      free(refset_target);
-    }
 
-    context->header_table->num_evicted++;
-    free(last);
+      hpack_header_table_entry_free(entry);
+
+      header_table->current_size -= entry->size_in_table;
+      circular_buffer_evict(header_table->entries);
+    }
   }
 }
 
@@ -342,9 +313,6 @@ hpack_headers_t* hpack_emit_header(hpack_headers_t* headers, char* name,
 hpack_header_table_entry_t* hpack_header_table_add_existing_entry(
     hpack_context_t* context, hpack_header_table_entry_t* header) {
 
-  header->index = context->header_table->length +
-    context->header_table->num_evicted + 1;
-
   hpack_header_table_t* header_table = context->header_table;
 
   size_t new_header_table_size = header_table->current_size +
@@ -362,13 +330,8 @@ hpack_header_table_entry_t* hpack_header_table_add_existing_entry(
 
     log_info("Adding %s: %s\n", header->name, header->value);
 
-    if (context->header_table->entries) {
-      context->header_table->entries->prev = header;
-    }
-    header->next = context->header_table->entries;
     context->header_table->current_size += header->size_in_table;
-    context->header_table->entries = header;
-    context->header_table->length++;
+    circular_buffer_add(context->header_table->entries, header);
 
     // add to reference set
     hpack_reference_set_add(context, header);
@@ -394,7 +357,7 @@ hpack_header_table_entry_t* hpack_header_table_add(hpack_context_t* context,
 }
 
 hpack_header_table_entry_t* hpack_static_table_get(hpack_context_t* context, size_t index) {
-  size_t header_table_length = context->header_table->length;
+  size_t header_table_length = context->header_table->entries->length;
   if (index + 1 > header_table_length) {
     size_t static_table_index = index - header_table_length - 1;
     static_entry_t entry = static_table[static_table_index];
@@ -419,16 +382,8 @@ hpack_header_table_entry_t* hpack_static_table_get(hpack_context_t* context, siz
 }
 
 hpack_header_table_entry_t* hpack_header_table_get(hpack_context_t* context, size_t index) {
-  size_t target_index = hpack_header_table_adjusted_index(context, index);
-  log_debug("Real index: %ld, target_index: %ld\n", index, target_index);
-  if (index + 1 <= context->header_table->length) {
-    hpack_header_table_entry_t* iter = context->header_table->entries;
-    while (iter) {
-      if (iter->index == target_index) {
-        return iter;
-      }
-      iter = iter->next;
-    }
+  if (index > 0 && index + 1 <= context->header_table->entries->length) {
+    return circular_buffer_get(context->header_table->entries, index);
   }
   return NULL;
 }
@@ -525,11 +480,10 @@ hpack_headers_t* hpack_decode_indexed_header(
     hpack_reference_set_clear(context);
   } else {
     // if the value is in the reference set - remove it from the reference set
-    if (hpack_reference_set_contains(context, result->value)) {
-      hpack_reference_set_remove(context, result->value);
+    hpack_header_table_entry_t* entry = hpack_header_table_get(context, result->value);
+    if (hpack_reference_set_contains(context, entry)) {
+      hpack_reference_set_remove(context, entry);
     } else {
-      hpack_header_table_entry_t* entry = hpack_header_table_get(context,
-          result->value);
       if (!entry) {
         entry = hpack_static_table_get(context, result->value);
         hpack_header_table_add_existing_entry(context, entry);
@@ -552,6 +506,7 @@ hpack_headers_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t len
   size_t current = 0;
   hpack_headers_t* headers = NULL;
 
+  /*
   log_debug("BEFORE:\n");
   log_debug("Reference Set:\n");
   hpack_reference_set_entry_t* refset_iter2 = context->reference_set->entries;
@@ -570,6 +525,7 @@ hpack_headers_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t len
       header->name_length, header->value, header->value_length);
     ht_iter = ht_iter->next;
   }
+  */
 
   log_debug("Decompressing headers: %ld, %ld\n", current, length);
   while (current < length) {
@@ -600,6 +556,7 @@ hpack_headers_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t len
     refset_iter = refset_iter->next;
   }
 
+  /*
   log_debug("AFTER:\n");
   log_debug("Reference Set:\n");
   refset_iter2 = context->reference_set->entries;
@@ -618,6 +575,7 @@ hpack_headers_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t len
       header->name_length, header->value, header->value_length);
     ht_iter = ht_iter->next;
   }
+  */
 
   return headers;
 }
