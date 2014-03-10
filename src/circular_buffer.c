@@ -15,7 +15,6 @@ circular_buffer_t* circular_buffer_init(size_t capacity) {
 }
 
 circular_buffer_t* circular_buffer_grow(circular_buffer_t* buf) {
-  buf->entries = realloc(buf->entries, sizeof(void*) * buf->capacity * 2);
   // If the buffer wraps around the end of the array, we need to move the data around
   // so that we can still compute the indices correctly.
   // Say the buffer wraps around and splits the data into 2 segments:
@@ -23,20 +22,23 @@ circular_buffer_t* circular_buffer_grow(circular_buffer_t* buf) {
   // seg_a   seg_b
   // ---     ******
   // We need to reconfigure the data so that it looks like:
-  // seg_bseg_a
-  // *****-----
+  // seg_b+seg_a
+  // ******---
   size_t shift = buf->shift;
   size_t length = buf->length;
   size_t capacity = buf->capacity;
   if (shift + length > capacity) {
+    void** new_entries = malloc(sizeof(void*) * buf->capacity * 2);
+
     size_t seg_a_length = shift + length - capacity;
     size_t seg_b_length = length - seg_a_length;
-    void** temp = malloc(sizeof(void*) * seg_a_length);
-    memcpy(temp, buf->entries, seg_a_length);
-    memcpy(buf->entries, buf->entries + shift, seg_b_length);
-    memcpy(buf->entries + seg_b_length, temp, seg_a_length);
-    free(temp);
+    memcpy(new_entries, buf->entries + shift, seg_b_length);
+    memcpy(new_entries + seg_b_length, buf->entries, seg_a_length);
+    free(buf->entries);
+    buf->entries = new_entries;
     buf->shift = 0;
+  } else {
+    buf->entries = realloc(buf->entries, sizeof(void*) * buf->capacity * 2);
   }
   buf->capacity *= 2;
   return buf;
