@@ -401,7 +401,8 @@ http_frame_t* http_frame_init(uint16_t length, char type, char flags, uint32_t s
       parse_frame_continuation(parser);
     */
     default:
-      log_error("Invalid frame type: %d\n", type);
+      log_fatal("Invalid frame type: %d\n", type);
+      abort();
   }
   frame->type = type;
   frame->length = length;

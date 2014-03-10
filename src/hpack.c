@@ -77,10 +77,12 @@ static_entry_t static_table[] = {
   { "www-authenticate",             "" }
 };
 
+const size_t static_table_length = sizeof(static_table) / sizeof(static_entry_t);
+
 hpack_decode_quantity_result_t* hpack_decode_quantity(uint8_t* buf,
     size_t length, uint8_t offset) {
   size_t prefix_length = 8 - offset;
-  uint8_t limit = pow(2, prefix_length) - 1;
+  uint8_t limit = (1 << prefix_length) - 1; // 2^prefix_length - 1
   size_t i = 0;
   if (prefix_length != 0) {
     i = buf[0] & limit;
@@ -91,7 +93,7 @@ hpack_decode_quantity_result_t* hpack_decode_quantity(uint8_t* buf,
     unsigned int m = 0;
     uint8_t next = buf[index];
     while (index < length) {
-      i += ((next & 127) << m);
+      i += (next & 127) << m;
       m += 7;
 
       if (next < 128) {
@@ -130,6 +132,7 @@ size_t hpack_encode_quantity(uint8_t* buf, size_t offset, size_t i) {
   uint8_t n = 8 - byte_offset;
   uint8_t bitmask = ((1 << byte_offset) - 1) << n;
   uint8_t first_byte = buf[buf_index] & bitmask;
+  //uint8_t p = (1 << n) - 1; // 2^n - 1
   uint8_t p = (2 << (n - 1)) - 1; // 2^n - 1
 
   if (i < p) {
@@ -208,6 +211,7 @@ size_t hpack_header_table_adjusted_index(hpack_context_t* context, size_t index)
   size_t length = context->header_table->length;
   size_t num_evicted = context->header_table->num_evicted;
   size_t end = length + num_evicted;
+  log_debug("index: %ld, length %ld, num_evicted: %ld, end: %ld, result: %ld\n", index,  length, num_evicted, end, end - index + 1);
   return end - index + 1;
 }
 
@@ -342,16 +346,22 @@ hpack_header_table_entry_t* hpack_header_table_add_existing_entry(
     context->header_table->num_evicted + 1;
 
   hpack_header_table_t* header_table = context->header_table;
+
   size_t new_header_table_size = header_table->current_size +
     header->size_in_table;
-  log_debug("current_size: %ld, new size: %ld, max size: %ld\n", header_table->current_size, new_header_table_size, header_table->max_size);
-  if (new_header_table_size > header_table->max_size) {
+  while (new_header_table_size > header_table->max_size) {
     // remove from the end of the table
     hpack_header_table_evict(context);
+
+    new_header_table_size = header_table->current_size +
+      header->size_in_table;
   }
 
   // make sure it fits in the header table
   if (header->size_in_table <= header_table->max_size) {
+
+    log_info("Adding %s: %s\n", header->name, header->value);
+
     if (context->header_table->entries) {
       context->header_table->entries->prev = header;
     }
@@ -359,8 +369,6 @@ hpack_header_table_entry_t* hpack_header_table_add_existing_entry(
     context->header_table->current_size += header->size_in_table;
     context->header_table->entries = header;
     context->header_table->length++;
-
-    log_debug("-------- Updating header table current size to %ld/%ld\n", context->header_table->current_size, context->header_table->max_size);
 
     // add to reference set
     hpack_reference_set_add(context, header);
@@ -380,7 +388,7 @@ hpack_header_table_entry_t* hpack_header_table_add(hpack_context_t* context,
 
   // add an extra 32 octets - see 
   // http://tools.ietf.org/html/draft-ietf-httpbis-header-compression-05#section-3.3.1
-  header->size_in_table = name_length + value_length + 32;
+  header->size_in_table = name_length + value_length + HEADER_TABLE_OVERHEAD;
 
   return hpack_header_table_add_existing_entry(context, header);
 }
@@ -401,7 +409,7 @@ hpack_header_table_entry_t* hpack_static_table_get(hpack_context_t* context, siz
 
     // add an extra 32 octets - see 
     // http://tools.ietf.org/html/draft-ietf-httpbis-header-compression-05#section-3.3.1
-    header->size_in_table = name_length + value_length + 32;
+    header->size_in_table = name_length + value_length + HEADER_TABLE_OVERHEAD;
 
     // TODO - this will need to be free'd by caller, but the caller won't
     // know whether it can - because we also return non-freeable entries below
@@ -477,6 +485,10 @@ hpack_headers_t* hpack_decode_literal_header(
       log_debug("getting from static table %ld\n", header_table_index);
       entry = hpack_static_table_get(context, header_table_index);
     }
+    if (!entry) {
+      // TODO protocol error - invalid index
+      abort();
+    }
     key_name = malloc(sizeof(char) * (entry->name_length + 1));
     strncpy(key_name, entry->name, entry->name_length);
     key_name[entry->name_length] = '\0';
@@ -521,6 +533,10 @@ hpack_headers_t* hpack_decode_indexed_header(
       if (!entry) {
         entry = hpack_static_table_get(context, result->value);
         hpack_header_table_add_existing_entry(context, entry);
+      }
+      if (!entry) {
+        // TODO protocol error - invalid index
+        abort();
       }
       headers = hpack_emit_header(headers, entry->name,
           entry->name_length, entry->value, entry->value_length);

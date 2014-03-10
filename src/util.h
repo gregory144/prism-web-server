@@ -48,15 +48,15 @@ typedef struct {
   size_t length;
 } string_and_length_t;
 
-inline string_and_length_t* string_and_length(char* string, size_t length);
+string_and_length_t* string_and_length(char* string, size_t length);
 
-inline bool get_bit(uint8_t* buffer, size_t total_bit_index);
+bool get_bit(uint8_t* buffer, size_t total_bit_index);
 
-inline uint8_t get_bits8(uint8_t* buf, size_t offset, size_t num_bytes, uint8_t mask);
+uint8_t get_bits8(uint8_t* buf, size_t offset, size_t num_bytes, uint8_t mask);
 
-inline uint16_t get_bits16(uint8_t* buf, size_t offset, size_t num_bytes, uint16_t mask);
+uint16_t get_bits16(uint8_t* buf, size_t offset, size_t num_bytes, uint16_t mask);
 
-inline uint32_t get_bits32(uint8_t* buf, size_t offset, size_t num_bytes, uint32_t mask);
+uint32_t get_bits32(uint8_t* buf, size_t offset, size_t num_bytes, uint32_t mask);
 
 char* date_rfc1123();
 

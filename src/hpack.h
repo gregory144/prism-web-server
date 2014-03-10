@@ -11,6 +11,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define HEADER_TABLE_OVERHEAD 32
+
 typedef struct hpack_decode_quantity_result_t {
   size_t num_bytes;
   size_t value;
@@ -105,7 +107,7 @@ void hpack_context_free(hpack_context_t* context);
 
 void hpack_headers_free(hpack_headers_t* headers);
 
-void hpack_adjust_header_table_size(hpack_context_t* context);
+void hpack_header_table_adjust_size(hpack_context_t* context, size_t new_size);
 
 hpack_headers_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length);
 

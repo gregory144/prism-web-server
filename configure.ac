@@ -1,7 +1,10 @@
 AC_INIT([galactic], [0.0.1], [greg@gtgross.com])
 AM_INIT_AUTOMAKE([foreign -Wall -Werror])
 
+CFLAGS="-g -O0"
+
 AC_PROG_CC
+AC_PROG_CC_C99
 
 AC_CHECK_HEADERS([stdint.h])
 AC_CHECK_HEADERS([stdlib.h])

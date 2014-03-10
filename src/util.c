@@ -7,14 +7,14 @@
 
 #include "util.h"
 
-inline string_and_length_t* string_and_length(char* string, size_t length) {
+string_and_length_t* string_and_length(char* string, size_t length) {
   string_and_length_t* sl = malloc(sizeof(string_and_length_t));
   sl->value = string;
   sl->length = length;
   return sl;
 }
 
-inline bool get_bit(uint8_t* buffer, size_t total_bit_index) {
+bool get_bit(uint8_t* buffer, size_t total_bit_index) {
   uint8_t* at_byte = buffer + (total_bit_index / 8);
   size_t bit_index = total_bit_index % 8;
 
@@ -24,7 +24,7 @@ inline bool get_bit(uint8_t* buffer, size_t total_bit_index) {
   return res;
 }
 
-inline uint8_t get_bits8(uint8_t* buf, size_t offset, size_t num_bytes, uint8_t mask) {
+uint8_t get_bits8(uint8_t* buf, size_t offset, size_t num_bytes, uint8_t mask) {
   uint8_t* curr = buf + offset;
   uint8_t val = 0;
   for (; curr < buf + offset + num_bytes; curr++) {
@@ -33,7 +33,7 @@ inline uint8_t get_bits8(uint8_t* buf, size_t offset, size_t num_bytes, uint8_t 
   return val & mask;
 }
 
-inline uint16_t get_bits16(uint8_t* buf, size_t offset, size_t num_bytes, uint16_t mask) {
+uint16_t get_bits16(uint8_t* buf, size_t offset, size_t num_bytes, uint16_t mask) {
   uint8_t* curr = buf + offset;
   uint16_t val = 0;
   for (; curr < buf + offset + num_bytes; curr++) {
@@ -42,7 +42,7 @@ inline uint16_t get_bits16(uint8_t* buf, size_t offset, size_t num_bytes, uint16
   return val & mask;
 }
 
-inline uint32_t get_bits32(uint8_t* buf, size_t offset, size_t num_bytes, uint32_t mask) {
+uint32_t get_bits32(uint8_t* buf, size_t offset, size_t num_bytes, uint32_t mask) {
   uint8_t* curr = buf + offset;
   uint32_t val = 0;
   for (; curr < buf + offset + num_bytes; curr++) {
