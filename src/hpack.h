@@ -40,10 +40,12 @@ typedef struct hpack_header_table_entry_t {
 
   size_t size_in_table;
 
+  // TODO can these flags be moved to a bitset?
   bool from_static_table;
 
-  struct hpack_header_table_entry_t* prev;
-  struct hpack_header_table_entry_t* next;
+  bool in_refset; 
+
+  bool added_on_current_request;
 
 } hpack_header_table_entry_t;
 
@@ -60,22 +62,6 @@ typedef struct hpack_header_table_t {
 
 } hpack_header_table_t;
 
-typedef struct hpack_reference_set_entry_t {
-
-  hpack_header_table_entry_t* entry;
-
-  bool added_on_current_request;
-
-  struct hpack_reference_set_entry_t* next;
-
-} hpack_reference_set_entry_t;
-
-typedef struct hpack_reference_set_t {
-
-  hpack_reference_set_entry_t* entries;
-
-} hpack_reference_set_t;
-
 typedef struct hpack_headers_t {
 
   char* name;
@@ -91,8 +77,6 @@ typedef struct hpack_headers_t {
 typedef struct hpack_context_t {
 
   hpack_header_table_t* header_table;
-
-  hpack_reference_set_t* reference_set;
 
 } hpack_context_t;
 

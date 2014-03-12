@@ -75,13 +75,29 @@ void* circular_buffer_evict(circular_buffer_t* buf) {
   return last;
 }
 
-void circular_buffer_free(circular_buffer_t* buf, void (free_entry)(void*)) {
+void circular_buffer_iterator_init(circular_buffer_iter_t* iter, circular_buffer_t* buf) {
+  iter->index = 1;
+  iter->buf = buf;
+}
+
+bool circular_buffer_iterate(circular_buffer_iter_t* iter) {
+  circular_buffer_t* buf = iter->buf;
   size_t length = buf->length;
   size_t shift = buf->shift;
-  size_t i;
-  for (i = 0; i < length; i++) {
-    void** entry = buf->entries + ( (shift + i) % buf->capacity );
-    free_entry(*entry);
+  size_t index = iter->index++;
+  if (index <= length) {
+    void** entry = buf->entries + ((shift + index - 1) % buf->capacity);
+    iter->value = *entry;
+    return true;
+  }
+  return false;
+}
+
+void circular_buffer_free(circular_buffer_t* buf, void (free_entry)(void*)) {
+  circular_buffer_iter_t iter;
+  circular_buffer_iterator_init(&iter, buf);
+  while (circular_buffer_iterate(&iter)) {
+    free_entry(iter.value);
   }
   free(buf->entries);
   free(buf);
