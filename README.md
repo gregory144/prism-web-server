@@ -4,7 +4,6 @@
 
 ## TODO
 
-* header table data structure
 * API for processing requests/responses
 * send params to request callback
 * streams data structure
