@@ -13,29 +13,6 @@
 static long reads = 0;
 static long writes = 0;
 
-http_headers_t* add_header(http_headers_t* headers, char* name, char* value) {
-  http_headers_t* header = malloc(sizeof(http_headers_t));
-
-  size_t name_length = strlen(name);
-  header->name = malloc(sizeof(char) * (name_length + 1));
-  strncpy(header->name, name, name_length);
-  header->name[name_length] = '\0';
-  header->name_length = name_length;
-
-  size_t value_length = strlen(value);
-  header->value = malloc(sizeof(char) * (value_length + 1));
-  strncpy(header->value, value, value_length);
-  header->value[value_length] = '\0';
-  header->value_length = value_length;
-
-  if (headers) {
-    header->next = headers;
-  } else {
-    header->next = NULL;
-  }
-  return header;
-}
-
 void handle_request(http_request_t* request, http_response_t* response) {
 
   log_debug("Got headers:\n");
@@ -51,18 +28,17 @@ void handle_request(http_request_t* request, http_response_t* response) {
     client_user_agent = "Unknown";
   }
   size_t resp_length = 100 + strlen(client_user_agent);
-  char* resp_text = malloc(sizeof(char) * resp_length);
+  char resp_text[resp_length + 1];
   snprintf(resp_text, resp_length, "Hello %s\n", client_user_agent);
 
-  char* content_length = malloc(sizeof(char) * 1024);
-  snprintf(content_length, 1024, "%ld", strlen(resp_text));
+  char content_length[256];
+  snprintf(content_length, 255, "%ld", strlen(resp_text));
 
-  response->headers = add_header(response->headers, ":status", "200");
-  response->headers = add_header(response->headers, "content-length", content_length);
-  free(content_length);
-  response->headers = add_header(response->headers, "server", PACKAGE_STRING);
+  http_response_header_add(response, ":status", "200");
+  http_response_header_add(response, "content-length", content_length);
+  http_response_header_add(response, "server", PACKAGE_STRING);
   char* date = date_rfc1123();
-  response->headers = add_header(response->headers, "date", date);
+  http_response_header_add(response, "date", date);
   free(date);
 
   http_response_write(response, resp_text, strlen(resp_text));
@@ -114,7 +90,7 @@ void server_connection_shutdown(uv_shutdown_t* shutdown_req, int status) {
   free(shutdown_req);
 }
 
-void server_parse(uv_stream_t *client, char* buffer, size_t len) {
+void server_parse(uv_stream_t *client, uint8_t* buffer, size_t len) {
   http_client_data_t *client_data = client->data;
   client_data->bytes_read += len;
   client_data->uv_read_count++;
@@ -153,13 +129,13 @@ void server_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t* buf) {
     return;
   }
 
-  server_parse(stream, buf->base, nread);
+  server_parse(stream, (uint8_t*)buf->base, nread);
 
   reads++;
 
 }
 
-void server_http_write(void* stream, char* buf, size_t len) {
+void server_http_write(void* stream, uint8_t* buf, size_t len) {
   uv_write_t* write_req = malloc(sizeof(uv_write_t));
   http_write_req_data_t* write_req_data = malloc(sizeof(http_write_req_data_t));
   write_req_data->stream = stream;
@@ -174,9 +150,9 @@ void server_http_write(void* stream, char* buf, size_t len) {
   write_req_data->buf = write_buf;
 
   log_debug("uv_write: %s, %ld\n", buf, len);
-  int i;
+  size_t i;
   for (i = 0; i < len; i++) {
-    log_debug("%02x ", (unsigned char)buf[i]);
+    log_debug("%02x ", (uint8_t)buf[i]);
   }
   log_debug("\n");
   uv_write(write_req, stream, write_req_data->buf, 1, server_write);

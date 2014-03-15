@@ -63,7 +63,7 @@ void http_parser_free(http_parser_t* parser) {
   free(parser);
 }
 
-void http_frame_header_write(char* buf, uint16_t length, uint8_t type, uint8_t flags, uint32_t stream_id) {
+void http_frame_header_write(uint8_t* buf, uint16_t length, uint8_t type, uint8_t flags, uint32_t stream_id) {
   size_t pos = 0;
 
   buf[pos++] = (length >> 8) & 0x3F; // only the first 6 bits (first 2 bits are reserved)
@@ -82,7 +82,7 @@ void http_frame_header_write(char* buf, uint16_t length, uint8_t type, uint8_t f
 void http_emit_headers(http_parser_t* parser, http_stream_t* stream, http_headers_t* headers) {
   // TODO split large headers into multiple frames
   size_t headers_length = 0;
-  char* hpack_buf = NULL;
+  uint8_t* hpack_buf = NULL;
   if (headers != NULL) {
     hpack_encode_result_t* encoded = hpack_encode(parser->encoding_context, headers);
     hpack_buf = encoded->buf;
@@ -90,7 +90,7 @@ void http_emit_headers(http_parser_t* parser, http_stream_t* stream, http_header
     free(encoded);
   }
   size_t buf_length = FRAME_HEADER_SIZE + headers_length;
-  char* buf = malloc(buf_length);
+  uint8_t* buf = malloc(buf_length);
   uint8_t flags = 0;
   bool end_stream = false;
   bool end_headers = true;
@@ -110,11 +110,11 @@ void http_emit_headers(http_parser_t* parser, http_stream_t* stream, http_header
   parser->writer(parser->data, buf, buf_length);
 }
 
-void http_emit_data(http_parser_t* parser, http_stream_t* stream, char* text, size_t text_length) {
+void http_emit_data(http_parser_t* parser, http_stream_t* stream, uint8_t* text, size_t text_length) {
   // TODO split large text into multiple frames
   // TODO support adding padding?
   size_t buf_length = FRAME_HEADER_SIZE + text_length;
-  char* buf = malloc(buf_length);
+  uint8_t* buf = malloc(buf_length);
   uint8_t flags = 0;
   bool end_stream = true;
   if (end_stream) flags |= DATA_FLAG_END_STREAM;
@@ -127,7 +127,7 @@ void http_emit_data(http_parser_t* parser, http_stream_t* stream, char* text, si
 
 void http_emit_settings_ack(http_parser_t* parser) {
   size_t buf_length = FRAME_HEADER_SIZE;
-  char* buf = malloc(buf_length);
+  uint8_t* buf = malloc(buf_length);
   uint8_t flags = 0;
   bool ack = true;
   if (ack) flags |= SETTINGS_FLAG_ACK;
@@ -143,7 +143,7 @@ void http_emit_settings_ack(http_parser_t* parser) {
 bool http_parser_recognize_connection_header(http_parser_t* parser) {
   if (parser->buffer_length >= HTTP_CONNECTION_HEADER_LENGTH) {
     parser->buffer_position = HTTP_CONNECTION_HEADER_LENGTH;
-    return strncmp(parser->buffer, HTTP_CONNECTION_HEADER,
+    return memcmp(parser->buffer, HTTP_CONNECTION_HEADER,
         HTTP_CONNECTION_HEADER_LENGTH) == 0;
   }
   return false;
@@ -212,7 +212,7 @@ http_stream_t* http_stream_init(http_parser_t* parser, uint32_t stream_id) {
   return stream;
 }
 
-http_stream_t* http_trigger_request(http_parser_t* parser, http_stream_t* stream) {
+void http_trigger_request(http_parser_t* parser, http_stream_t* stream) {
   if (!parser->request_listener) {
     log_error("No request listener set up\n");
     abort();
@@ -231,7 +231,7 @@ http_stream_t* http_trigger_request(http_parser_t* parser, http_stream_t* stream
   parser->request_listener(request, response);
 }
 
-void http_stream_add_header_fragment(http_stream_t* stream, char* buffer, size_t length) {
+void http_stream_add_header_fragment(http_stream_t* stream, uint8_t* buffer, size_t length) {
   http_header_fragment_t* fragment = malloc(sizeof(http_header_fragment_t));
   fragment->buffer = malloc(length);
   memcpy(fragment->buffer, buffer, length);
@@ -254,8 +254,8 @@ void http_parse_header_fragments(http_parser_t* parser, http_stream_t* stream) {
     log_debug("Counting header fragment lengths: %ld\n", current->length);
     headers_length += current->length;
   }
-  char* headers = malloc(headers_length + 1);
-  char* header_appender = headers;
+  uint8_t* headers = malloc(headers_length + 1);
+  uint8_t* header_appender = headers;
   current = stream->header_fragments;
   while (current) {
     log_debug("Appending header fragment: %s (%ld)\n", current->buffer, current->length);
@@ -277,7 +277,7 @@ void http_parse_header_fragments(http_parser_t* parser, http_stream_t* stream) {
 }
 
 void http_parse_frame_headers(http_parser_t* parser, http_frame_headers_t* frame) {
-  char* pos = parser->buffer + parser->buffer_position;
+  uint8_t* pos = parser->buffer + parser->buffer_position;
   size_t header_block_fragment_size = frame->length;
   http_stream_t* stream = http_stream_init(parser, frame->stream_id);
   if (frame->priority) {
@@ -310,13 +310,13 @@ void http_parse_frame_settings(http_parser_t* parser, http_frame_settings_t* fra
     log_debug("Received settings ACK\n");
     abort();
   } else {
-    char* pos = parser->buffer + parser->buffer_position;
+    uint8_t* pos = parser->buffer + parser->buffer_position;
     size_t setting_size = 8;
     size_t num_settings = frame->length / setting_size;
     log_debug("Found #%ld settings\n", num_settings);
     size_t i;
     for (i = 0; i < num_settings; i++) {
-      char* curr_setting = pos + (i * setting_size);
+      uint8_t* curr_setting = pos + (i * setting_size);
       uint32_t setting_id = get_bits32(curr_setting, 0, 1, 0x0FF);
       uint32_t setting_value = curr_setting[1];
       http_setting_set(parser, setting_id, setting_value);
@@ -335,7 +335,7 @@ void http_parse_frame_goaway(http_parser_t* parser, http_frame_goaway_t* frame) 
     log_error("Invalid stream identifier for goaway frame\n");
     abort();
   }
-  char* buf = parser->buffer + parser->buffer_position;
+  uint8_t* buf = parser->buffer + parser->buffer_position;
   frame->last_stream_id = get_bits32(buf, 0, 4, 0x7FFFFFFF);
   frame->error_code = get_bits32(buf, 4, 4, 0xFFFFFFFF);
   size_t debug_data_length = (frame->length - 8);
@@ -418,12 +418,12 @@ bool http_parser_add_from_buffer(http_parser_t* parser) {
     return false;
   }
 
-  unsigned char* pos = parser->buffer + parser->buffer_position;
+  uint8_t* pos = parser->buffer + parser->buffer_position;
 
   // get 14 bits of first 2 bytes
   uint16_t frame_length = get_bits16(pos, 0, 2, 0x3FFF);
-  char frame_type = pos[2];
-  char frame_flags = pos[3];
+  uint8_t frame_type = pos[2];
+  uint8_t frame_flags = pos[3];
   // get 31 bits
   uint32_t stream_id = get_bits32(pos, 4, 4, 0x7FFFFFFF);
   log_debug("stream id: %x %x %x %x\n", pos[4], pos[5], pos[6], pos[7]);
@@ -488,7 +488,7 @@ bool http_parser_add_from_buffer(http_parser_t* parser) {
   return false;
 }
 
-void http_parser_read(http_parser_t* parser, char* buffer, size_t len) {
+void http_parser_read(http_parser_t* parser, uint8_t* buffer, size_t len) {
   log_debug("Reading from buffer: %ld\n", len);
   parser->buffer = buffer;
   parser->buffer_length = len;
@@ -515,9 +515,8 @@ void http_response_write(http_response_t* response, char* text, size_t text_leng
   http_emit_headers(parser, stream, response->headers);
 
   // emit data frame
-  http_emit_data(parser, stream, text, text_length);
+  http_emit_data(parser, stream, (uint8_t*)text, text_length);
 
-  free(text);
   http_response_free(response);
 }
 

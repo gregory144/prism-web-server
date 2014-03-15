@@ -61,7 +61,7 @@ char* date_rfc1123() {
     const int RFC1123_TIME_LEN = 29;
     time_t t;
     struct tm* tm;
-    char * buf = malloc(RFC1123_TIME_LEN+1);
+    char* buf = malloc(RFC1123_TIME_LEN+1);
 
     time(&t);
     tm = gmtime(&t);
@@ -91,25 +91,25 @@ void log_fatal(char* format, ...) {
 }
 
 void log_warning(char* format, ...) {
-#ifdef LOG_WARN
-  LOG_WITH_LEVEL("WARN")
-#endif
+  if (LOG_WARN) {
+    LOG_WITH_LEVEL("WARN")
+  }
 }
 
 void log_error(char* format, ...) {
-#ifdef LOG_ERROR
-  LOG_WITH_LEVEL("ERROR")
-#endif
+  if (LOG_ERROR) {
+    LOG_WITH_LEVEL("ERROR")
+  }
 }
 
 void log_info(char* format, ...) {
-#ifdef LOG_INFO
-  LOG_WITH_LEVEL("INFO")
-#endif
+  if (LOG_INFO) {
+    LOG_WITH_LEVEL("INFO")
+  }
 }
 
 void log_debug(char* format, ...) {
-#ifdef LOG_DEBUG
-  LOG_WITH_LEVEL("DEBUG")
-#endif
+  if (LOG_DEBUG) {
+    LOG_WITH_LEVEL("DEBUG")
+  }
 }

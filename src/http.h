@@ -152,7 +152,7 @@
 typedef struct http_frame_payload_s http_frame_payload_t;
 struct http_frame_payload_s {
 
-  char* data;
+  uint8_t* data;
 
 };
 
@@ -194,13 +194,13 @@ typedef struct http_frame_goaway_t {
   uint32_t last_stream_id;
   uint32_t error_code;
   
-  char* debug_data;
+  uint8_t* debug_data;
 
 } http_frame_goaway_t;
 
 typedef struct http_header_fragment_s http_header_fragment_t;
 struct http_header_fragment_s {
-  char* buffer;
+  uint8_t* buffer;
   size_t length;
   struct http_header_fragment_s* next;
 };
@@ -217,7 +217,7 @@ typedef struct http_frame_headers_t {
   bool priority;
 
   size_t header_block_fragment_size;
-  char* header_block_fragment;
+  uint8_t* header_block_fragment;
 
 } http_frame_headers_t;
 
@@ -261,7 +261,7 @@ struct http_stream_s {
 
 typedef void (*request_cb)(http_request_t* request, http_response_t* response);
 
-typedef void (*write_cb)(void* data, char* buf, size_t len);
+typedef void (*write_cb)(void* data, uint8_t* buf, size_t len);
 
 typedef void (*close_cb)(void* data);
 
@@ -285,7 +285,7 @@ struct http_parser_s {
   /**
    * what's currently being read
    */
-  char* buffer;
+  uint8_t* buffer;
   size_t buffer_length;
   size_t buffer_position;
 
@@ -308,7 +308,7 @@ http_parser_t* http_parser_init(void* data, request_cb request_handler, write_cb
 
 void http_parser_free(http_parser_t* parser);
 
-void http_parser_read(http_parser_t* parser, char* buffer, size_t len);
+void http_parser_read(http_parser_t* parser, uint8_t* buffer, size_t len);
 
 void http_response_write(http_response_t* response, char* text, size_t text_length);
 

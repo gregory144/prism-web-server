@@ -125,7 +125,6 @@ hpack_decode_quantity_result_t* hpack_decode_quantity(uint8_t* buf,
  *     encode (I) on 8 bits
  */
 size_t hpack_encode_quantity(uint8_t* buf, size_t offset, size_t i) {
-  size_t bytes_written = 0;
   size_t buf_index = offset / 8;
   size_t original_buf_index = buf_index;
   uint8_t byte_offset = offset % 8;
@@ -193,6 +192,7 @@ hpack_header_table_entry_t* hpack_header_table_get(hpack_context_t* context,
 
 void hpack_reference_set_add(hpack_context_t* context,
     hpack_header_table_entry_t* header) {
+  UNUSED(context);
   header->in_refset = true;
 }
 
@@ -243,11 +243,11 @@ hpack_headers_t* hpack_emit_header(hpack_headers_t* headers, char* name,
 
   hpack_headers_t* new_header = malloc(sizeof(hpack_headers_t));
   new_header->name = malloc(sizeof(char) * (name_length + 1));
-  strncpy(new_header->name, name, name_length);
+  memcpy(new_header->name, name, name_length);
   new_header->name[name_length] = '\0';
   new_header->name_length = name_length;
   new_header->value = malloc(sizeof(char) * (value_length + 1));
-  strncpy(new_header->value, value, value_length);
+  memcpy(new_header->value, value, value_length);
   new_header->value_length = value_length;
   new_header->value[value_length] = '\0';
   new_header->next = headers;
@@ -338,6 +338,7 @@ hpack_header_table_entry_t* hpack_header_table_get(hpack_context_t* context, siz
 string_and_length_t* hpack_decode_string_literal(
     hpack_context_t* context, uint8_t* buf, size_t length,
     size_t* current) {
+  UNUSED(context);
   bool first_bit = get_bit(buf + (*current), 0); // is it huffman encoded?
   hpack_decode_quantity_result_t* key_name_result = hpack_decode_quantity(buf + (*current), length - (*current), 1);
   *current += key_name_result->num_bytes;
@@ -350,7 +351,7 @@ string_and_length_t* hpack_decode_string_literal(
     *current += key_name_length;
     key_name_length = huffman_result->length;
     key_name = malloc(sizeof(char) * (key_name_length + 1));
-    strncpy(key_name, huffman_result->value, key_name_length);
+    memcpy(key_name, huffman_result->value, key_name_length);
     key_name[key_name_length] = '\0';
     free(huffman_result->value);
     free(huffman_result);
@@ -392,7 +393,7 @@ hpack_headers_t* hpack_decode_literal_header(
       abort();
     }
     key_name = malloc(sizeof(char) * (entry->name_length + 1));
-    strncpy(key_name, entry->name, entry->name_length);
+    memcpy(key_name, entry->name, entry->name_length);
     key_name[entry->name_length] = '\0';
     key_name_length = entry->name_length;
     log_debug("Indexed name: %s, %ld\n", key_name, key_name_length);
@@ -528,6 +529,7 @@ hpack_headers_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t len
 }
 
 hpack_encode_result_t* hpack_encode(hpack_context_t* context, hpack_headers_t* headers) {
+  UNUSED(context);
   // naive hpack encoding - never add to the header table
   uint8_t* encoded = malloc(4096); // TODO - we need to construct this dynamically
   size_t encoded_index = 0;
@@ -537,7 +539,7 @@ hpack_encode_result_t* hpack_encode(hpack_context_t* context, hpack_headers_t* h
     encoded[encoded_index++] = 0x40; // 4.3.1. Literal Header Field without Indexing
 
     encoded[encoded_index] = 0x80; // set huffman encoded bit
-    huffman_result_t* encoded_name = huffman_encode(header->name, header->name_length);
+    huffman_result_t* encoded_name = huffman_encode((uint8_t*)header->name, header->name_length);
     encoded_index += hpack_encode_quantity(encoded, (encoded_index * 8) + 1, encoded_name->length);
     memcpy(encoded + encoded_index, encoded_name->value, encoded_name->length);
     encoded_index += encoded_name->length;
@@ -545,7 +547,7 @@ hpack_encode_result_t* hpack_encode(hpack_context_t* context, hpack_headers_t* h
     free(encoded_name);
 
     encoded[encoded_index] = 0x80; // set huffman encoded bit
-    huffman_result_t* encoded_value = huffman_encode(header->value, header->value_length);
+    huffman_result_t* encoded_value = huffman_encode((uint8_t*)header->value, header->value_length);
     encoded_index += hpack_encode_quantity(encoded, (encoded_index * 8) + 1, encoded_value->length);
     memcpy(encoded + encoded_index, encoded_value->value, encoded_value->length);
     encoded_index += encoded_value->length;

@@ -10,33 +10,43 @@
 
 #if defined LOG_LEVEL_FATAL
 
-#define LOG_FATAL 1
+#define LOG_FATAL true
+#define LOG_ERROR false
+#define LOG_WARN false
+#define LOG_INFO false
+#define LOG_DEBUG false
 
 #elif defined LOG_LEVEL_ERROR
 
-#define LOG_FATAL 1
-#define LOG_ERROR 1
+#define LOG_FATAL true
+#define LOG_ERROR true
+#define LOG_WARN false
+#define LOG_INFO false
+#define LOG_DEBUG false
 
 #elif defined LOG_LEVEL_WARN
 
-#define LOG_FATAL 1
-#define LOG_ERROR 1
-#define LOG_WARN 1
+#define LOG_FATAL true
+#define LOG_ERROR true
+#define LOG_WARN true
+#define LOG_INFO false
+#define LOG_DEBUG false
 
 #elif defined LOG_LEVEL_INFO
 
-#define LOG_FATAL 1
-#define LOG_ERROR 1
-#define LOG_WARN 1
-#define LOG_INFO 1
+#define LOG_FATAL true
+#define LOG_ERROR true
+#define LOG_WARN true
+#define LOG_INFO true
+#define LOG_DEBUG false
 
 #elif defined LOG_LEVEL_DEBUG
 
-#define LOG_FATAL 1
-#define LOG_ERROR 1
-#define LOG_WARN 1
-#define LOG_INFO 1
-#define LOG_DEBUG 1
+#define LOG_FATAL true
+#define LOG_ERROR true
+#define LOG_WARN true
+#define LOG_INFO true
+#define LOG_DEBUG true
 
 #endif
 

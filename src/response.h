@@ -11,6 +11,8 @@ typedef struct http_response_t {
 
 } http_response_t;
 
+http_headers_t* http_response_header_add(http_response_t* response, char* name, char* value);
+
 void http_response_free(http_response_t* response);
 
 #endif

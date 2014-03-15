@@ -44,10 +44,10 @@ huffman_result_t* huffman_decode(uint8_t* input, size_t input_length_in_octets) 
 
 huffman_result_t* huffman_encode(uint8_t* buf, size_t len) {
   uint8_t* encoded = malloc(sizeof(char) * (len + 1));
-  int encoded_index = 0;
-  int buf_index;
+  size_t encoded_index = 0;
+  size_t buf_index;
 
-  int bits_left_in_byte = 8;
+  uint8_t bits_left_in_byte = 8;
   uint8_t current_byte = 0;
 
   for (buf_index = 0; buf_index < len; buf_index++) {
