@@ -6,11 +6,14 @@
 
 * API for processing requests/responses
 * send params to request callback
+* cookies
+* scheme, authority, port
+* duplicate header, parameter keys
 * streams data structure
+* max concurrent streams
 * POST requests (parse data frame)
 * better goaway handling
 * goaway on bad hpack indexes
-* max concurrent streams
 * flow control (window update)
 * stream priority
 * ping
