@@ -5,13 +5,13 @@
 ## TODO
 
 * API for processing requests/responses
-* send params to request callback
+* scheme, authority, port, query string
+* send decoded query parameters to request callback
 * cookies
-* scheme, authority, port
 * duplicate header, parameter keys
 * streams data structure
 * max concurrent streams
-* POST requests (parse data frame)
+* POST/PUT/PATCH requests (parse data frame)
 * better goaway handling
 * goaway on bad hpack indexes
 * flow control (window update)
