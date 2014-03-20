@@ -15,6 +15,12 @@ static long writes = 0;
 static long requests = 0;
 
 void handle_request(http_request_t* request, http_response_t* response) {
+  log_debug("Method: %s\n", http_request_method(request));
+  log_debug("Scheme: %s\n", http_request_scheme(request));
+  log_debug("Host: %s\n", http_request_host(request));
+  log_debug("Port: %d\n", http_request_port(request));
+  log_debug("Path: %s\n", http_request_path(request));
+  log_debug("Query: %s\n", http_request_query_string(request));
 
   log_debug("Got headers:\n");
 
@@ -46,7 +52,7 @@ void handle_request(http_request_t* request, http_response_t* response) {
 
   requests++;
   if (requests % 1000 == 0) {
-    fprintf(stderr, "Request #%ld\n", requests);
+    log_info("Request #%ld\n", requests);
   }
 }
 
