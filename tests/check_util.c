@@ -10,7 +10,7 @@ void teardown() {
 }
 
 START_TEST(test_get_bit_ex1) {
-  char buf[] = { 0x6f }; //0b01101111
+  uint8_t buf[] = { 0x6f }; //0b01101111
   ck_assert_int_eq(0, get_bit(buf, 0));
   ck_assert_int_eq(1, get_bit(buf, 1));
   ck_assert_int_eq(1, get_bit(buf, 2));
@@ -22,7 +22,7 @@ START_TEST(test_get_bit_ex1) {
 } END_TEST
 
 START_TEST(test_get_bit_ex2) {
-  char buf[] = { 0x3f, 0xfb  }; //0b00111111 11111011
+  uint8_t buf[] = { 0x3f, 0xfb  }; //0b00111111 11111011
   ck_assert_int_eq(0, get_bit(buf, 0));
   ck_assert_int_eq(0, get_bit(buf, 1));
   ck_assert_int_eq(1, get_bit(buf, 2));
@@ -42,7 +42,7 @@ START_TEST(test_get_bit_ex2) {
 } END_TEST
 
 START_TEST(test_get_bit_ex3) {
-  char buf[] = { 0x6f }; //0b11100001
+  uint8_t buf[] = { 0x6f }; //0b11100001
   ck_assert_int_eq(0, get_bit(buf, 0));
   ck_assert_int_eq(1, get_bit(buf, 1));
   ck_assert_int_eq(1, get_bit(buf, 2));

@@ -3,36 +3,32 @@
 
 #include "response.h"
 
-http_headers_t* http_response_header_add(http_response_t* response, char* name, char* value) {
-  http_headers_t* headers = response->headers;
-  http_headers_t* header = malloc(sizeof(http_headers_t));
+http_response_t* http_response_init(http_request_t* request) {
+  http_response_t* response = malloc(sizeof(http_response_t));
+  response->headers = hash_table_init_with_string_keys();
+  response->request = request;
+  return response;
+}
 
+void http_response_header_add(http_response_t* response, char* name, char* value) {
   size_t name_length = strlen(name);
-  header->name = malloc(sizeof(char) * (name_length + 1));
-  strncpy(header->name, name, name_length);
-  header->name[name_length] = '\0';
-  header->name_length = name_length;
+  char* name_copy = malloc(sizeof(char) * (name_length + 1));
+  strncpy(name_copy, name, name_length);
+  name_copy[name_length] = '\0';
 
   size_t value_length = strlen(value);
-  header->value = malloc(sizeof(char) * (value_length + 1));
-  strncpy(header->value, value, value_length);
-  header->value[value_length] = '\0';
-  header->value_length = value_length;
+  char* value_copy = malloc(sizeof(char) * (value_length + 1));
+  strncpy(value_copy, value, value_length);
+  value_copy[value_length] = '\0';
 
-  if (headers) {
-    header->next = headers;
-  } else {
-    header->next = NULL;
-  }
-  response->headers = headers;
-  return header;
+  hash_table_put(response->headers, name_copy, value_copy);
 }
 
 void http_response_free(http_response_t* response) {
 
   http_request_free(response->request);
 
-  if (response->headers) hpack_headers_free(response->headers);
+  hash_table_free(response->headers, free, free);
 
   free(response);
 }

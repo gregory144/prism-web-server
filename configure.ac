@@ -1,4 +1,4 @@
-AC_INIT([galactic], [0.0.1], [greg@gtgross.com])
+AC_INIT([galactic],[0.0.1],[greg@gtgross.com])
 AM_INIT_AUTOMAKE([foreign -Wall -Werror])
 
 CFLAGS="-g -O0 -Wall -Wextra"
@@ -9,9 +9,11 @@ AC_PROG_CC_C99
 AC_CHECK_HEADERS([stdint.h])
 AC_CHECK_HEADERS([stdlib.h])
 AC_CHECK_HEADERS([string.h])
+AC_CHECK_HEADERS([limits.h])
 AC_CHECK_HEADER_STDBOOL
 AC_C_INLINE
 AC_FUNC_MALLOC
+AC_FUNC_REALLOC
 AC_TYPE_SIZE_T
 AC_TYPE_SSIZE_T
 AC_TYPE_UINT16_T

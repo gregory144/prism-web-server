@@ -1,7 +1,7 @@
 TESTS = check_hpack check_huffman check_util
 check_PROGRAMS = check_hpack check_huffman check_util
 
-check_hpack_SOURCES = check_hpack.c $(top_builddir)/src/hpack.c $(top_builddir)/src/util.c $(top_builddir)/src/huffman.c $(top_builddir)/src/circular_buffer.c
+check_hpack_SOURCES = check_hpack.c $(top_builddir)/src/hpack.c $(top_builddir)/src/util.c $(top_builddir)/src/hash_table.c $(top_builddir)/src/huffman.c $(top_builddir)/src/circular_buffer.c
 check_hpack_CFLAGS = @CHECK_CFLAGS@
 check_hpack_LDADD = @CHECK_LIBS@
 

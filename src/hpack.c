@@ -177,16 +177,6 @@ void hpack_context_free(hpack_context_t* context) {
   free(context);
 }
 
-void hpack_headers_free(hpack_headers_t* headers) {
-  while (headers) {
-    hpack_headers_t* header = headers;
-    headers = headers->next;
-    free(header->name);
-    free(header->value);
-    free(header);
-  }
-}
-
 hpack_header_table_entry_t* hpack_header_table_get(hpack_context_t* context,
     size_t index);
 
@@ -238,21 +228,18 @@ void hpack_header_table_adjust_size(hpack_context_t* context, size_t new_size) {
   }
 }
 
-hpack_headers_t* hpack_emit_header(hpack_headers_t* headers, char* name,
+void hpack_emit_header(hash_table_t* headers, char* name,
     size_t name_length, char* value, size_t value_length) {
 
-  hpack_headers_t* new_header = malloc(sizeof(hpack_headers_t));
-  new_header->name = malloc(sizeof(char) * (name_length + 1));
-  memcpy(new_header->name, name, name_length);
-  new_header->name[name_length] = '\0';
-  new_header->name_length = name_length;
-  new_header->value = malloc(sizeof(char) * (value_length + 1));
-  memcpy(new_header->value, value, value_length);
-  new_header->value_length = value_length;
-  new_header->value[value_length] = '\0';
-  new_header->next = headers;
+  char* name_copy = malloc(sizeof(char) * (name_length + 1));
+  strncpy(name_copy, name, name_length);
+  name_copy[name_length] = '\0';
 
-  return new_header;
+  char* value_copy = malloc(sizeof(char) * (value_length + 1));
+  strncpy(value_copy, value, value_length);
+  value_copy[value_length] = '\0';
+
+  hash_table_put(headers, name_copy, value_copy);
 }
 
 hpack_header_table_entry_t* hpack_header_table_add_existing_entry(
@@ -363,8 +350,8 @@ string_and_length_t* hpack_decode_string_literal(
   return string_and_length(key_name, key_name_length);
 }
 
-hpack_headers_t* hpack_decode_literal_header(
-    hpack_context_t* context, hpack_headers_t* headers, uint8_t* buf,
+void hpack_decode_literal_header(
+    hpack_context_t* context, hash_table_t* headers, uint8_t* buf,
     size_t length, size_t* current, bool add_to_header_table) {
   hpack_decode_quantity_result_t* index_result = hpack_decode_quantity(buf + (*current), length - (*current), 2);
   size_t header_table_index = index_result->value;
@@ -417,8 +404,8 @@ hpack_headers_t* hpack_decode_literal_header(
   }
 }
 
-hpack_headers_t* hpack_decode_indexed_header(
-    hpack_context_t* context, hpack_headers_t* headers, uint8_t* buf,
+void hpack_decode_indexed_header(
+    hpack_context_t* context, hash_table_t* headers, uint8_t* buf,
     size_t length, size_t* current) {
   hpack_decode_quantity_result_t* result = hpack_decode_quantity(buf + (*current), length - (*current), 1);
   *current += result->num_bytes;
@@ -440,55 +427,33 @@ hpack_headers_t* hpack_decode_indexed_header(
         // TODO protocol error - invalid index
         abort();
       }
-      headers = hpack_emit_header(headers, entry->name,
+      hpack_emit_header(headers, entry->name,
           entry->name_length, entry->value, entry->value_length);
       log_debug("From index: %s: %s\n", entry->name, entry->value);
     }
   }
   free(result);
-  return headers;
 }
 
-hpack_headers_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length) {
+hash_table_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length) {
 
   size_t current = 0;
-  hpack_headers_t* headers = NULL;
-
-  /*
-  log_debug("BEFORE:\n");
-  log_debug("Reference Set:\n");
-  hpack_reference_set_entry_t* refset_iter2 = context->reference_set->entries;
-  while (refset_iter2) {
-    hpack_header_table_entry_t* header = refset_iter2->entry;
-    log_debug("refset: \"%s\" (%ld): \"%s\" (%ld)\n", header->name,
-      header->name_length, header->value, header->value_length);
-    refset_iter2 = refset_iter2->next;
-  }
-
-  log_debug("Header Table:\n");
-  hpack_header_table_entry_t* ht_iter = context->header_table->entries;
-  while (ht_iter) {
-    hpack_header_table_entry_t* header = ht_iter;
-    log_debug("header table: %ld: \"%s\" (%ld): \"%s\" (%ld)\n", header->index, header->name,
-      header->name_length, header->value, header->value_length);
-    ht_iter = ht_iter->next;
-  }
-  */
+  hash_table_t* headers = hash_table_init_with_string_keys();
 
   log_debug("Decompressing headers: %ld, %ld\n", current, length);
   while (current < length) {
     bool first_bit = get_bit(buf + current, 0);
     if (first_bit) {
       // indexed header field (4.2)
-      headers = hpack_decode_indexed_header(context, headers, buf, length, &current);
+      hpack_decode_indexed_header(context, headers, buf, length, &current);
     } else {
       bool second_bit = get_bit(buf + current, 1);
       if (second_bit) {
         // literal header field without indexing (4.3.1)
-        headers = hpack_decode_literal_header(context, headers, buf, length, &current, false);
+        hpack_decode_literal_header(context, headers, buf, length, &current, false);
       } else {
         // literal header field with incremental indexing (4.3.2)
-        headers = hpack_decode_literal_header(context, headers, buf, length, &current, true);
+        hpack_decode_literal_header(context, headers, buf, length, &current, true);
       }
     }
   }
@@ -498,48 +463,33 @@ hpack_headers_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t len
   while (circular_buffer_iterate(&iter)) {
     hpack_header_table_entry_t* entry = iter.value;
     if (!entry->added_on_current_request) {
-      headers = hpack_emit_header(headers, entry->name,
+      hpack_emit_header(headers, entry->name,
         entry->name_length, entry->value, entry->value_length);
     }
     entry->added_on_current_request = false;
   }
 
-  /*
-  log_debug("AFTER:\n");
-  log_debug("Reference Set:\n");
-  refset_iter2 = context->reference_set->entries;
-  while (refset_iter2) {
-    hpack_header_table_entry_t* header = refset_iter2->entry;
-    log_debug("refset: \"%s\" (%ld): \"%s\" (%ld)\n", header->name,
-      header->name_length, header->value, header->value_length);
-    refset_iter2 = refset_iter2->next;
-  }
-
-  log_debug("Header Table:\n");
-  ht_iter = context->header_table->entries;
-  while (ht_iter) {
-    hpack_header_table_entry_t* header = ht_iter;
-    log_debug("header table: %ld: \"%s\" (%ld): \"%s\" (%ld)\n", header->index, header->name,
-      header->name_length, header->value, header->value_length);
-    ht_iter = ht_iter->next;
-  }
-  */
-
   return headers;
 }
 
-hpack_encode_result_t* hpack_encode(hpack_context_t* context, hpack_headers_t* headers) {
+hpack_encode_result_t* hpack_encode(hpack_context_t* context, hash_table_t* headers) {
   UNUSED(context);
   // naive hpack encoding - never add to the header table
   uint8_t* encoded = malloc(4096); // TODO - we need to construct this dynamically
   size_t encoded_index = 0;
-  hpack_headers_t* header = headers;
-  while (header) {
-    log_debug("Encoding Reponse Header: %s (%ld): %s (%ld)\n", header->name, header->name_length, header->value, header->value_length);
+
+  hash_table_iter_t iter;
+  hash_table_iterator_init(&iter, headers);
+  while (hash_table_iterate(&iter)) {
+    char* name = iter.key;
+    size_t name_length = strlen(name);
+    char* value = iter.value;
+    size_t value_length = strlen(value);
+    log_debug("Encoding Reponse Header: %s (%ld): %s (%ld)\n", name, name_length, value, value_length);
     encoded[encoded_index++] = 0x40; // 4.3.1. Literal Header Field without Indexing
 
     encoded[encoded_index] = 0x80; // set huffman encoded bit
-    huffman_result_t* encoded_name = huffman_encode((uint8_t*)header->name, header->name_length);
+    huffman_result_t* encoded_name = huffman_encode((uint8_t*)name, name_length);
     encoded_index += hpack_encode_quantity(encoded, (encoded_index * 8) + 1, encoded_name->length);
     memcpy(encoded + encoded_index, encoded_name->value, encoded_name->length);
     encoded_index += encoded_name->length;
@@ -547,14 +497,12 @@ hpack_encode_result_t* hpack_encode(hpack_context_t* context, hpack_headers_t* h
     free(encoded_name);
 
     encoded[encoded_index] = 0x80; // set huffman encoded bit
-    huffman_result_t* encoded_value = huffman_encode((uint8_t*)header->value, header->value_length);
+    huffman_result_t* encoded_value = huffman_encode((uint8_t*)value, value_length);
     encoded_index += hpack_encode_quantity(encoded, (encoded_index * 8) + 1, encoded_value->length);
     memcpy(encoded + encoded_index, encoded_value->value, encoded_value->length);
     encoded_index += encoded_value->length;
     free(encoded_value->value);
     free(encoded_value);
-
-    header = header->next;
   }
   hpack_encode_result_t* result = malloc(sizeof(hpack_encode_result_t));
   result->buf = encoded;

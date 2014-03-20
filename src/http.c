@@ -6,6 +6,8 @@
 
 #include "http.h"
 #include "util.h"
+#include "request.h"
+#include "response.h"
 
 #define FRAME_HEADER_SIZE 8 // octets
 #define DEFAULT_STREAM_PRIORITY 0x40000000 // 2^30
@@ -44,7 +46,9 @@ http_parser_t* http_parser_init(void* data, request_cb request_handler, write_cb
 }
 
 void http_stream_close(http_parser_t* parser, http_stream_t* stream) {
-  hpack_headers_free(stream->headers);
+  if (stream->headers) {
+    hash_table_free(stream->headers, free, free);
+  }
   parser->streams[stream->id] = NULL;
   free(stream);
 }
@@ -79,7 +83,7 @@ void http_frame_header_write(uint8_t* buf, uint16_t length, uint8_t type, uint8_
   buf[pos++] = (stream_id) & 0xFF;
 }
 
-void http_emit_headers(http_parser_t* parser, http_stream_t* stream, http_headers_t* headers) {
+void http_emit_headers(http_parser_t* parser, http_stream_t* stream, hash_table_t* headers) {
   // TODO split large headers into multiple frames
   size_t headers_length = 0;
   uint8_t* hpack_buf = NULL;
@@ -218,15 +222,12 @@ void http_trigger_request(http_parser_t* parser, http_stream_t* stream) {
     abort();
   }
 
-  http_request_t* request = malloc(sizeof(http_request_t));
-  request->headers = stream->headers;
-  request->params = NULL;
-  request->parser = (_http_parser_t)parser;
-  request->stream = (_http_stream_t)stream;
+  http_request_t* request = http_request_init(parser, stream, stream->headers);
 
-  http_response_t* response = malloc(sizeof(http_response_t));
-  response->request = request;
-  response->headers = NULL;
+  // transfer ownership of headers to the request
+  stream->headers = NULL;
+
+  http_response_t* response = http_response_init(request);
 
   parser->request_listener(request, response);
 }

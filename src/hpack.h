@@ -12,6 +12,7 @@
 #include <stdbool.h>
 
 #include "circular_buffer.h"
+#include "hash_table.h"
 
 #define HEADER_TABLE_OVERHEAD 32
 
@@ -62,18 +63,6 @@ typedef struct hpack_header_table_t {
 
 } hpack_header_table_t;
 
-typedef struct hpack_headers_t {
-
-  char* name;
-  size_t name_length;
-
-  char* value;
-  size_t value_length;
-
-  struct hpack_headers_t* next;
-
-} hpack_headers_t;
-
 typedef struct hpack_context_t {
 
   hpack_header_table_t* header_table;
@@ -88,12 +77,10 @@ hpack_context_t* hpack_context_init(size_t header_table_size);
 
 void hpack_context_free(hpack_context_t* context);
 
-void hpack_headers_free(hpack_headers_t* headers);
-
 void hpack_header_table_adjust_size(hpack_context_t* context, size_t new_size);
 
-hpack_headers_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length);
+hash_table_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length);
 
-hpack_encode_result_t* hpack_encode(hpack_context_t* context, hpack_headers_t* headers);
+hpack_encode_result_t* hpack_encode(hpack_context_t* context, hash_table_t* headers);
 
 #endif

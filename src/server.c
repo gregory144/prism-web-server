@@ -12,15 +12,16 @@
 
 static long reads = 0;
 static long writes = 0;
+static long requests = 0;
 
 void handle_request(http_request_t* request, http_response_t* response) {
 
   log_debug("Got headers:\n");
 
-  hpack_headers_t* curr = request->headers;
-  while (curr) {
-    log_debug("%s: %s\n", curr->name, curr->value);
-    curr = curr->next;
+  hash_table_iter_t iter;
+  hash_table_iterator_init(&iter, request->headers);
+  while (hash_table_iterate(&iter)) {
+    log_debug("%s: %s\n", iter.key, iter.value);
   }
 
   char* client_user_agent = http_request_header_get(request, "user-agent");
@@ -42,6 +43,11 @@ void handle_request(http_request_t* request, http_response_t* response) {
   free(date);
 
   http_response_write(response, resp_text, strlen(resp_text));
+
+  requests++;
+  if (requests % 1000 == 0) {
+    fprintf(stderr, "Request #%ld\n", requests);
+  }
 }
 
 void server_alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t* buf) {
