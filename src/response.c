@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "util.h"
 #include "response.h"
 
 http_response_t* http_response_init(http_request_t* request) {
@@ -11,15 +12,10 @@ http_response_t* http_response_init(http_request_t* request) {
 }
 
 void http_response_header_add(http_response_t* response, char* name, char* value) {
-  size_t name_length = strlen(name);
-  char* name_copy = malloc(sizeof(char) * (name_length + 1));
-  strncpy(name_copy, name, name_length);
-  name_copy[name_length] = '\0';
 
-  size_t value_length = strlen(value);
-  char* value_copy = malloc(sizeof(char) * (value_length + 1));
-  strncpy(value_copy, value, value_length);
-  value_copy[value_length] = '\0';
+  char *name_copy, *value_copy;
+  COPY_STRING(name_copy, name, strlen(name));
+  COPY_STRING(value_copy, value, strlen(value));
 
   multimap_put(response->headers, name_copy, value_copy);
 }

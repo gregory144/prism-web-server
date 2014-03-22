@@ -6,7 +6,6 @@
 
 * API for processing requests/responses
 * cookies
-* duplicate header, parameter keys
 * streams data structure
 * max concurrent streams
 * POST/PUT/PATCH requests (parse data frame)

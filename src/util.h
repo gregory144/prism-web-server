@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <stdarg.h>
 
-#define LOG_LEVEL_FATAL true
+#define LOG_LEVEL_DEBUG true
 
 #if defined LOG_LEVEL_FATAL
 

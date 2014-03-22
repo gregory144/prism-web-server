@@ -10,7 +10,7 @@
  * into the host and port
  */
 void parse_authority(http_request_t* request) {
-  char* authority = multimap_get(request->headers, ":authority");
+  char* authority = http_request_header_get(request, ":authority");
   char* port = strchr(authority, ':');
   if (port) {
     COPY_STRING(request->host, authority, port - authority);
@@ -26,7 +26,7 @@ void parse_authority(http_request_t* request) {
  * path and a query string
  */
 void parse_path(http_request_t* request) {
-  char* path = multimap_get(request->headers, ":path");
+  char* path = http_request_header_get(request, ":path");
   if (path) {
     char* query = strchr(path, '?');
     if (query) {
@@ -152,10 +152,7 @@ void remove_special_headers(multimap_t* headers) {
   }
   size_t i;
   for (i = 0; i < found; i++) {
-    char* value = multimap_get(headers, special_names[i]);
-    multimap_remove(headers, special_names[i]);
-    free(special_names[i]);
-    free(value);
+    multimap_remove(headers, special_names[i], free, free);
   }
 }
 
@@ -169,8 +166,8 @@ http_request_t* http_request_init_internal(_http_parser_t parser,
   request->headers = headers;
   request->params = multimap_init_with_string_keys();
 
-  request->method = multimap_get(headers, ":method");
-  request->scheme = multimap_get(headers, ":scheme");
+  request->method = strdup(http_request_header_get(request, ":method"));
+  request->scheme = strdup(http_request_header_get(request, ":scheme"));
 
   parse_authority(request);
   parse_path(request);
@@ -181,11 +178,35 @@ http_request_t* http_request_init_internal(_http_parser_t parser,
   return request;
 }
 
+/**
+ * Returns the first header value for the given name
+ * (ignores any other defined header values)
+ */
 char* http_request_header_get(http_request_t* request, char* name) {
+  multimap_values_t* values = multimap_get(request->headers, name);
+  return values ? values->value : NULL;
+}
+
+/**
+ * Returns a reference to the first header value for the given name.
+ */
+multimap_values_t* http_request_header_get_values(http_request_t* request, char* name) {
   return multimap_get(request->headers, name);
 }
 
+/**
+ * Returns the first param value for the given name
+ * (ignores any other defined parameter values)
+ */
 char* http_request_param_get(http_request_t* request, char* name) {
+  multimap_values_t* values = multimap_get(request->params, name);
+  return values ? values->value : NULL;
+}
+
+/**
+ * Returns a reference to the first header value for the given name.
+ */
+multimap_values_t* http_request_param_get_values(http_request_t* request, char* name) {
   return multimap_get(request->params, name);
 }
 
@@ -217,17 +238,11 @@ void http_request_free(http_request_t* request) {
   multimap_free(request->headers, free, free);
   multimap_free(request->params, free, free);
 
-  if (request->path) {
-    free(request->path);
-  }
-
-  if (request->query_string) {
-    free(request->query_string);
-  }
-
-  if (request->host) {
-    free(request->host);
-  }
+  if (request->path) free(request->path);
+  if (request->query_string) free(request->query_string);
+  if (request->host) free(request->host);
+  if (request->method) free(request->method);
+  if (request->scheme) free(request->scheme);
 
   free(request);
 }

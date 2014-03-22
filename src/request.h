@@ -36,7 +36,11 @@ http_request_t* http_request_init_internal(_http_parser_t parser,
 
 char* http_request_header_get(http_request_t* request, char* name);
 
+multimap_values_t* http_request_header_get_values(http_request_t* request, char* name);
+
 char* http_request_param_get(http_request_t* request, char* name);
+
+multimap_values_t* http_request_param_get_values(http_request_t* request, char* name);
 
 char* http_request_method(http_request_t* request);
 
