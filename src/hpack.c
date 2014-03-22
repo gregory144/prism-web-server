@@ -387,12 +387,15 @@ void hpack_decode_literal_header(
   if (add_to_header_table) {
     hpack_header_table_entry_t* header = hpack_header_table_add(context,
         key_name, key_name_length, value, value_length);
-    return hpack_emit_header(headers, header->name, header->name_length,
+    hpack_emit_header(headers, header->name, header->name_length,
         header->value, header->value_length);
   } else {
-    return hpack_emit_header(headers, key_name, key_name_length,
+    hpack_emit_header(headers, key_name, key_name_length,
         value, value_length);
+    free(key_name);
+    free(value);
   }
+
 }
 
 void hpack_decode_indexed_header(

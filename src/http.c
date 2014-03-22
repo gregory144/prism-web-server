@@ -518,6 +518,8 @@ void http_response_write(http_response_t* response, char* text, size_t text_leng
   // emit data frame
   http_emit_data(parser, stream, (uint8_t*)text, text_length);
 
+  free(text);
+
   http_response_free(response);
 }
 

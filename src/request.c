@@ -152,7 +152,6 @@ void remove_special_headers(hash_table_t* headers) {
   }
   size_t i;
   for (i = 0; i < found; i++) {
-    fprintf(stderr, "Removing special header: '%s' (%ld)\n", special_names[i], strlen(special_names[i]));
     char* value = hash_table_get(headers, special_names[i]);
     hash_table_remove(headers, special_names[i]);
     free(special_names[i]);
