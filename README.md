@@ -20,4 +20,5 @@
 * upgrade from 1.1
 * API for processing streams and frames
 * better error handling for libuv calls
+* better hpack encoding algorithm - use indexing
 * data frame padding
