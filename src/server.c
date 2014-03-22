@@ -146,8 +146,6 @@ void server_parse(uv_stream_t *client, uint8_t* buffer, size_t len) {
 
   http_parser_t* parser = client_data->parser;
   http_parser_read(parser, buffer, len);
-
-  free(buffer);
 }
 
 void server_stream_shutdown(uv_stream_t* stream) {

@@ -5,13 +5,13 @@
 ## TODO
 
 * API for processing requests/responses
+* flow control (window update)
 * cookies
 * streams data structure
 * max concurrent streams
 * POST/PUT/PATCH requests (parse data frame)
 * better goaway handling
 * goaway on bad hpack indexes
-* flow control (window update)
 * stream priority
 * ping
 * continuations

@@ -409,6 +409,11 @@ http_frame_t* http_frame_init(uint16_t length, char type, char flags, uint32_t s
 }
 
 bool http_parser_add_from_buffer(http_parser_t* parser) {
+  if (LOG_TRACE) log_trace("Reading %ld bytes: %s\n", parser->buffer_length, parser->buffer + parser->buffer_position);
+  if (parser->buffer_position == parser->buffer_length) {
+    if (LOG_TRACE) log_trace("Finished with current buffer\n");
+    return false;
+  }
   // is there enough in the buffer to read a frame header?
   if (parser->buffer_position + FRAME_HEADER_SIZE > parser->buffer_length) {
     // TODO off-by-one?
@@ -420,18 +425,18 @@ bool http_parser_add_from_buffer(http_parser_t* parser) {
 
   // get 14 bits of first 2 bytes
   uint16_t frame_length = get_bits16(pos, 0, 2, 0x3FFF);
-  uint8_t frame_type = pos[2];
-  uint8_t frame_flags = pos[3];
-  // get 31 bits
-  uint32_t stream_id = get_bits32(pos, 4, 4, 0x7FFFFFFF);
-  if (LOG_TRACE) log_trace("stream id: %x %x %x %x\n", pos[4], pos[5], pos[6], pos[7]);
-
-  http_frame_t* frame = http_frame_init(frame_length, frame_type, frame_flags, stream_id);
-
-  parser->buffer_position += FRAME_HEADER_SIZE;
 
   // is there enough in the buffer to read the frame payload?
-  if (parser->buffer_position + frame->length <= parser->buffer_length) {
+  if (parser->buffer_position + FRAME_HEADER_SIZE + frame_length <= parser->buffer_length) {
+
+    uint8_t frame_type = pos[2];
+    uint8_t frame_flags = pos[3];
+    // get 31 bits
+    uint32_t stream_id = get_bits32(pos, 4, 4, 0x7FFFFFFF);
+
+    http_frame_t* frame = http_frame_init(frame_length, frame_type, frame_flags, stream_id);
+
+    parser->buffer_position += FRAME_HEADER_SIZE;
     // TODO off-by-one?
     if (!parser->received_settings && frame->type != FRAME_TYPE_SETTINGS) {
       // TODO emit protocol error?
@@ -480,17 +485,30 @@ bool http_parser_add_from_buffer(http_parser_t* parser) {
     free(frame);
     return true;
   } else {
-    if (LOG_ERROR) log_error("Not enough in buffer to read frame payload\n");
-    abort();
+    if (LOG_TRACE) log_trace("Not enough in buffer to read %ld byte frame payload\n", frame_length);
   }
   return false;
 }
 
+/**
+ * Reads the given buffer and acts on it. Caller must give up ownership of the
+ * buffer.
+ */
 void http_parser_read(http_parser_t* parser, uint8_t* buffer, size_t len) {
   if (LOG_TRACE) log_trace("Reading from buffer: %ld\n", len);
-  parser->buffer = buffer;
-  parser->buffer_length = len;
+  size_t unprocessed_bytes = parser->buffer_length;
+  if (unprocessed_bytes > 0) {
+    // there are still unprocessed bytes
+    parser->buffer = realloc(parser->buffer, unprocessed_bytes + len);
+    memcpy(parser->buffer + unprocessed_bytes, buffer, len);
+    parser->buffer_length = unprocessed_bytes + len;
+    free(buffer);
+  } else {
+    parser->buffer = buffer;
+    parser->buffer_length = len;
+  }
   parser->buffer_position = 0;
+
   if (!parser->received_connection_header) {
     if (http_parser_recognize_connection_header(parser)) {
       parser->received_connection_header = true;
@@ -502,7 +520,20 @@ void http_parser_read(http_parser_t* parser, uint8_t* buffer, size_t len) {
     }
   }
   while (http_parser_add_from_buffer(parser));
-  if (LOG_TRACE) log_trace("What next?\n");
+
+  // if there is still unprocessed data in the buffer, save it for when we
+  // get the rest of the frame
+  unprocessed_bytes = parser->buffer_length - parser->buffer_position;
+  if (unprocessed_bytes > 0) {
+    // use memmove because it might overlap
+    memmove(parser->buffer, parser->buffer + parser->buffer_position, unprocessed_bytes);
+    parser->buffer = realloc(parser->buffer, unprocessed_bytes);
+    parser->buffer_length = unprocessed_bytes;
+  } else {
+    free(parser->buffer);
+    parser->buffer = NULL;
+    parser->buffer_length = 0;
+  }
 }
 
 void http_response_write(http_response_t* response, char* text, size_t text_length) {
