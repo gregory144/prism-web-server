@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <check.h>
 
-#include "../src/util.h"
+#include "../src/util.c"
 
 void setup() {
 }

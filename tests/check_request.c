@@ -3,7 +3,7 @@
 #include <check.h>
 
 #include "../src/request.c"
-#include "../src/hash_table.c"
+#include "../src/multimap.c"
 
 void setup() {
 }
