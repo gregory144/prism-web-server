@@ -5,7 +5,7 @@
 #include "util.h"
 
 void catcher(int sig) {
-  log_error("caught signal %d\n", sig);
+  if (LOG_ERROR) log_error("caught signal %d\n", sig);
 }
 
 int main() {

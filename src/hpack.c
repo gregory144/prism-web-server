@@ -258,7 +258,7 @@ hpack_header_table_entry_t* hpack_header_table_add_existing_entry(
 
     header->added_on_current_request = true;
 
-    log_info("Adding %s: %s\n", header->name, header->value);
+    if (LOG_TRACE) log_trace("Adding %s: %s\n", header->name, header->value);
 
     context->header_table->current_size += header->size_in_table;
     circular_buffer_add(context->header_table->entries, header);
@@ -327,7 +327,7 @@ string_and_length_t* hpack_decode_string_literal(
   *current += key_name_result->num_bytes;
   size_t key_name_length = key_name_result->value;
   free(key_name_result);
-  log_debug("Decoding string literal length: %ld\n", key_name_length);
+  if (LOG_TRACE) log_trace("Decoding string literal length: %ld\n", key_name_length);
   char* key_name;
   if (first_bit) {
     huffman_result_t* huffman_result = huffman_decode(buf + (*current), key_name_length);
@@ -349,7 +349,7 @@ void hpack_decode_literal_header(
   hpack_decode_quantity_result_t* index_result = hpack_decode_quantity(buf + (*current), length - (*current), 2);
   size_t header_table_index = index_result->value;
   *current += index_result->num_bytes;
-  log_debug("Adding literal header field: %ld, %ld\n", index_result->value, index_result->num_bytes);
+  if (LOG_TRACE) log_trace("Adding literal header field: %ld, %ld\n", index_result->value, index_result->num_bytes);
   free(index_result);
   char* key_name = NULL;
   size_t key_name_length = 0;
@@ -359,13 +359,13 @@ void hpack_decode_literal_header(
     key_name = sl->value;
     key_name_length = sl->length;
     free(sl);
-    log_debug("Literal name: %s, %ld\n", key_name, key_name_length);
+    if (LOG_TRACE) log_trace("Literal name: %s, %ld\n", key_name, key_name_length);
   } else {
     // indexed name
-    log_debug("getting from header table %ld\n", header_table_index);
+    if (LOG_TRACE) log_trace("getting from header table %ld\n", header_table_index);
     hpack_header_table_entry_t* entry = hpack_header_table_get(context, header_table_index);
     if (!entry) {
-      log_debug("getting from static table %ld\n", header_table_index);
+      if (LOG_TRACE) log_trace("getting from static table %ld\n", header_table_index);
       entry = hpack_static_table_get(context, header_table_index);
     }
     if (!entry) {
@@ -374,7 +374,7 @@ void hpack_decode_literal_header(
     }
     COPY_STRING(key_name, entry->name, entry->name_length);
     key_name_length = entry->name_length;
-    log_debug("Indexed name: %s, %ld\n", key_name, key_name_length);
+    if (LOG_TRACE) log_trace("Indexed name: %s, %ld\n", key_name, key_name_length);
     free(entry);
   }
   // literal value
@@ -382,7 +382,7 @@ void hpack_decode_literal_header(
   char* value = sl->value;
   size_t value_length = sl->length;
   free(sl);
-  log_debug("Emitting header literal value: %s (%ld), %s (%ld)\n", key_name, key_name_length, value, value_length);
+  if (LOG_TRACE) log_trace("Emitting header literal value: %s (%ld), %s (%ld)\n", key_name, key_name_length, value, value_length);
 
   if (add_to_header_table) {
     hpack_header_table_entry_t* header = hpack_header_table_add(context,
@@ -403,9 +403,9 @@ void hpack_decode_indexed_header(
     size_t length, size_t* current) {
   hpack_decode_quantity_result_t* result = hpack_decode_quantity(buf + (*current), length - (*current), 1);
   *current += result->num_bytes;
-  log_debug("Adding indexed header field: %ld\n", result->value);
+  if (LOG_TRACE) log_trace("Adding indexed header field: %ld\n", result->value);
   if (result->value == 0) {
-    log_debug("Empty reference set\n");
+    if (LOG_TRACE) log_debug("Empty reference set\n");
     hpack_reference_set_clear(context);
   } else {
     // if the value is in the reference set - remove it from the reference set
@@ -423,7 +423,7 @@ void hpack_decode_indexed_header(
       }
       hpack_emit_header(headers, entry->name,
           entry->name_length, entry->value, entry->value_length);
-      log_debug("From index: %s: %s\n", entry->name, entry->value);
+      if (LOG_TRACE) log_trace("From index: %s: %s\n", entry->name, entry->value);
     }
   }
   free(result);
@@ -434,7 +434,7 @@ multimap_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length) 
   size_t current = 0;
   multimap_t* headers = multimap_init_with_string_keys();
 
-  log_debug("Decompressing headers: %ld, %ld\n", current, length);
+  if (LOG_TRACE) log_trace("Decompressing headers: %ld, %ld\n", current, length);
   while (current < length) {
     bool first_bit = get_bit(buf + current, 0);
     if (first_bit) {
@@ -479,7 +479,7 @@ hpack_encode_result_t* hpack_encode(hpack_context_t* context, multimap_t* header
     size_t name_length = strlen(name);
     char* value = iter.value;
     size_t value_length = strlen(value);
-    log_debug("Encoding Reponse Header: %s (%ld): %s (%ld)\n", name, name_length, value, value_length);
+    if (LOG_TRACE) log_trace("Encoding Reponse Header: %s (%ld): %s (%ld)\n", name, name_length, value, value_length);
     encoded[encoded_index++] = 0x40; // 4.3.1. Literal Header Field without Indexing
 
     encoded[encoded_index] = 0x80; // set huffman encoded bit
@@ -501,7 +501,7 @@ hpack_encode_result_t* hpack_encode(hpack_context_t* context, multimap_t* header
   hpack_encode_result_t* result = malloc(sizeof(hpack_encode_result_t));
   result->buf = encoded;
   result->buf_length = encoded_index;
-  log_debug("Encoded headers into %ld bytes\n", encoded_index);
+  if (LOG_TRACE) log_trace("Encoded headers into %ld bytes\n", encoded_index);
   return result;
 }
 

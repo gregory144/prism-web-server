@@ -15,26 +15,27 @@ static long writes = 0;
 static long requests = 0;
 
 void handle_request(http_request_t* request, http_response_t* response) {
-  log_debug("Method: %s\n", http_request_method(request));
-  log_debug("Scheme: %s\n", http_request_scheme(request));
-  log_debug("Host: %s\n", http_request_host(request));
-  log_debug("Port: %d\n", http_request_port(request));
-  log_debug("Path: %s\n", http_request_path(request));
-  log_debug("Query: %s\n", http_request_query_string(request));
+  if (LOG_DEBUG) {
+    log_debug("Method: '%s'\n", http_request_method(request));
+    log_debug("Scheme: '%s'\n", http_request_scheme(request));
+    log_debug("Host: '%s'\n", http_request_host(request));
+    log_debug("Port: %d\n", http_request_port(request));
+    log_debug("Path: '%s'\n", http_request_path(request));
+    log_debug("Query: '%s'\n", http_request_query_string(request));
 
-  log_debug("Got headers:\n");
+    log_debug("Got headers:\n");
+    multimap_iter_t iter;
+    multimap_iterator_init(&iter, request->headers);
+    while (multimap_iterate(&iter)) {
+      log_debug("'%s' (%ld): '%s' (%ld)\n", iter.key, strlen(iter.key), iter.value, strlen(iter.value));
+    }
 
-  multimap_iter_t iter;
-  multimap_iterator_init(&iter, request->headers);
-  while (multimap_iterate(&iter)) {
-    log_debug("%s: %s\n", iter.key, iter.value);
-  }
+    log_debug("Got parameters:\n");
 
-  log_debug("Got parameters:\n");
-
-  multimap_iterator_init(&iter, request->params);
-  while (multimap_iterate(&iter)) {
-    log_debug("'%s' (%ld): '%s' (%ld)\n", iter.key, strlen(iter.key), iter.value, strlen(iter.value));
+    multimap_iterator_init(&iter, request->params);
+    while (multimap_iterate(&iter)) {
+      log_debug("'%s' (%ld): '%s' (%ld)\n", iter.key, strlen(iter.key), iter.value, strlen(iter.value));
+    }
   }
 
   char* resp_text;
@@ -83,9 +84,11 @@ void handle_request(http_request_t* request, http_response_t* response) {
 
   http_response_write(response, resp_text, content_length);
 
-  requests++;
-  if (requests % 1000 == 0) {
-    log_info("Request #%ld\n", requests);
+  if (LOG_INFO) {
+    requests++;
+    if (requests % 1000 == 0) {
+      log_info("Request #%ld\n", requests);
+    }
   }
 }
 
@@ -102,7 +105,7 @@ void server_write(uv_write_t *req, int status) {
   http_client_data_t *client_data = write_req_data->stream->data;
 
   if (status < 0) {
-    log_error("uv_write error: %s, %ld\n", uv_strerror(status), client_data->uv_write_count);
+    if (LOG_ERROR) log_error("Write error: %s, %ld\n", uv_strerror(status), client_data->uv_write_count);
   } else {
     client_data->uv_write_count++;
     client_data->bytes_written += write_req_data->buf->len;
@@ -116,17 +119,17 @@ void server_write(uv_write_t *req, int status) {
 
 void server_connection_close(uv_handle_t* handle) {
   http_client_data_t *client_data = handle->data;
-  log_info("Closing client handle: (%ld = %ld)\n", client_data->bytes_read, client_data->bytes_written);
+  if (LOG_TRACE) log_trace("Closing client handle: (%ld = %ld)\n", client_data->bytes_read, client_data->bytes_written);
   free(client_data->stream);
   http_parser_free(client_data->parser);
   free(client_data);
-  log_info("Stats: reads %ld, writes %ld\n", reads, writes);
+  if (LOG_TRACE) log_trace("Stats: reads %ld, writes %ld\n", reads, writes);
 }
 
 void server_connection_shutdown(uv_shutdown_t* shutdown_req, int status) {
   http_shutdown_data_t *shutdown_data = shutdown_req->data;
   if (status) {
-    log_error("shutdown error: %s\n", uv_strerror(status));
+    if (LOG_ERROR) log_error("Shutdown error: %s\n", uv_strerror(status));
     server_connection_close((uv_handle_t*)shutdown_data->stream);
   } else {
     uv_close((uv_handle_t*)shutdown_data->stream, server_connection_close);
@@ -139,7 +142,7 @@ void server_parse(uv_stream_t *client, uint8_t* buffer, size_t len) {
   http_client_data_t *client_data = client->data;
   client_data->bytes_read += len;
   client_data->uv_read_count++;
-  log_info("Read %ld bytes (%ld)\n", len, client_data->uv_read_count);
+  if (LOG_TRACE) log_trace("Read %ld bytes (%ld)\n", len, client_data->uv_read_count);
 
   http_parser_t* parser = client_data->parser;
   http_parser_read(parser, buffer, len);
@@ -149,7 +152,7 @@ void server_parse(uv_stream_t *client, uint8_t* buffer, size_t len) {
 
 void server_stream_shutdown(uv_stream_t* stream) {
   http_client_data_t *client_data = stream->data;
-  log_info("shutting down... (%ld)\n", client_data->uv_read_count);
+  if (LOG_TRACE) log_trace("shutting down... (%ld)\n", client_data->uv_read_count);
   uv_shutdown_t *shutdown_req = malloc(sizeof(uv_shutdown_t));
   http_shutdown_data_t *shutdown_data = malloc(sizeof(http_shutdown_data_t));
   shutdown_data->stream = stream;
@@ -168,7 +171,7 @@ void server_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t* buf) {
   } else if (nread < 0) {
     free(buf->base);
 
-    log_error("read error: %s\n", uv_strerror(nread));
+    if (LOG_ERROR) log_error("Read error: %s\n", uv_strerror(nread));
     uv_close((uv_handle_t*)stream, server_connection_close);
 
     return;
@@ -194,12 +197,14 @@ void server_http_write(void* stream, uint8_t* buf, size_t len) {
   // keep track of the buffer so we can free it later
   write_req_data->buf = write_buf;
 
-  log_debug("uv_write: %s, %ld\n", buf, len);
-  size_t i;
-  for (i = 0; i < len; i++) {
-    log_debug("%02x ", (uint8_t)buf[i]);
+  if (LOG_TRACE) {
+    log_trace("uv_write: %s, %ld\n", buf, len);
+    size_t i;
+    for (i = 0; i < len; i++) {
+      log_trace("%02x ", (uint8_t)buf[i]);
+    }
+    log_trace("\n");
   }
-  log_debug("\n");
   uv_write(write_req, stream, write_req_data->buf, 1, server_write);
   free(buf);
 }
@@ -228,8 +233,9 @@ void server_connection_start(uv_stream_t *server, int status) {
   uv_tcp_init(server_data->loop, client);
   if (uv_accept(server, (uv_stream_t*) client) == 0) {
     int err = uv_read_start((uv_stream_t*) client, server_alloc_buffer, server_read);
-    if (err < 0)
+    if (err < 0 && LOG_ERROR) {
       log_error("Read error: %s\n", uv_strerror(err));
+    }
   }
   else {
     uv_close((uv_handle_t*) client, server_connection_close);
@@ -249,7 +255,7 @@ int server_start() {
   uv_ip4_addr("0.0.0.0", 7000, &bind_addr);
   uv_tcp_bind(&server, (struct sockaddr*)&bind_addr, 0);
   int err = uv_listen((uv_stream_t*) &server, 128, server_connection_start);
-  if (err < 0) {
+  if (err < 0 && LOG_ERROR) {
     log_error("Listen error: %s\n", uv_strerror(err));
     return 1;
   }

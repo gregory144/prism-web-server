@@ -85,9 +85,9 @@ char* date_rfc1123() {
   fprintf(stderr, "%s\t%s\n", level, buffer);
 
 void log_fatal(char* format, ...) {
-#ifdef LOG_FATAL
-  LOG_WITH_LEVEL("FATAL")
-#endif
+  if (LOG_FATAL) {
+    LOG_WITH_LEVEL("FATAL")
+  }
 }
 
 void log_warning(char* format, ...) {
@@ -111,5 +111,11 @@ void log_info(char* format, ...) {
 void log_debug(char* format, ...) {
   if (LOG_DEBUG) {
     LOG_WITH_LEVEL("DEBUG")
+  }
+}
+
+void log_trace(char* format, ...) {
+  if (LOG_TRACE) {
+    LOG_WITH_LEVEL("TRACE")
   }
 }
