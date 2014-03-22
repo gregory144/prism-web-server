@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <stdarg.h>
 
-#define LOG_LEVEL_FATAL true
+#define LOG_LEVEL_WARN true
 
 #if defined LOG_LEVEL_FATAL
 
@@ -52,6 +52,15 @@
 
 
 #define UNUSED(expr) do { (void)(expr); } while (0)
+
+/**
+ * Copies a string to a new memory location
+ * and terminates the string after len bytes
+ */
+#define COPY_STRING(dest, src, len) \
+    dest = malloc(sizeof(char) * (len + 1)); \
+    memcpy(dest, src, len); \
+    dest[len] = '\0'
 
 typedef struct {
   char* value;

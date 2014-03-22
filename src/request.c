@@ -13,10 +13,7 @@ void parse_authority(http_request_t* request) {
   char* authority = hash_table_get(request->headers, ":authority");
   char* port = strchr(authority, ':');
   if (port) {
-    size_t host_len = port - authority;
-    request->host = malloc(sizeof(char) * (host_len + 1));
-    strncpy(request->host, authority, host_len);
-    request->host[host_len] = '\0';
+    COPY_STRING(request->host, authority, port - authority);
     request->port = strtoul(port + 1, NULL, 10);
   } else {
     request->host = strdup(authority);
@@ -33,26 +30,107 @@ void parse_path(http_request_t* request) {
   if (path) {
     char* query = strchr(path, '?');
     if (query) {
-      size_t path_len = query - path;
-      request->path = malloc(sizeof(char) * (path_len + 1));
-      strncpy(request->path, path, path_len);
-      request->path[path_len] = '\0';
+      COPY_STRING(request->path, path, query - path);
     } else {
       request->path = strdup(path);
     }
-    request->query_string = query ? query + 1 : NULL;
+    request->query_string = query ? strdup(query + 1) : NULL;
   } else {
     request->path = NULL;
     request->query_string = NULL;
   }
 }
 
+unsigned char ascii_to_hex(unsigned char in) {
+  if (in >= '0' && in <= '9') {
+    return in - '0';
+  } else if (in >= 'A' && in <= 'F') {
+    return in - 'A' + 10;
+  }
+  return 0;
+}
+
+/*
+ * Letters (A–Z and a–z), numbers (0–9) and the characters '.','-','~' and '_' are left as-is
+ * SPACE is encoded as '+' or "%20" [8]
+ * All other characters are encoded as %HH hex representation with any non-ASCII characters
+ *    first encoded as UTF-8 (or other specified encoding)
+ * The octet corresponding to the tilde ("~") character is often encoded as "%7E" by older
+ * URI processing implementations; the "%7E" can be replaced by "~" without changing its interpretation.
+ *
+ * The encoding of SPACE as '+' and the selection of "as-is" characters distinguishes this encoding from RFC 1738.
+ */
+char* url_decode(char* encoded, size_t length) {
+  char* decoded = malloc(sizeof(char) * length + 1);
+  size_t decoded_index = 0;
+  size_t encoded_index = 0;
+  while (encoded_index < length) {
+    unsigned char c = encoded[encoded_index++];
+    if (c == '+') {
+      decoded[decoded_index++] = ' ';
+    } else if (c == '%' && encoded_index + 2 <= length) {
+      unsigned char digit1 = ascii_to_hex(encoded[encoded_index++]);
+      unsigned char digit2 = ascii_to_hex(encoded[encoded_index++]);
+      unsigned char decimal = (digit1 << 4) | digit2;
+      decoded[decoded_index++] = decimal;
+    } else {
+      decoded[decoded_index++] = c;
+    }
+  }
+  decoded[decoded_index] = '\0';
+  return decoded;
+}
+
 /**
  * Parses the query string into parameters
  */
-void parse_parameters(http_request_t* request) {
-  if (request->query_string) {
-    // TODO
+void parse_parameters(hash_table_t* params, char* query_string) {
+  if (query_string) {
+    size_t query_string_len = strlen(query_string);
+    char* buf = query_string;
+    char* end_buf = buf + query_string_len;
+    char* key = NULL;
+    size_t key_len = 0;
+    char* value = NULL;
+    size_t value_len = 0;
+    while (buf < end_buf) {
+      char* end = strpbrk(buf, "=&;#");
+      size_t len = end ? end - buf : end_buf - buf;
+      char next = end ? *end : 0;
+      switch(next) {
+        case '=':
+          {
+            key = buf;
+            key_len = len;
+          }
+          break;
+        case '&':
+        case ';':
+        case '#':
+        case '\0':
+          {
+            if (key) {
+              value = buf;
+              value_len = len;
+            } else {
+              // key with no value
+              key = buf;
+              key_len = len;
+              value = "";
+              value_len = 0;
+            }
+
+            char* decoded_key = url_decode(key, key_len);
+            char* decoded_value = url_decode(value, value_len);
+
+            hash_table_put(params, decoded_key, decoded_value);
+            key = NULL;
+            value = NULL;
+          }
+          break;
+      }
+      buf += len + 1;
+    }
   }
 }
 
@@ -74,7 +152,11 @@ void remove_special_headers(hash_table_t* headers) {
   }
   size_t i;
   for (i = 0; i < found; i++) {
+    fprintf(stderr, "Removing special header: '%s' (%ld)\n", special_names[i], strlen(special_names[i]));
+    char* value = hash_table_get(headers, special_names[i]);
     hash_table_remove(headers, special_names[i]);
+    free(special_names[i]);
+    free(value);
   }
 }
 
@@ -93,7 +175,7 @@ http_request_t* http_request_init_internal(_http_parser_t parser,
 
   parse_authority(request);
   parse_path(request);
-  parse_parameters(request);
+  parse_parameters(request->params, request->query_string);
 
   remove_special_headers(headers);
 
@@ -138,6 +220,10 @@ void http_request_free(http_request_t* request) {
 
   if (request->path) {
     free(request->path);
+  }
+
+  if (request->query_string) {
+    free(request->query_string);
   }
 
   if (request->host) {

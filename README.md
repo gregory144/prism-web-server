@@ -5,7 +5,6 @@
 ## TODO
 
 * API for processing requests/responses
-* send decoded query parameters to request callback
 * cookies
 * duplicate header, parameter keys
 * streams data structure

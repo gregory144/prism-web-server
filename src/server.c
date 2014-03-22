@@ -30,25 +30,40 @@ void handle_request(http_request_t* request, http_response_t* response) {
     log_debug("%s: %s\n", iter.key, iter.value);
   }
 
-  char* client_user_agent = http_request_header_get(request, "user-agent");
-  if (!client_user_agent) {
-    client_user_agent = "Unknown";
-  }
-  size_t resp_length = 100 + strlen(client_user_agent);
-  char resp_text[resp_length + 1];
-  snprintf(resp_text, resp_length, "Hello %s\n", client_user_agent);
+  log_debug("Got parameters:\n");
 
-  char content_length[256];
-  snprintf(content_length, 255, "%ld", strlen(resp_text));
+  hash_table_iterator_init(&iter, request->params);
+  while (hash_table_iterate(&iter)) {
+    log_debug("'%s' (%ld): '%s' (%ld)\n", iter.key, strlen(iter.key), iter.value, strlen(iter.value));
+  }
+
+  char* resp_text;
+  char* message = http_request_param_get(request, "msg");
+  if (!message) {
+    char* client_user_agent = http_request_header_get(request, "user-agent");
+    if (!client_user_agent) {
+      client_user_agent = "Unknown";
+    }
+    size_t resp_length = 100 + strlen(client_user_agent);
+    char user_agent_message[resp_length + 1];
+    snprintf(user_agent_message, resp_length, "Hello %s\n", client_user_agent);
+    resp_text = strdup(user_agent_message);
+  } else {
+    resp_text = strdup(message);
+  }
+
+  size_t content_length = strlen(resp_text);
+  char content_length_s[256];
+  snprintf(content_length_s, 255, "%ld", content_length);
 
   http_response_header_add(response, ":status", "200");
-  http_response_header_add(response, "content-length", content_length);
+  http_response_header_add(response, "content-length", content_length_s);
   http_response_header_add(response, "server", PACKAGE_STRING);
   char* date = date_rfc1123();
   http_response_header_add(response, "date", date);
   free(date);
 
-  http_response_write(response, resp_text, strlen(resp_text));
+  http_response_write(response, resp_text, content_length);
 
   requests++;
   if (requests % 1000 == 0) {

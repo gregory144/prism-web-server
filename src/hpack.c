@@ -231,13 +231,9 @@ void hpack_header_table_adjust_size(hpack_context_t* context, size_t new_size) {
 void hpack_emit_header(hash_table_t* headers, char* name,
     size_t name_length, char* value, size_t value_length) {
 
-  char* name_copy = malloc(sizeof(char) * (name_length + 1));
-  strncpy(name_copy, name, name_length);
-  name_copy[name_length] = '\0';
-
-  char* value_copy = malloc(sizeof(char) * (value_length + 1));
-  strncpy(value_copy, value, value_length);
-  value_copy[value_length] = '\0';
+  char* name_copy, *value_copy;
+  COPY_STRING(name_copy, name, name_length);
+  COPY_STRING(value_copy, value, value_length);
 
   hash_table_put(headers, name_copy, value_copy);
 }
@@ -337,14 +333,11 @@ string_and_length_t* hpack_decode_string_literal(
     huffman_result_t* huffman_result = huffman_decode(buf + (*current), key_name_length);
     *current += key_name_length;
     key_name_length = huffman_result->length;
-    key_name = malloc(sizeof(char) * (key_name_length + 1));
-    memcpy(key_name, huffman_result->value, key_name_length);
-    key_name[key_name_length] = '\0';
+    COPY_STRING(key_name, huffman_result->value, key_name_length);
     free(huffman_result->value);
     free(huffman_result);
   } else {
-    key_name = malloc(sizeof(char) * key_name_length);
-    memcpy(key_name, buf + (*current), key_name_length);
+    COPY_STRING(key_name, buf + (*current), key_name_length);
     *current += key_name_length;
   }
   return string_and_length(key_name, key_name_length);
@@ -379,9 +372,7 @@ void hpack_decode_literal_header(
       // TODO protocol error - invalid index
       abort();
     }
-    key_name = malloc(sizeof(char) * (entry->name_length + 1));
-    memcpy(key_name, entry->name, entry->name_length);
-    key_name[entry->name_length] = '\0';
+    COPY_STRING(key_name, entry->name, entry->name_length);
     key_name_length = entry->name_length;
     log_debug("Indexed name: %s, %ld\n", key_name, key_name_length);
     free(entry);
