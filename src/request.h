@@ -11,8 +11,8 @@ typedef struct http_request_t {
   _http_parser_t parser;
   _http_stream_t stream;
 
-  hash_table_t* headers;
-  hash_table_t* params;
+  multimap_t* headers;
+  multimap_t* params;
 
   char* method;
 
@@ -32,7 +32,7 @@ typedef struct http_request_t {
   http_request_init_internal((_http_parser_t)a, (_http_stream_t)b, c)
 
 http_request_t* http_request_init_internal(_http_parser_t parser, 
-    _http_stream_t stream, hash_table_t* headers);
+    _http_stream_t stream, multimap_t* headers);
 
 char* http_request_header_get(http_request_t* request, char* name);
 

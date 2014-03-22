@@ -228,14 +228,14 @@ void hpack_header_table_adjust_size(hpack_context_t* context, size_t new_size) {
   }
 }
 
-void hpack_emit_header(hash_table_t* headers, char* name,
+void hpack_emit_header(multimap_t* headers, char* name,
     size_t name_length, char* value, size_t value_length) {
 
   char* name_copy, *value_copy;
   COPY_STRING(name_copy, name, name_length);
   COPY_STRING(value_copy, value, value_length);
 
-  hash_table_put(headers, name_copy, value_copy);
+  multimap_put(headers, name_copy, value_copy);
 }
 
 hpack_header_table_entry_t* hpack_header_table_add_existing_entry(
@@ -344,7 +344,7 @@ string_and_length_t* hpack_decode_string_literal(
 }
 
 void hpack_decode_literal_header(
-    hpack_context_t* context, hash_table_t* headers, uint8_t* buf,
+    hpack_context_t* context, multimap_t* headers, uint8_t* buf,
     size_t length, size_t* current, bool add_to_header_table) {
   hpack_decode_quantity_result_t* index_result = hpack_decode_quantity(buf + (*current), length - (*current), 2);
   size_t header_table_index = index_result->value;
@@ -399,7 +399,7 @@ void hpack_decode_literal_header(
 }
 
 void hpack_decode_indexed_header(
-    hpack_context_t* context, hash_table_t* headers, uint8_t* buf,
+    hpack_context_t* context, multimap_t* headers, uint8_t* buf,
     size_t length, size_t* current) {
   hpack_decode_quantity_result_t* result = hpack_decode_quantity(buf + (*current), length - (*current), 1);
   *current += result->num_bytes;
@@ -429,10 +429,10 @@ void hpack_decode_indexed_header(
   free(result);
 }
 
-hash_table_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length) {
+multimap_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length) {
 
   size_t current = 0;
-  hash_table_t* headers = hash_table_init_with_string_keys();
+  multimap_t* headers = multimap_init_with_string_keys();
 
   log_debug("Decompressing headers: %ld, %ld\n", current, length);
   while (current < length) {
@@ -466,15 +466,15 @@ hash_table_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length
   return headers;
 }
 
-hpack_encode_result_t* hpack_encode(hpack_context_t* context, hash_table_t* headers) {
+hpack_encode_result_t* hpack_encode(hpack_context_t* context, multimap_t* headers) {
   UNUSED(context);
   // naive hpack encoding - never add to the header table
   uint8_t* encoded = malloc(4096); // TODO - we need to construct this dynamically
   size_t encoded_index = 0;
 
-  hash_table_iter_t iter;
-  hash_table_iterator_init(&iter, headers);
-  while (hash_table_iterate(&iter)) {
+  multimap_iter_t iter;
+  multimap_iterator_init(&iter, headers);
+  while (multimap_iterate(&iter)) {
     char* name = iter.key;
     size_t name_length = strlen(name);
     char* value = iter.value;

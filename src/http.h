@@ -256,7 +256,7 @@ struct http_stream_s {
 
   http_header_fragment_t* header_fragments;
 
-  hash_table_t* headers;
+  multimap_t* headers;
 };
 
 typedef void (*request_cb)(http_request_t* request, http_response_t* response);

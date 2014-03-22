@@ -5,7 +5,7 @@
 
 http_response_t* http_response_init(http_request_t* request) {
   http_response_t* response = malloc(sizeof(http_response_t));
-  response->headers = hash_table_init_with_string_keys();
+  response->headers = multimap_init_with_string_keys();
   response->request = request;
   return response;
 }
@@ -21,14 +21,14 @@ void http_response_header_add(http_response_t* response, char* name, char* value
   strncpy(value_copy, value, value_length);
   value_copy[value_length] = '\0';
 
-  hash_table_put(response->headers, name_copy, value_copy);
+  multimap_put(response->headers, name_copy, value_copy);
 }
 
 void http_response_free(http_response_t* response) {
 
   http_request_free(response->request);
 
-  hash_table_free(response->headers, free, free);
+  multimap_free(response->headers, free, free);
 
   free(response);
 }

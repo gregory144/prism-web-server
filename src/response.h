@@ -7,7 +7,7 @@ typedef struct http_response_t {
 
   http_request_t* request;
 
-  hash_table_t* headers;
+  multimap_t* headers;
 
 } http_response_t;
 

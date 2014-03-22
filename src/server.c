@@ -24,16 +24,16 @@ void handle_request(http_request_t* request, http_response_t* response) {
 
   log_debug("Got headers:\n");
 
-  hash_table_iter_t iter;
-  hash_table_iterator_init(&iter, request->headers);
-  while (hash_table_iterate(&iter)) {
+  multimap_iter_t iter;
+  multimap_iterator_init(&iter, request->headers);
+  while (multimap_iterate(&iter)) {
     log_debug("%s: %s\n", iter.key, iter.value);
   }
 
   log_debug("Got parameters:\n");
 
-  hash_table_iterator_init(&iter, request->params);
-  while (hash_table_iterate(&iter)) {
+  multimap_iterator_init(&iter, request->params);
+  while (multimap_iterate(&iter)) {
     log_debug("'%s' (%ld): '%s' (%ld)\n", iter.key, strlen(iter.key), iter.value, strlen(iter.value));
   }
 

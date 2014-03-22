@@ -47,7 +47,7 @@ http_parser_t* http_parser_init(void* data, request_cb request_handler, write_cb
 
 void http_stream_close(http_parser_t* parser, http_stream_t* stream) {
   if (stream->headers) {
-    hash_table_free(stream->headers, free, free);
+    multimap_free(stream->headers, free, free);
   }
   parser->streams[stream->id] = NULL;
   free(stream);
@@ -83,7 +83,7 @@ void http_frame_header_write(uint8_t* buf, uint16_t length, uint8_t type, uint8_
   buf[pos++] = (stream_id) & 0xFF;
 }
 
-void http_emit_headers(http_parser_t* parser, http_stream_t* stream, hash_table_t* headers) {
+void http_emit_headers(http_parser_t* parser, http_stream_t* stream, multimap_t* headers) {
   // TODO split large headers into multiple frames
   size_t headers_length = 0;
   uint8_t* hpack_buf = NULL;

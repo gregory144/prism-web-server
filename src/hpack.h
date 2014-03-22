@@ -12,7 +12,7 @@
 #include <stdbool.h>
 
 #include "circular_buffer.h"
-#include "hash_table.h"
+#include "multimap.h"
 
 #define HEADER_TABLE_OVERHEAD 32
 
@@ -79,8 +79,8 @@ void hpack_context_free(hpack_context_t* context);
 
 void hpack_header_table_adjust_size(hpack_context_t* context, size_t new_size);
 
-hash_table_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length);
+multimap_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length);
 
-hpack_encode_result_t* hpack_encode(hpack_context_t* context, hash_table_t* headers);
+hpack_encode_result_t* hpack_encode(hpack_context_t* context, multimap_t* headers);
 
 #endif
