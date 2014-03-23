@@ -69,7 +69,6 @@
 //settings
 #define SETTINGS_FLAG_ACK 0x1
 
-
 /**
  * HTTP errors
  */
@@ -149,13 +148,6 @@
  */
 #define HTTP_ERROR_INADEQUATE_SECURITY 12
 
-typedef struct http_frame_payload_s http_frame_payload_t;
-struct http_frame_payload_s {
-
-  uint8_t* data;
-
-};
-
 #define HTTP_FRAME_FIELDS               \
   /* Length in octets of the frame */   \
   /* 14 bits                       */   \
@@ -170,14 +162,13 @@ struct http_frame_payload_s {
   uint32_t stream_id;
 
 
-typedef struct http_frame_s http_frame_t;
-struct http_frame_s {
+typedef struct {
 
   HTTP_FRAME_FIELDS
 
-};
+} http_frame_t;
 
-typedef struct http_frame_settings_t {
+typedef struct {
 
   HTTP_FRAME_FIELDS
 
@@ -187,7 +178,7 @@ typedef struct http_frame_settings_t {
 
 } http_frame_settings_t;
 
-typedef struct http_frame_goaway_t {
+typedef struct {
 
   HTTP_FRAME_FIELDS
 
@@ -198,14 +189,21 @@ typedef struct http_frame_goaway_t {
 
 } http_frame_goaway_t;
 
-typedef struct http_header_fragment_s http_header_fragment_t;
-struct http_header_fragment_s {
+typedef struct {
+
+  HTTP_FRAME_FIELDS
+
+  uint32_t increment;
+
+} http_frame_window_update_t;
+
+typedef struct http_header_fragment_s {
   uint8_t* buffer;
   size_t length;
   struct http_header_fragment_s* next;
-};
+} http_header_fragment_t;
 
-typedef struct http_frame_headers_t {
+typedef struct {
 
   HTTP_FRAME_FIELDS
 
@@ -221,7 +219,7 @@ typedef struct http_frame_headers_t {
 
 } http_frame_headers_t;
 
-typedef struct http_frame_data_t {
+typedef struct {
 
   HTTP_FRAME_FIELDS
 
@@ -230,8 +228,7 @@ typedef struct http_frame_data_t {
 
 } http_frame_data_t;
 
-typedef struct http_stream_s http_stream_t;
-struct http_stream_s {
+typedef struct {
 
   /**
    * Stream identifier
@@ -254,10 +251,12 @@ struct http_stream_s {
 
   uint32_t priority;
 
+  long window_size;
+
   http_header_fragment_t* header_fragments;
 
   multimap_t* headers;
-};
+} http_stream_t;
 
 typedef void (*request_cb)(http_request_t* request, http_response_t* response);
 
@@ -265,22 +264,44 @@ typedef void (*write_cb)(void* data, uint8_t* buf, size_t len);
 
 typedef void (*close_cb)(void* data);
 
+typedef struct http_queued_frame_s {
+  struct http_queued_frame_s* next;
+
+  http_stream_t* stream;
+  uint8_t* buf;
+  size_t buf_length;
+
+  /**
+   * The buf may be part of a larger buffer
+   * that needs to be free'd.
+   * If the buffer should be free'd after the data
+   * is sent, this is the point to the full buffer.
+   */
+  void* buf_begin;
+
+  bool continuation;
+  bool end_stream;
+
+} http_queued_frame_t;
+
 /**
  * Stores state for a client.
  */
-typedef struct http_parser_s http_parser_t;
-struct http_parser_s {
+typedef struct {
   void* data;
   write_cb writer;
   close_cb closer;
   request_cb request_listener;
 
   /**
-   * Parser state
+   * connection state
    */
   bool received_connection_header;
   bool received_settings;
   size_t current_stream_id;
+  long window_size;
+
+  http_queued_frame_t* queued_frames;
 
   /**
    * what's currently being read
@@ -302,13 +323,13 @@ struct http_parser_s {
 
   hpack_context_t* encoding_context;
   hpack_context_t* decoding_context;
-};
+} http_connection_t;
 
-http_parser_t* http_parser_init(void* data, request_cb request_handler, write_cb writer, close_cb closer);
+http_connection_t* http_connection_init(void* data, request_cb request_handler, write_cb writer, close_cb closer);
 
-void http_parser_free(http_parser_t* parser);
+void http_connection_free(http_connection_t* connection);
 
-void http_parser_read(http_parser_t* parser, uint8_t* buffer, size_t len);
+void http_connection_read(http_connection_t* connection, uint8_t* buffer, size_t len);
 
 void http_response_write(http_response_t* response, char* text, size_t text_length);
 

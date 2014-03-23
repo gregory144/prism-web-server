@@ -14,7 +14,7 @@ typedef struct http_client_data_s http_client_data_t;
 struct http_client_data_s {
   uv_stream_t *stream;
 
-  http_parser_t *parser;
+  http_connection_t *connection;
 
   /**
    * Keep track of some stats for each client

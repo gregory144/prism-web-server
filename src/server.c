@@ -121,7 +121,7 @@ void server_connection_close(uv_handle_t* handle) {
   http_client_data_t *client_data = handle->data;
   if (LOG_TRACE) log_trace("Closing client handle: (%ld = %ld)\n", client_data->bytes_read, client_data->bytes_written);
   free(client_data->stream);
-  http_parser_free(client_data->parser);
+  http_connection_free(client_data->connection);
   free(client_data);
   if (LOG_TRACE) log_trace("Stats: reads %ld, writes %ld\n", reads, writes);
 }
@@ -144,8 +144,8 @@ void server_parse(uv_stream_t *client, uint8_t* buffer, size_t len) {
   client_data->uv_read_count++;
   if (LOG_TRACE) log_trace("Read %ld bytes (%ld)\n", len, client_data->uv_read_count);
 
-  http_parser_t* parser = client_data->parser;
-  http_parser_read(parser, buffer, len);
+  http_connection_t* connection = client_data->connection;
+  http_connection_read(connection, buffer, len);
 }
 
 void server_stream_shutdown(uv_stream_t* stream) {
@@ -187,7 +187,7 @@ void server_http_write(void* stream, uint8_t* buf, size_t len) {
   write_req_data->stream = stream;
   write_req->data = write_req_data;
 
-  // copy read bytes to new buffer
+  // copy bytes to write to new buffer
   uv_buf_t *write_buf = malloc(sizeof(uv_buf_t));
   write_buf->base = malloc(len);
   memcpy(write_buf->base, buf, len);
@@ -199,12 +199,10 @@ void server_http_write(void* stream, uint8_t* buf, size_t len) {
     log_trace("uv_write: %s, %ld\n", buf, len);
     size_t i;
     for (i = 0; i < len; i++) {
-      log_trace("%02x ", (uint8_t)buf[i]);
+      log_trace("%02x\n", (uint8_t)buf[i]);
     }
-    log_trace("\n");
   }
   uv_write(write_req, stream, write_req_data->buf, 1, server_write);
-  free(buf);
 }
 
 void server_http_close(void* stream) {
@@ -226,7 +224,7 @@ void server_connection_start(uv_stream_t *server, int status) {
   client_data->bytes_written = 0;
   client_data->uv_read_count = 0;
   client_data->stream = (uv_stream_t*)client;
-  client_data->parser = http_parser_init(client, handle_request, server_http_write, server_http_close);
+  client_data->connection = http_connection_init(client, handle_request, server_http_write, server_http_close);
   client->data = client_data;
   uv_tcp_init(server_data->loop, client);
   if (uv_accept(server, (uv_stream_t*) client) == 0) {

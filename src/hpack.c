@@ -405,7 +405,7 @@ void hpack_decode_indexed_header(
   *current += result->num_bytes;
   if (LOG_TRACE) log_trace("Adding indexed header field: %ld\n", result->value);
   if (result->value == 0) {
-    if (LOG_TRACE) log_debug("Empty reference set\n");
+    if (LOG_TRACE) log_trace("Empty reference set\n");
     hpack_reference_set_clear(context);
   } else {
     // if the value is in the reference set - remove it from the reference set

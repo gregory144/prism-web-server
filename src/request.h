@@ -3,12 +3,12 @@
 
 #include "hpack.h"
 
-typedef struct http_parser_t* _http_parser_t;
+typedef struct http_connection_t* _http_connection_t;
 typedef struct http_stream_t* _http_stream_t;
 
 typedef struct http_request_t {
 
-  _http_parser_t parser;
+  _http_connection_t connection;
   _http_stream_t stream;
 
   multimap_t* headers;
@@ -29,9 +29,9 @@ typedef struct http_request_t {
 } http_request_t;
 
 #define http_request_init(a, b, c) \
-  http_request_init_internal((_http_parser_t)a, (_http_stream_t)b, c)
+  http_request_init_internal((_http_connection_t)a, (_http_stream_t)b, c)
 
-http_request_t* http_request_init_internal(_http_parser_t parser, 
+http_request_t* http_request_init_internal(_http_connection_t connection, 
     _http_stream_t stream, multimap_t* headers);
 
 char* http_request_header_get(http_request_t* request, char* name);

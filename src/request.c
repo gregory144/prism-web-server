@@ -156,11 +156,11 @@ void remove_special_headers(multimap_t* headers) {
   }
 }
 
-http_request_t* http_request_init_internal(_http_parser_t parser,
+http_request_t* http_request_init_internal(_http_connection_t connection,
     _http_stream_t stream, multimap_t* headers) {
   http_request_t* request = malloc(sizeof(http_request_t));
 
-  request->parser = (_http_parser_t)parser;
+  request->connection = (_http_connection_t)connection;
   request->stream = (_http_stream_t)stream;
 
   request->headers = headers;

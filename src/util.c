@@ -75,14 +75,10 @@ char* date_rfc1123() {
 
 #define LOG_WITH_LEVEL(level) \
   va_list ap; \
+  fprintf(stdout, "%s\t", level); \
   va_start(ap, format); \
-  size_t needed = vsnprintf(NULL, 0, format, ap); \
-  va_end(ap); \
-  char* buffer = malloc(sizeof(char) * (needed + 1)); \
-  va_start(ap, format); \
-  vsnprintf(buffer, needed, format, ap); \
-  va_end(ap); \
-  fprintf(stderr, "%s\t%s\n", level, buffer);
+  vfprintf(stdout, format, ap); \
+  va_end(ap);
 
 void log_fatal(char* format, ...) {
   if (LOG_FATAL) {
