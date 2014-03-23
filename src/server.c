@@ -39,36 +39,45 @@ void handle_request(http_request_t* request, http_response_t* response) {
   }
 
   char* resp_text;
-  multimap_values_t* messages = http_request_param_get_values(request, "msg");
-  if (!messages) {
-    char* client_user_agent = http_request_header_get(request, "user-agent");
-    if (!client_user_agent) {
-      client_user_agent = "Unknown";
-    }
-    size_t resp_length = 100 + strlen(client_user_agent);
-    char user_agent_message[resp_length + 1];
-    snprintf(user_agent_message, resp_length, "Hello %s\n", client_user_agent);
-    resp_text = strdup(user_agent_message);
+
+  char* resp_len_s = http_request_param_get(request, "resp_len");
+  if (resp_len_s) {
+    size_t resp_len = strtol(resp_len_s, NULL, 10);
+    resp_text = malloc(resp_len + 1);
+    memset(resp_text, 'a', resp_len);
+    resp_text[resp_len] = '\0';
   } else {
-    // Append all messages.
-    // First, count the size
-    size_t messages_length = 0;
-    multimap_values_t* current = messages;
-    while (current) {
-      messages_length += strlen(current->value) + 1;
-      current = current->next;
+    multimap_values_t* messages = http_request_param_get_values(request, "msg");
+    if (!messages) {
+      char* client_user_agent = http_request_header_get(request, "user-agent");
+      if (!client_user_agent) {
+        client_user_agent = "Unknown";
+      }
+      size_t resp_length = 100 + strlen(client_user_agent);
+      char user_agent_message[resp_length + 1];
+      snprintf(user_agent_message, resp_length, "Hello %s\n", client_user_agent);
+      resp_text = strdup(user_agent_message);
+    } else {
+      // Append all messages.
+      // First, count the size
+      size_t messages_length = 0;
+      multimap_values_t* current = messages;
+      while (current) {
+        messages_length += strlen(current->value) + 1;
+        current = current->next;
+      }
+      resp_text = malloc(sizeof(char) * messages_length + 1);
+      current = messages;
+      size_t resp_text_index = 0;
+      while (current) {
+        size_t current_length = strlen(current->value);
+        memcpy(resp_text + resp_text_index, current->value, current_length);
+        resp_text_index += current_length;
+        resp_text[resp_text_index++] = '\n';
+        current = current->next;
+      }
+      resp_text[resp_text_index] = '\0';
     }
-    resp_text = malloc(sizeof(char) * messages_length + 1);
-    current = messages;
-    size_t resp_text_index = 0;
-    while (current) {
-      size_t current_length = strlen(current->value);
-      memcpy(resp_text + resp_text_index, current->value, current_length);
-      resp_text_index += current_length;
-      resp_text[resp_text_index++] = '\n';
-      current = current->next;
-    }
-    resp_text[resp_text_index] = '\0';
   }
 
   size_t content_length = strlen(resp_text);
