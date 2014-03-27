@@ -1,6 +1,6 @@
 
-#ifndef HTTP_multimap_H
-#define HTTP_multimap_H
+#ifndef HTTP_MULTIMAP_H
+#define HTTP_MULTIMAP_H
 
 #include <stdlib.h>
 #include <stdbool.h>

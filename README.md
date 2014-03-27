@@ -6,6 +6,8 @@
 
 * API for processing requests/responses
 * flow control (window update)
+* switch from heap based priority queue to linked list?
+* buffer writes instead of writing small packets
 * cookies
 * streams data structure
 * max concurrent streams
@@ -14,7 +16,7 @@
 * goaway on bad hpack indexes
 * stream priority
 * ping
-* continuations
+* header continuations
 * push promise
 * upgrade from 1.1
 * API for processing streams and frames

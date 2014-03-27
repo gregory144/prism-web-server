@@ -228,6 +228,25 @@ typedef struct {
 
 } http_frame_data_t;
 
+typedef struct http_queued_frame_s {
+  struct http_queued_frame_s* next;
+
+  uint8_t* buf;
+  size_t buf_length;
+
+  /**
+   * The buf may be part of a larger buffer
+   * that needs to be free'd.
+   * If the buffer should be free'd after the data
+   * is sent, this is the point to the full buffer.
+   */
+  void* buf_begin;
+
+  bool continuation;
+  bool end_stream;
+
+} http_queued_frame_t;
+
 typedef struct {
 
   /**
@@ -255,6 +274,8 @@ typedef struct {
 
   http_header_fragment_t* header_fragments;
 
+  http_queued_frame_t* queued_data_frames;
+
   multimap_t* headers;
 } http_stream_t;
 
@@ -263,26 +284,6 @@ typedef void (*request_cb)(http_request_t* request, http_response_t* response);
 typedef void (*write_cb)(void* data, uint8_t* buf, size_t len);
 
 typedef void (*close_cb)(void* data);
-
-typedef struct http_queued_frame_s {
-  struct http_queued_frame_s* next;
-
-  http_stream_t* stream;
-  uint8_t* buf;
-  size_t buf_length;
-
-  /**
-   * The buf may be part of a larger buffer
-   * that needs to be free'd.
-   * If the buffer should be free'd after the data
-   * is sent, this is the point to the full buffer.
-   */
-  void* buf_begin;
-
-  bool continuation;
-  bool end_stream;
-
-} http_queued_frame_t;
 
 /**
  * Stores state for a client.
@@ -300,8 +301,6 @@ typedef struct {
   bool received_settings;
   size_t current_stream_id;
   long window_size;
-
-  http_queued_frame_t* queued_frames;
 
   /**
    * what's currently being read

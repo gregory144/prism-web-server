@@ -41,10 +41,16 @@ void handle_request(http_request_t* request, http_response_t* response) {
   char* resp_text;
 
   char* resp_len_s = http_request_param_get(request, "resp_len");
+  long long resp_len = 0;
   if (resp_len_s) {
-    size_t resp_len = strtol(resp_len_s, NULL, 10);
+    resp_len = strtoll(resp_len_s, NULL, 10);
+  }
+  if (resp_len > 0) {
     resp_text = malloc(resp_len + 1);
     memset(resp_text, 'a', resp_len);
+    if (resp_len > 0) {
+    }
+    resp_text[resp_len - 1] = '\n';
     resp_text[resp_len] = '\0';
   } else {
     multimap_values_t* messages = http_request_param_get_values(request, "msg");

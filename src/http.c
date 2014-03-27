@@ -29,7 +29,6 @@ http_connection_t* http_connection_init(void* data, request_cb request_handler, 
   connection->received_settings = false;
   connection->current_stream_id = 2;
   connection->window_size = DEFAULT_INITIAL_WINDOW_SIZE;
-  connection->queued_frames = NULL;
 
   connection->buffer = NULL;
   connection->buffer_length = 0;
@@ -48,6 +47,18 @@ http_connection_t* http_connection_init(void* data, request_cb request_handler, 
   connection->decoding_context = hpack_context_init(connection->header_table_size);
 
   return connection;
+}
+
+http_stream_t* http_stream_get(http_connection_t* connection, uint32_t stream_id) {
+  // TODO - use a better data structure than an array
+  if (stream_id >= 4096) {
+    if (LOG_ERROR) log_error("Unsupported stream identifier (too high): %d\n", stream_id);
+    abort();
+  }
+
+  http_stream_t* stream = connection->streams[stream_id];
+
+  return stream;
 }
 
 void http_stream_close(http_connection_t* connection, http_stream_t* stream) {
@@ -119,67 +130,73 @@ void http_emit_headers(http_connection_t* connection, http_stream_t* stream, mul
   connection->writer(connection->data, buf, buf_length);
 }
 
-void http_emit_data_frame(http_connection_t* connection, http_queued_frame_t* frame) {
+void http_emit_data_frame(http_connection_t* connection, http_stream_t* stream, http_queued_frame_t* frame) {
   size_t header_length = FRAME_HEADER_SIZE;
   uint8_t header_buf[header_length];
   uint8_t flags = 0;
   if (frame->end_stream) flags |= DATA_FLAG_END_STREAM;
-  http_frame_header_write(header_buf, frame->buf_length, FRAME_TYPE_DATA, flags, frame->stream->id);
+  http_frame_header_write(header_buf, frame->buf_length, FRAME_TYPE_DATA, flags, stream->id);
   connection->writer(connection->data, header_buf, header_length);
 
-  if (LOG_DEBUG) log_debug("Writing data frame: stream %d, %ld octets\n", frame->stream->id, frame->buf_length);
+  if (LOG_DEBUG) log_debug("Writing data frame: stream %d, %ld octets\n", stream->id, frame->buf_length);
   connection->writer(connection->data, frame->buf, frame->buf_length);
 }
 
 void http_trigger_send_data(http_connection_t* connection, http_stream_t* stream) {
-  http_queued_frame_t* current_frame = connection->queued_frames;
-  while (current_frame) {
-    http_queued_frame_t* next_frame = current_frame->next;
-    http_emit_data_frame(connection, current_frame);
-    if (current_frame->buf_begin) {
-      free(current_frame->buf_begin);
-    }
-    free(current_frame);
-    current_frame = next_frame;
-  }
-  connection->queued_frames = NULL;
-  /*if (frame_payload_size <= connection->window_size && frame_payload_size <= stream->window_size) {*/
-    //emit data frame
-    /*http_emit_data_frame(connection, stream, (uint8_t*)text, text_length, true);*/
-  /*} else {*/
-    /*if (LOG_ERROR) {*/
-      /*log_debug("Wanted to send %ld octets, but connection window is %ld and stream window is %ld\n",*/
-          /*frame_payload_size, connection->window_size, stream->window_size);*/
-      /*log_error("NOT IMPLEMENTED YET - flow control queuing\n");*/
-    /*}*/
-    /*abort();*/
-  /*}*/
+  uint32_t i;
+  for (i = 0; i < 4096; i++) {
+    http_stream_t* stream = http_stream_get(connection, i);
+    if (stream) {
+      while (stream->queued_data_frames) {
+        http_queued_frame_t* frame = stream->queued_data_frames;
+        size_t frame_payload_size = frame->buf_length;
+        if ((long)frame_payload_size <= connection->window_size &&
+            (long)frame_payload_size <= stream->window_size) {
+          http_emit_data_frame(connection, stream, frame);
 
-  /*connection->window_size -= text_length;*/
-  /*stream->window_size -= text_length;*/
+          connection->window_size -= frame_payload_size;
+          stream->window_size -= frame_payload_size;
+
+          stream->queued_data_frames = frame->next;
+
+          if (frame->buf_begin) {
+            free(frame->buf_begin);
+          }
+          free(frame);
+        } else {
+          if (LOG_DEBUG) {
+            log_debug("Wanted to send %ld octets, but connection window is %ld and stream window is %ld\n",
+                frame_payload_size, connection->window_size, stream->window_size);
+          }
+
+          // wait until the window size has been increased
+          break;
+        }
+      }
+    }
+  }
+
   if (LOG_TRACE) log_trace("Connection window size: %ld, stream window: %ld\n", connection->window_size, stream->window_size);
 }
 
-void http_queue_data_frame(http_connection_t* connection,
-    http_stream_t* stream, uint8_t* buf, size_t buf_length,
-    bool end_stream, void* buf_begin) {
+void http_queue_data_frame(http_stream_t* stream, uint8_t* buf,
+    size_t buf_length, bool end_stream, void* buf_begin) {
   http_queued_frame_t* new_frame = malloc(sizeof(http_queued_frame_t));
-  new_frame->stream = stream;
   new_frame->buf = buf;
   new_frame->buf_length = buf_length;
   new_frame->end_stream = end_stream;
   new_frame->buf_begin = buf_begin;
+  new_frame->buf_begin = buf_begin;
   new_frame->next = NULL;
-  
-  // add it to the queue
-  http_queued_frame_t* current_frame = connection->queued_frames;
-  if (current_frame) {
-    while (current_frame && current_frame->next) {
-      current_frame = current_frame->next;
-    }
-    current_frame->next = new_frame;
+
+  if (!stream->queued_data_frames) {
+    stream->queued_data_frames = new_frame;
   } else {
-    connection->queued_frames = new_frame;
+    http_queued_frame_t* curr = stream->queued_data_frames;
+    while (curr->next) {
+      curr = curr->next;
+    }
+    curr->next = new_frame;
   }
 }
 
@@ -200,12 +217,12 @@ void http_emit_data(http_connection_t* connection, http_stream_t* stream, uint8_
         per_frame_length = remaining_length;
         last = true;
       }
-      http_queue_data_frame(connection, stream, per_frame_text, per_frame_length, last, last ? text : NULL);
+      http_queue_data_frame(stream, per_frame_text, per_frame_length, last, last ? text : NULL);
       remaining_length -= per_frame_length;
       per_frame_text += per_frame_length;
     }
   } else {
-    http_queue_data_frame(connection, stream, text, text_length, true, text);
+    http_queue_data_frame(stream, text, text_length, true, text);
   }
   http_trigger_send_data(connection, stream);
 }
@@ -277,18 +294,6 @@ void http_setting_set(http_connection_t* connection, uint8_t id, uint32_t value)
   }
 }
 
-http_stream_t* http_stream_get(http_connection_t* connection, uint32_t stream_id) {
-  // TODO - use a better data structure than an array
-  if (stream_id >= 4096) {
-    if (LOG_ERROR) log_error("Unsupported stream identifier (too high): %d\n", stream_id);
-    abort();
-  }
-
-  http_stream_t* stream = connection->streams[stream_id];
-
-  return stream;
-}
-
 http_stream_t* http_stream_init(http_connection_t* connection, uint32_t stream_id) {
   http_stream_t* stream = http_stream_get(connection, stream_id);
   if (stream != NULL) {
@@ -299,6 +304,8 @@ http_stream_t* http_stream_init(http_connection_t* connection, uint32_t stream_i
   }
   stream = malloc(sizeof(http_stream_t));
   connection->streams[stream_id] = stream;
+
+  stream->queued_data_frames = NULL;
 
   stream->id = stream_id;
   stream->state = STREAM_STATE_IDLE;
@@ -427,6 +434,8 @@ void http_parse_frame_settings(http_connection_t* connection, http_frame_setting
 void http_increment_connection_window_size(http_connection_t* connection, uint32_t increment) {
   connection->window_size += increment;
   if (LOG_TRACE) log_trace("Connection window size incremented to: %ld\n", connection->window_size);
+
+  http_trigger_send_data(connection, NULL);
 }
 
 void http_increment_stream_window_size(http_connection_t* connection, uint32_t stream_id, uint32_t increment) {
@@ -434,6 +443,8 @@ void http_increment_stream_window_size(http_connection_t* connection, uint32_t s
   if (stream) {
     stream->window_size += increment;
     if (LOG_TRACE) log_trace("Stream window size incremented to: %ld\n", stream->window_size);
+
+    http_trigger_send_data(connection, stream);
   } else {
     // TODO connection error if the stream was closed over x seconds ago
     abort();
