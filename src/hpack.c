@@ -536,11 +536,11 @@ multimap_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length) 
   circular_buffer_iterator_init(&iter, context->header_table->entries);
   while (circular_buffer_iterate(&iter)) {
     hpack_header_table_entry_t* entry = iter.value;
-    if (!entry->added_on_current_request) {
+    if (!entry->added_on_current_request && entry->in_refset) {
       hpack_emit_header(headers, entry->name,
         entry->name_length, entry->value, entry->value_length);
-      entry->added_on_current_request = false;
     }
+    entry->added_on_current_request = false;
   }
 
   return headers;
