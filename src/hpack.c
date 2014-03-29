@@ -231,11 +231,25 @@ void hpack_header_table_adjust_size(hpack_context_t* context, size_t new_size) {
 void hpack_emit_header(multimap_t* headers, char* name,
     size_t name_length, char* value, size_t value_length) {
 
-  char* name_copy, *value_copy;
-  COPY_STRING(name_copy, name, name_length);
-  COPY_STRING(value_copy, value, value_length);
+  char *name_copy, *value_copy;
+  size_t value_start = 0;
+  size_t value_index;
 
-  multimap_put(headers, name_copy, value_copy);
+  // there may be multiple values in this header
+  // the values are separated by a zero-valued octet
+  //
+  // See https://tools.ietf.org/html/draft-ietf-httpbis-http2-10#section-8.1.3.3
+  for (value_index = 0; value_index < value_length; value_index++) {
+    // the last value is not terminated by a 0 octet
+    if (value_index == value_length - 1 || value[value_index + 1] == '\0') {
+      COPY_STRING(name_copy, name, name_length);
+      COPY_STRING(value_copy, value + value_start, value_index + 1 - value_start);
+      multimap_put(headers, name_copy, value_copy);
+
+      value_start = value_index + 2;
+    }
+  }
+
 }
 
 hpack_header_table_entry_t* hpack_header_table_add_existing_entry(
@@ -346,21 +360,26 @@ string_and_length_t* hpack_decode_string_literal(
 void hpack_decode_literal_header(
     hpack_context_t* context, multimap_t* headers, uint8_t* buf,
     size_t length, size_t* current, bool add_to_header_table) {
+
   hpack_decode_quantity_result_t* index_result = hpack_decode_quantity(buf + (*current), length - (*current), 2);
   size_t header_table_index = index_result->value;
   *current += index_result->num_bytes;
   if (LOG_TRACE) log_trace("Adding literal header field: %ld, %ld\n", index_result->value, index_result->num_bytes);
   free(index_result);
+
   char* key_name = NULL;
   size_t key_name_length = 0;
   if (header_table_index == 0) {
+
     // literal name
     string_and_length_t* sl = hpack_decode_string_literal(context, buf, length, current);
     key_name = sl->value;
     key_name_length = sl->length;
     free(sl);
     if (LOG_TRACE) log_trace("Literal name: %s, %ld\n", key_name, key_name_length);
+
   } else {
+
     // indexed name
     if (LOG_TRACE) log_trace("getting from header table %ld\n", header_table_index);
     hpack_header_table_entry_t* entry = hpack_header_table_get(context, header_table_index);
@@ -376,6 +395,7 @@ void hpack_decode_literal_header(
     key_name_length = entry->name_length;
     if (LOG_TRACE) log_trace("Indexed name: %s, %ld\n", key_name, key_name_length);
     free(entry);
+
   }
   // literal value
   string_and_length_t* sl = hpack_decode_string_literal(context, buf, length, current);
@@ -401,13 +421,18 @@ void hpack_decode_literal_header(
 void hpack_decode_indexed_header(
     hpack_context_t* context, multimap_t* headers, uint8_t* buf,
     size_t length, size_t* current) {
+
   hpack_decode_quantity_result_t* result = hpack_decode_quantity(buf + (*current), length - (*current), 1);
   *current += result->num_bytes;
   if (LOG_TRACE) log_trace("Adding indexed header field: %ld\n", result->value);
+
   if (result->value == 0) {
+
     if (LOG_TRACE) log_trace("Empty reference set\n");
     hpack_reference_set_clear(context);
+
   } else {
+
     // if the value is in the reference set - remove it from the reference set
     hpack_header_table_entry_t* entry = hpack_header_table_get(context, result->value);
     if (entry && hpack_reference_set_contains(entry)) {
@@ -415,18 +440,21 @@ void hpack_decode_indexed_header(
     } else {
       if (!entry) {
         entry = hpack_static_table_get(context, result->value);
-        hpack_header_table_add_existing_entry(context, entry);
       }
       if (!entry) {
         // TODO protocol error - invalid index
         abort();
       }
+      hpack_header_table_add_existing_entry(context, entry);
       hpack_emit_header(headers, entry->name,
           entry->name_length, entry->value, entry->value_length);
       if (LOG_TRACE) log_trace("From index: %s: %s\n", entry->name, entry->value);
     }
+
   }
+
   free(result);
+
 }
 
 multimap_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length) {
@@ -468,6 +496,7 @@ multimap_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length) 
 
 hpack_encode_result_t* hpack_encode(hpack_context_t* context, multimap_t* headers) {
   UNUSED(context);
+
   // naive hpack encoding - never add to the header table
   uint8_t* encoded = malloc(4096); // TODO - we need to construct this dynamically
   size_t encoded_index = 0;
