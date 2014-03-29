@@ -231,6 +231,8 @@ void hpack_header_table_adjust_size(hpack_context_t* context, size_t new_size) {
 void hpack_emit_header(multimap_t* headers, char* name,
     size_t name_length, char* value, size_t value_length) {
 
+  if (LOG_TRACE) log_trace("Emittting header: '%s' (%ld): '%s' (%ld)\n", name, name_length, value, value_length);
+
   char *name_copy, *value_copy;
   size_t value_start = 0;
   size_t value_index;
@@ -272,7 +274,8 @@ hpack_header_table_entry_t* hpack_header_table_add_existing_entry(
 
     header->added_on_current_request = true;
 
-    if (LOG_TRACE) log_trace("Adding %s: %s\n", header->name, header->value);
+    if (LOG_TRACE) log_trace("Adding to header table: '%s' (%ld): '%s' (%ld)\n",
+        header->name, header->name_length, header->value, header->value_length);
 
     context->header_table->current_size += header->size_in_table;
     circular_buffer_add(context->header_table->entries, header);
@@ -394,7 +397,9 @@ void hpack_decode_literal_header(
     COPY_STRING(key_name, entry->name, entry->name_length);
     key_name_length = entry->name_length;
     if (LOG_TRACE) log_trace("Indexed name: %s, %ld\n", key_name, key_name_length);
-    free(entry);
+    if (entry->from_static_table) {
+      free(entry);
+    }
 
   }
   // literal value
@@ -457,6 +462,49 @@ void hpack_decode_indexed_header(
 
 }
 
+/**
+ * Finds any cookie values and transforms them into a single value
+ */
+void concatenate_cookie_fields(multimap_t* headers) {
+  char* name = "cookie";
+  multimap_values_t* values = multimap_get(headers, name);
+  if (values) {
+    // First count the size of the final appended strings
+    size_t length = 0;
+    size_t num_crumbs = 0;
+    multimap_values_t* curr = values;
+    while (curr) {
+      length += strlen(curr->value);
+      curr = curr->next;
+      num_crumbs++;
+    }
+    size_t total_length = length + ((num_crumbs - 1) * 2);
+
+    // Append all the values together
+    char* single_cookie = malloc(sizeof(char) * (total_length + 1));
+    size_t total_index = 0;
+    size_t curr_index;
+    curr = values;
+    while (curr) {
+      char* value = curr->value;
+      for (curr_index = 0; curr_index < strlen(value); curr_index++) {
+        single_cookie[total_index++] = value[curr_index];
+      }
+      curr = curr->next;
+      if (curr) {
+        // seprated by "; "
+        single_cookie[total_index++] = ';';
+        single_cookie[total_index++] = ' ';
+      }
+    }
+    single_cookie[total_index] = '\0';
+    // remove the old cookie values
+    multimap_remove(headers, name, free, free);
+    // add the single concatenated value
+    multimap_put(headers, strdup(name), single_cookie);
+  }
+}
+
 multimap_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length) {
 
   size_t current = 0;
@@ -479,7 +527,11 @@ multimap_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length) 
       }
     }
   }
+
+  concatenate_cookie_fields(headers);
+
   // emit reference set headers
+  if (LOG_TRACE) log_trace("Emitting from ref set\n");
   circular_buffer_iter_t iter;
   circular_buffer_iterator_init(&iter, context->header_table->entries);
   while (circular_buffer_iterate(&iter)) {
@@ -487,8 +539,8 @@ multimap_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length) 
     if (!entry->added_on_current_request) {
       hpack_emit_header(headers, entry->name,
         entry->name_length, entry->value, entry->value_length);
+      entry->added_on_current_request = false;
     }
-    entry->added_on_current_request = false;
   }
 
   return headers;

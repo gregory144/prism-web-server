@@ -5,10 +5,8 @@
 ## TODO
 
 * API for processing requests/responses
-* flow control (window update)
 * switch from heap based priority queue to linked list?
 * buffer writes instead of writing small packets
-* cookies
 * streams data structure
 * max concurrent streams
 * POST/PUT/PATCH requests (parse data frame)
