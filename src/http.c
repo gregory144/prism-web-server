@@ -379,6 +379,11 @@ void http_parse_header_fragments(http_connection_t* connection, http_stream_t* s
 }
 
 void http_parse_frame_headers(http_connection_t* connection, http_frame_headers_t* frame) {
+  if (frame->stream_id < 1) {
+    // protocol error, do we need to read the rest of the frame anyway so that the
+    // decoding context is still synced?
+    abort();
+  }
   uint8_t* pos = connection->buffer + connection->buffer_position;
   size_t header_block_fragment_size = frame->length;
   http_stream_t* stream = http_stream_init(connection, frame->stream_id);
@@ -388,6 +393,18 @@ void http_parse_frame_headers(http_connection_t* connection, http_frame_headers_
     connection->buffer_position += 4;
     header_block_fragment_size -= 4;
   }
+  http_stream_add_header_fragment(stream, pos, header_block_fragment_size);
+  if (frame->end_headers) {
+    // parse the headers
+    if (LOG_TRACE) log_trace("Parsing headers\n");
+    http_parse_header_fragments(connection, stream);
+  }
+}
+
+void http_parse_frame_continuation(http_connection_t* connection, http_frame_continuation_t* frame) {
+  uint8_t* pos = connection->buffer + connection->buffer_position;
+  size_t header_block_fragment_size = frame->length;
+  http_stream_t* stream = http_stream_get(connection, frame->stream_id);
   http_stream_add_header_fragment(stream, pos, header_block_fragment_size);
   if (frame->end_headers) {
     // parse the headers
@@ -492,7 +509,7 @@ http_frame_t* http_frame_init(uint16_t length, char type, char flags, uint32_t s
     {
       http_frame_data_t *data_frame = malloc(sizeof(http_frame_data_t));
       data_frame->end_stream = flags & DATA_FLAG_END_STREAM;
-      // flag 0x2 is reserved
+      // TODO padding flags
       frame = (http_frame_t*) data_frame;
       break;
     }
@@ -500,9 +517,9 @@ http_frame_t* http_frame_init(uint16_t length, char type, char flags, uint32_t s
     {
       http_frame_headers_t *headers_frame = malloc(sizeof(http_frame_headers_t));
       headers_frame->end_stream = flags & HEADERS_FLAG_END_STREAM;
-      // flag 0x2 is reserved
       headers_frame->end_headers = flags & HEADERS_FLAG_END_HEADERS;
       headers_frame->priority = flags & HEADERS_FLAG_PRIORITY;
+      // TODO padding flags
       frame = (http_frame_t*) headers_frame;
       break;
     }
@@ -515,7 +532,7 @@ http_frame_t* http_frame_init(uint16_t length, char type, char flags, uint32_t s
     case FRAME_TYPE_SETTINGS:
     {
       http_frame_settings_t *settings_frame = malloc(sizeof(http_frame_settings_t));
-      settings_frame->ack = flags & 0x1;
+      settings_frame->ack = flags & SETTINGS_FLAG_ACK;
       frame = (http_frame_t*) settings_frame;
       break;
     }
@@ -537,10 +554,14 @@ http_frame_t* http_frame_init(uint16_t length, char type, char flags, uint32_t s
       frame = (http_frame_t*) window_update_frame;
       break;
     }
-    /*
     case FRAME_TYPE_CONTINUATION:
-      parse_frame_continuation(connection);
-    */
+    {
+      http_frame_continuation_t *continuation_frame = malloc(sizeof(http_frame_continuation_t));
+      continuation_frame->end_headers = flags & CONTINUATION_FLAG_END_HEADERS;
+      // TODO padding flags
+      frame = (http_frame_t*) continuation_frame;
+      break;
+    }
     default:
       if (LOG_ERROR) log_error("Invalid frame type: %d\n", type);
       abort();
@@ -576,6 +597,9 @@ bool http_connection_add_from_buffer(http_connection_t* connection) {
     uint8_t frame_flags = pos[3];
     // get 31 bits
     uint32_t stream_id = get_bits32(pos, 4, 4, 0x7FFFFFFF);
+
+    // TODO - if the previous frame type was headers, and headers haven't been completed,
+    // this frame must be a continuation frame, or else this is a protocol error
 
     http_frame_t* frame = http_frame_init(frame_length, frame_type, frame_flags, stream_id);
 
@@ -615,10 +639,9 @@ bool http_connection_add_from_buffer(http_connection_t* connection) {
         case FRAME_TYPE_WINDOW_UPDATE:
           http_parse_frame_window_update(connection, (http_frame_window_update_t*) frame);
           break;
-        /*
         case FRAME_TYPE_CONTINUATION:
-          parse_frame_continuation(connection);
-        */
+          http_parse_frame_continuation(connection, (http_frame_continuation_t*) frame);
+          break;
         default:
           if (LOG_ERROR) log_error("Invalid frame type: %d\n", frame->type);
           abort();

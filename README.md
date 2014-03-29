@@ -16,7 +16,6 @@
 * goaway on bad hpack indexes
 * stream priority
 * ping
-* header continuations
 * push promise
 * upgrade from 1.1
 * API for processing streams and frames

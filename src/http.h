@@ -60,6 +60,11 @@
 #define HEADERS_FLAG_PAD_LOW 0x10
 #define HEADERS_FLAG_PAD_HIGH 0x20
 
+// continuation
+#define CONTINUATION_FLAG_END_HEADERS 0x4
+#define CONTINUATION_FLAG_PAD_LOW 0x10
+#define CONTINUATION_FLAG_PAD_HIGH 0x20
+
 // data
 #define DATA_FLAG_END_STREAM 0x1
 #define DATA_FLAG_END_SEGMENT 0x2
@@ -209,7 +214,7 @@ typedef struct {
 
   // is this the last frame in the stream?
   bool end_stream;
-  // is this the last settings frame for this stream?
+  // is this the last headers frame for this stream?
   bool end_headers;
   // is the priority provided in the frame payload?
   bool priority;
@@ -218,6 +223,18 @@ typedef struct {
   uint8_t* header_block_fragment;
 
 } http_frame_headers_t;
+
+typedef struct {
+
+  HTTP_FRAME_FIELDS
+
+  // is this the last headers frame for this stream?
+  bool end_headers;
+
+  bool pad_low;
+  bool pad_high;
+
+} http_frame_continuation_t;
 
 typedef struct {
 
