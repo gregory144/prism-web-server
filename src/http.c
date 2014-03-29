@@ -324,6 +324,9 @@ void http_trigger_request(http_connection_t* connection, http_stream_t* stream) 
   }
 
   http_request_t* request = http_request_init(connection, stream, stream->headers);
+  if (!request) {
+    abort();
+  }
 
   // transfer ownership of headers to the request
   stream->headers = NULL;
@@ -408,7 +411,7 @@ void http_parse_frame_continuation(http_connection_t* connection, http_frame_con
   http_stream_add_header_fragment(stream, pos, header_block_fragment_size);
   if (frame->end_headers) {
     // parse the headers
-    if (LOG_TRACE) log_trace("Parsing headers\n");
+    if (LOG_TRACE) log_trace("Parsing headers +continuations\n");
     http_parse_header_fragments(connection, stream);
   }
 }

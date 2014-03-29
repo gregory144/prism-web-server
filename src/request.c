@@ -11,13 +11,18 @@
  */
 void parse_authority(http_request_t* request) {
   char* authority = http_request_header_get(request, ":authority");
-  char* port = strchr(authority, ':');
-  if (port) {
-    COPY_STRING(request->host, authority, port - authority);
-    request->port = strtoul(port + 1, NULL, 10);
+  if (authority) {
+    char* port = strchr(authority, ':');
+    if (port) {
+      COPY_STRING(request->host, authority, port - authority);
+      request->port = strtoul(port + 1, NULL, 10);
+    } else {
+      request->host = strdup(authority);
+      request->port = 80;
+    }
   } else {
-    request->host = strdup(authority);
-    request->port = 80;
+    request->host = NULL;
+    request->port = 0;
   }
 }
 
@@ -25,20 +30,20 @@ void parse_authority(http_request_t* request) {
  * Parses the ':path' special header into a plain
  * path and a query string
  */
-void parse_path(http_request_t* request) {
+bool parse_path(http_request_t* request) {
   char* path = http_request_header_get(request, ":path");
-  if (path) {
-    char* query = strchr(path, '?');
-    if (query) {
-      COPY_STRING(request->path, path, query - path);
-    } else {
-      request->path = strdup(path);
-    }
-    request->query_string = query ? strdup(query + 1) : NULL;
-  } else {
-    request->path = NULL;
-    request->query_string = NULL;
+  if (!path) {
+    log_error("No :path header provided\n");
+    return false;
   }
+  char* query = strchr(path, '?');
+  if (query) {
+    COPY_STRING(request->path, path, query - path);
+  } else {
+    request->path = strdup(path);
+  }
+  request->query_string = query ? strdup(query + 1) : NULL;
+  return true;
 }
 
 unsigned char ascii_to_hex(unsigned char in) {
@@ -166,11 +171,25 @@ http_request_t* http_request_init_internal(_http_connection_t connection,
   request->headers = headers;
   request->params = multimap_init_with_string_keys();
 
-  request->method = strdup(http_request_header_get(request, ":method"));
-  request->scheme = strdup(http_request_header_get(request, ":scheme"));
+  char* method = http_request_header_get(request, ":method");
+  if (!method) {
+    log_error("Missing :method header\n");
+    return NULL;
+  }
+  request->method = strdup(method);
+
+  char* scheme = http_request_header_get(request, ":scheme");
+  if (!scheme) {
+    log_error("Missing :scheme header\n");
+    return NULL;
+  }
+  request->scheme = strdup(scheme);
+
+  if (!parse_path(request)) {
+    return NULL;
+  }
 
   parse_authority(request);
-  parse_path(request);
   parse_parameters(request->params, request->query_string);
 
   remove_special_headers(headers);
