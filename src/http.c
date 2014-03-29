@@ -704,6 +704,11 @@ void http_connection_read(http_connection_t* connection, uint8_t* buffer, size_t
 }
 
 void http_response_write(http_response_t* response, char* text, size_t text_length) {
+  char status_buf[10];
+  snprintf(status_buf, 10, "%d", response->status);
+  // add the status header
+  http_response_header_add(response, ":status", status_buf);
+
   http_connection_t* connection = (http_connection_t*)response->request->connection;
   http_stream_t* stream = (http_stream_t*)response->request->stream;
 

@@ -86,12 +86,13 @@ void handle_request(http_request_t* request, http_response_t* response) {
     }
   }
 
+  http_response_status_set(response, 200);
+
   size_t content_length = strlen(resp_text);
   char content_length_s[256];
   snprintf(content_length_s, 255, "%ld", content_length);
-
-  http_response_header_add(response, ":status", "200");
   http_response_header_add(response, "content-length", content_length_s);
+
   http_response_header_add(response, "server", PACKAGE_STRING);
   char* date = date_rfc1123();
   http_response_header_add(response, "date", date);

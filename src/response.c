@@ -20,6 +20,10 @@ void http_response_header_add(http_response_t* response, char* name, char* value
   multimap_put(response->headers, name_copy, value_copy);
 }
 
+void http_response_status_set(http_response_t* response, uint16_t status) {
+  response->status = status;
+}
+
 void http_response_free(http_response_t* response) {
 
   http_request_free(response->request);
