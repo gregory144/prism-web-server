@@ -194,10 +194,6 @@ bool hpack_reference_set_contains(hpack_header_table_entry_t* entry) {
   return entry->in_refset;
 }
 
-void hpack_reference_set_remove_all(void* entry) {
-  hpack_reference_set_remove(entry);
-}
-
 void hpack_reference_set_clear(hpack_context_t* context) {
   circular_buffer_iter_t iter;
   circular_buffer_iterator_init(&iter, context->header_table->entries);
