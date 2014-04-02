@@ -393,7 +393,6 @@ void http_parse_frame_headers(http_connection_t* connection, http_frame_headers_
   if (frame->priority) {
     stream->priority = get_bits32(pos, 4, 4, 0x7FFFFFFF);
     pos += 4;
-    connection->buffer_position += 4;
     header_block_fragment_size -= 4;
   }
   http_stream_add_header_fragment(stream, pos, header_block_fragment_size);
@@ -690,6 +689,11 @@ void http_connection_read(http_connection_t* connection, uint8_t* buffer, size_t
     }
   }
   while (http_connection_add_from_buffer(connection));
+
+  if (connection->buffer_position > connection->buffer_length) {
+    // buffer overflow
+    abort();
+  }
 
   // if there is still unprocessed data in the buffer, save it for when we
   // get the rest of the frame
