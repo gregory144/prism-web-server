@@ -2,6 +2,8 @@
 /build
 Makefile.in
 Makefile
+config.h.in~
+cscope*
 .deps/
 /aclocal.m4
 /autom4te.cache
