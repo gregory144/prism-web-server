@@ -25,3 +25,6 @@ cscope*
 
 /tests/*.log
 /tests/*.trs
+
+/src/weta
+
