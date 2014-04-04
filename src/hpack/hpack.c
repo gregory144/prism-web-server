@@ -6,8 +6,8 @@
 #include <math.h>
 
 #include "hpack.h"
-#include "huffman.h"
-#include "util.h"
+#include "../huffman/huffman.h"
+#include "../util/util.h"
 
 typedef struct static_entry_t {
   char* name;

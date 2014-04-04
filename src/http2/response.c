@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "util.h"
+#include "../util/util.h"
 #include "response.h"
 
 http_response_t* http_response_init(http_request_t* request) {

@@ -20,6 +20,15 @@ AC_TYPE_UINT16_T
 AC_TYPE_UINT32_T
 AC_TYPE_UINT8_T
 
+# archiver for libraries
+AM_PROG_AR
+
+# libtool
+LT_INIT
+
+# suggested by libtoolize
+AC_CONFIG_MACRO_DIR([m4])
+
 # require pthread for libuv
 AC_CHECK_LIB(pthread, pthread_create)
 
@@ -30,7 +39,7 @@ PKG_CHECK_MODULES([CHECK], [check >= 0.9.4])
 AM_PROG_CC_C_O
 
 AC_CONFIG_HEADERS([config.h])
-AC_CONFIG_FILES([Makefile src/Makefile tests/Makefile])
+AC_CONFIG_FILES([Makefile src/util/Makefile src/huffman/Makefile src/hpack/Makefile src/http2/Makefile src/Makefile tests/Makefile])
 
 AC_OUTPUT
 

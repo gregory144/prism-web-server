@@ -3,7 +3,8 @@
 
 #include <stdbool.h>
 
-#include "hpack.h"
+#include "../hpack/hpack.h"
+
 #include "request.h"
 #include "response.h"
 

@@ -2,26 +2,35 @@
 /build
 Makefile.in
 Makefile
-config.h.in~
 cscope*
 .deps/
+.libs/
 /aclocal.m4
+/ar-lib
 /autom4te.cache
 /autoscan.log
 /compile
+/config.guess
 /config.h
 /config.h.in
+/config.h.in~
 /config.log
 /config.status
+/config.sub
 /configure
 /configure.scan
 /depcomp
-/stamp-h1
 /install-sh
+/libtool
+/ltmain.sh
+/m4
 /missing
+/stamp-h1
 /test-driver
 
 *.o
+*.lo
+*.la
 
 /tests/*.log
 /tests/*.trs

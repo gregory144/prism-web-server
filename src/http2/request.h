@@ -1,7 +1,7 @@
 #ifndef HTTP_REQUEST_H
 #define HTTP_REQUEST_H
 
-#include "hpack.h"
+#include "../hpack/hpack.h"
 
 typedef struct http_connection_t* _http_connection_t;
 typedef struct http_stream_t* _http_stream_t;

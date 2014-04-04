@@ -2,8 +2,9 @@
 #include <string.h>
 #include <stdio.h>
 
+#include "util/util.h"
+
 #include "multimap.h"
-#include "util.h"
 
 #define DEFAULT_multimap_INITIAL_SIZE 128
 

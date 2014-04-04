@@ -1,6 +1,6 @@
 #include <uv.h>
 
-#include "http.h"
+#include "http2/http.h"
 
 #ifndef HTTP_SERVER_H
 #define HTTP_SERVER_H

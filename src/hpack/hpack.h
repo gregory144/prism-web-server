@@ -6,13 +6,13 @@
  */
 
 #ifndef HPACK_H
-#define HPACK_H 
+#define HPACK_H
 
 #include <stdint.h>
 #include <stdbool.h>
 
 #include "circular_buffer.h"
-#include "multimap.h"
+#include "../multimap.h"
 
 #define HEADER_TABLE_OVERHEAD 32
 

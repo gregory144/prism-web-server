@@ -1,8 +1,9 @@
 #include <signal.h>
 #include <stdio.h>
 
+#include "util/util.h"
+
 #include "server.h"
-#include "util.h"
 
 void catcher(int sig) {
   if (LOG_ERROR) log_error("caught signal %d\n", sig);

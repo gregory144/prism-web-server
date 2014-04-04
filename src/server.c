@@ -4,11 +4,13 @@
 #include <uv.h>
 #include <assert.h>
 
-#include "util.h"
-#include "server.h"
-#include "http.h"
 #include "config.h"
-#include "request.h"
+
+#include "util/util.h"
+#include "http2/http.h"
+#include "http2/request.h"
+
+#include "server.h"
 
 static long reads = 0;
 static long writes = 0;

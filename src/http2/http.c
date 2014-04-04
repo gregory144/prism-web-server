@@ -4,8 +4,9 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "../util/util.h"
+
 #include "http.h"
-#include "util.h"
 #include "request.h"
 #include "response.h"
 
