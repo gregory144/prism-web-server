@@ -3,11 +3,12 @@
 #include <check.h>
 #include <limits.h>
 
-#include "../src/hpack.c"
-#include "../src/util.c"
-#include "../src/multimap.c"
-#include "../src/huffman.c"
-#include "../src/circular_buffer.c"
+#include "../util/util.c"
+#include "../multimap.c"
+#include "../huffman/huffman.c"
+
+#include "hpack.c"
+#include "circular_buffer.c"
 
 void setup() {
 }

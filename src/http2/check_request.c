@@ -2,8 +2,10 @@
 #include <stdio.h>
 #include <check.h>
 
-#include "../src/request.c"
-#include "../src/multimap.c"
+#include "../multimap.c"
+#include "../util/util.c"
+
+#include "request.c"
 
 void setup() {
 }

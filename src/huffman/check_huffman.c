@@ -2,8 +2,9 @@
 #include <stdio.h>
 #include <check.h>
 
-#include "../src/huffman.c"
-#include "../src/util.c"
+#include "../util/util.c"
+
+#include "huffman.c"
 
 void check_encoded_val(unsigned char expected[], size_t expected_length, unsigned char result[], size_t length) {
   ck_assert_int_eq(expected_length, length);

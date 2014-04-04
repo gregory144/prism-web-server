@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <check.h>
 
-#include "../src/priority_queue.c"
+#include "priority_queue.c"
 
 priority_queue_t* pq;
 
