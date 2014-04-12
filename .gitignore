@@ -44,5 +44,6 @@ check_*.trs
 /src/check_priority_queue
 /src/hpack/check_hpack
 /src/huffman/check_huffman
+/src/huffman/huffman
 /src/http2/check_request
 /src/util/check_util

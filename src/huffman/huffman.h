@@ -6,9 +6,10 @@
  */
 
 #ifndef HUFFMAN_H
-#define HUFFMAN_H 
+#define HUFFMAN_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 typedef struct huffman_decoder_entry_t {
   int index;
