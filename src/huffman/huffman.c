@@ -43,7 +43,8 @@ huffman_result_t* huffman_decode(uint8_t* input, size_t input_length_in_octets) 
 }
 
 huffman_result_t* huffman_encode(uint8_t* buf, size_t len) {
-  uint8_t* encoded = malloc(sizeof(char) * (len + 1));
+  size_t max_len = len;
+  uint8_t* encoded = malloc(sizeof(char) * (max_len + 1));
   size_t encoded_index = 0;
   size_t buf_index;
 
@@ -51,6 +52,7 @@ huffman_result_t* huffman_encode(uint8_t* buf, size_t len) {
   uint8_t current_byte = 0;
 
   for (buf_index = 0; buf_index < len; buf_index++) {
+
     huffman_encoder_entry_t entry = huffman_encoder_table[buf[buf_index]];
 
     uint32_t entry_value = entry.value;
@@ -63,7 +65,14 @@ huffman_result_t* huffman_encode(uint8_t* buf, size_t len) {
       bits_left_in_byte--;
       pos_in_entry--;
       if (bits_left_in_byte == 0) {
+
+        // make sure there is enough room to write the extra byte
+        if (encoded_index >= max_len) {
+          max_len += max_len;
+          encoded = realloc(encoded, sizeof(char) * (max_len + 1));
+        }
         encoded[encoded_index++] = current_byte;
+
         current_byte = 0;
         bits_left_in_byte = 8;
       } else {
