@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <stdarg.h>
 
-#define LOG_LEVEL_TRACE true
+#define LOG_LEVEL_WARN true
 
 #if defined LOG_LEVEL_FATAL
 

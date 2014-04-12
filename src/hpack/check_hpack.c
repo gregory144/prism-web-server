@@ -38,7 +38,6 @@ START_TEST(test_hpack_decode_large_quantity_in_5bit_prefix) {
 } END_TEST
 
 START_TEST(test_hpack_encode_10_in_5bit_prefix) {
-  fprintf(stderr, "10 in 5bit_prefix\n");
   unsigned char buf[1024] = {0};
   size_t size = hpack_encode_quantity(buf, 3, 10);
   ck_assert_int_eq(size, 1);

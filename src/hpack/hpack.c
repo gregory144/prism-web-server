@@ -432,8 +432,8 @@ void hpack_decode_indexed_header(
 
   if (result->value == 0) {
 
-    if (LOG_TRACE) log_trace("Empty reference set\n");
-    hpack_reference_set_clear(context);
+    // decoding error (see 4.2)
+    abort();
 
   } else {
 
@@ -511,20 +511,24 @@ multimap_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length) 
 
   if (LOG_TRACE) log_trace("Decompressing headers: %ld, %ld\n", current, length);
   while (current < length) {
-    uint8_t four_high_bits = get_bits8(buf, current, 1, 0xf0) >> 4;
-    uint8_t two_high_bits = four_high_bits >> 2;
-    uint8_t first_bit = four_high_bits >> 3;
+    uint8_t first_bit = get_bits8(buf, current, 1, 0x80);
+    uint8_t second_bit = get_bits8(buf, current, 1, 0x40);
+    uint8_t third_bit = get_bits8(buf, current, 1, 0x20);
+    uint8_t fourth_bit = get_bits8(buf, current, 1, 0x10);
     if (first_bit) {
       // indexed header field (4.2)
       hpack_decode_indexed_header(context, headers, buf, length, &current);
-    } else if (two_high_bits == 1) {
-      // literal header field without indexing (4.3.1)
-      hpack_decode_literal_header(context, headers, buf, length, &current, 2, false);
-    } else if (four_high_bits == 0) {
-      // literal header field with incremental indexing (4.3.2)
-      hpack_decode_literal_header(context, headers, buf, length, &current, 4, true);
-    } else {
+    } else if (second_bit) {
+      // literal header field with incremental indexing (4.3.1)
+      hpack_decode_literal_header(context, headers, buf, length, &current, 2, true);
+    } else if (third_bit) {
+      // 4.4 Not implemented yet: encoding context update
+      abort();
+    } else if (fourth_bit) {
       // literal header field never indexed 4.3.3
+      hpack_decode_literal_header(context, headers, buf, length, &current, 4, false);
+    } else {
+      // literal header field without indexing (4.3.2)
       hpack_decode_literal_header(context, headers, buf, length, &current, 4, false);
     }
   }
