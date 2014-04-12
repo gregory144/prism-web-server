@@ -41,6 +41,7 @@ int main(int argc, char* argv[]) {
     total_bytes_read += bytes_read;
 
     uint8_t* intermediate = buffer;
+    bool free_intermediate = false;
     size_t intermediate_length = bytes_read;
 
     huffman_result_t* result;
@@ -54,8 +55,10 @@ int main(int argc, char* argv[]) {
       }
 
       intermediate = result->value;
+      free_intermediate = true;
       intermediate_length = result->length;
 
+      free(result);
     }
 
     if (decode) {
@@ -66,9 +69,15 @@ int main(int argc, char* argv[]) {
         exit(EXIT_FAILURE);
       }
 
+      if (intermediate && free_intermediate) {
+        free(intermediate);
+      }
+
       intermediate = result->value;
+      free_intermediate = true;
       intermediate_length = result->length;
 
+      free(result);
     }
 
     total_bytes_written += intermediate_length;
@@ -79,6 +88,12 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Could not write result to stdout\n");
         exit(EXIT_FAILURE);
       }
+    }
+
+    if (intermediate && free_intermediate) {
+      free(intermediate);
+      free_intermediate = false;
+      intermediate = NULL;
     }
 
   } while (bytes_read > 0);
