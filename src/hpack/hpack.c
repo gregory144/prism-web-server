@@ -461,6 +461,36 @@ void hpack_decode_indexed_header(
 
 }
 
+void hpack_decode_context_update(
+    hpack_context_t* context, uint8_t* buf,
+    size_t length, size_t* current, bool fourth_bit) {
+
+  hpack_decode_quantity_result_t* result = hpack_decode_quantity(buf + (*current), length - (*current), 4);
+  *current += result->num_bytes;
+  size_t new_size = result->value;
+  free(result);
+
+  // 4.4 encoding context update
+  if (fourth_bit == 0) {
+    // empty ref set
+
+    // low 4 bits must be 0
+    if (new_size != 0) {
+      // error!
+      abort();
+    }
+
+    hpack_reference_set_clear(context);
+
+  } else {
+
+    // adjust header table size
+    hpack_header_table_adjust_size(context, new_size);
+
+  }
+
+}
+
 /**
  * Finds any cookie values and transforms them into a single value
  */
@@ -504,6 +534,8 @@ void concatenate_cookie_fields(multimap_t* headers) {
   }
 }
 
+
+
 multimap_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length) {
 
   size_t current = 0;
@@ -522,8 +554,7 @@ multimap_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length) 
       // literal header field with incremental indexing (4.3.1)
       hpack_decode_literal_header(context, headers, buf, length, &current, 2, true);
     } else if (third_bit) {
-      // 4.4 Not implemented yet: encoding context update
-      abort();
+      hpack_decode_context_update(context, buf, length, &current, fourth_bit);
     } else if (fourth_bit) {
       // literal header field never indexed 4.3.3
       hpack_decode_literal_header(context, headers, buf, length, &current, 4, false);
