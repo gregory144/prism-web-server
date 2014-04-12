@@ -15,66 +15,67 @@ typedef struct static_entry_t {
 } static_entry_t;
 
 static_entry_t static_table[] = {
-  { ":authority",                   "" },
-  { ":method",                      "GET" },
-  { ":method",                      "POST" },
-  { ":path",                        "/" },
-  { ":path",                        "/index.html" },
-  { ":scheme",                      "http" },
-  { ":scheme",                      "https" },
-  { ":status",                      "200" },
-  { ":status",                      "500" },
-  { ":status",                      "404" },
-  { ":status",                      "403" },
-  { ":status",                      "400" },
-  { ":status",                      "401" },
-  { "accept-charset",               "" },
-  { "accept-encoding",              "" },
-  { "accept-language",              "" },
-  { "accept-ranges",                "" },
-  { "accept",                       "" },
-  { "access-control-allow-origin",  "" },
-  { "age",                          "" },
-  { "allow",                        "" },
-  { "authorization",                "" },
-  { "cache-control",                "" },
-  { "content-disposition",          "" },
-  { "content-encoding",             "" },
-  { "content-language",             "" },
-  { "content-length",               "" },
-  { "content-location",             "" },
-  { "content-range",                "" },
-  { "content-type",                 "" },
-  { "cookie",                       "" },
-  { "date",                         "" },
-  { "etag",                         "" },
-  { "expect",                       "" },
-  { "expires",                      "" },
-  { "from",                         "" },
-  { "host",                         "" },
-  { "if-match",                     "" },
-  { "if-modified-since",            "" },
-  { "if-none-match",                "" },
-  { "if-range",                     "" },
-  { "if-unmodified-since",          "" },
-  { "last-modified",                "" },
-  { "link",                         "" },
-  { "location",                     "" },
-  { "max-forwards",                 "" },
-  { "proxy-authenticate",           "" },
-  { "proxy-authorization",          "" },
-  { "range",                        "" },
-  { "referer",                      "" },
-  { "refresh",                      "" },
-  { "retry-after",                  "" },
-  { "server",                       "" },
-  { "set-cookie",                   "" },
-  { "strict-transport-security",    "" },
-  { "transfer-encoding",            "" },
-  { "user-agent",                   "" },
-  { "vary",                         "" },
-  { "via",                          "" },
-  { "www-authenticate",             "" }
+  { ":authority", "" },
+  { ":method", "GET" },
+  { ":method", "POST" },
+  { ":path", "/" },
+  { ":path", "/index.html" },
+  { ":scheme", "http" },
+  { ":scheme", "https" },
+  { ":status", "200" },
+  { ":status", "204" },
+  { ":status", "206" },
+  { ":status", "304" },
+  { ":status", "400" },
+  { ":status", "404" },
+  { ":status", "500" },
+  { "accept-charset", "" },
+  { "accept-encoding", "" },
+  { "accept-language", "" },
+  { "accept-ranges", "" },
+  { "accept", "" },
+  { "access-control-allow-origin", "" },
+  { "age", "" },
+  { "allow", "" },
+  { "authorization", "" },
+  { "cache-control", "" },
+  { "content-disposition", "" },
+  { "content-encoding", "" },
+  { "content-language", "" },
+  { "content-length", "" },
+  { "content-location", "" },
+  { "content-range", "" },
+  { "content-type", "" },
+  { "cookie", "" },
+  { "date", "" },
+  { "etag", "" },
+  { "expect", "" },
+  { "expires", "" },
+  { "from", "" },
+  { "host", "" },
+  { "if-match", "" },
+  { "if-modified-since", "" },
+  { "if-none-match", "" },
+  { "if-range", "" },
+  { "if-unmodified-since", "" },
+  { "last-modified", "" },
+  { "link", "" },
+  { "location", "" },
+  { "max-forwards", "" },
+  { "proxy-authenticate", "" },
+  { "proxy-authorization", "" },
+  { "range", "" },
+  { "referer", "" },
+  { "refresh", "" },
+  { "retry-after", "" },
+  { "server", "" },
+  { "set-cookie", "" },
+  { "strict-transport-security", "" },
+  { "transfer-encoding", "" },
+  { "user-agent", "" },
+  { "vary", "" },
+  { "via", "" },
+  { "www-authenticate", "" },
 };
 
 const size_t static_table_length = sizeof(static_table) / sizeof(static_entry_t);
@@ -99,7 +100,7 @@ hpack_decode_quantity_result_t* hpack_decode_quantity(uint8_t* buf,
       if (next < 128) {
         break;
       }
-      
+
       next = buf[++index];
     }
     index++;
@@ -227,7 +228,7 @@ void hpack_header_table_adjust_size(hpack_context_t* context, size_t new_size) {
 void hpack_emit_header(multimap_t* headers, char* name,
     size_t name_length, char* value, size_t value_length) {
 
-  if (LOG_TRACE) log_trace("Emittting header: '%s' (%ld): '%s' (%ld)\n", name, name_length, value, value_length);
+  if (LOG_TRACE) log_trace("Emitting header: '%s' (%ld): '%s' (%ld)\n", name, name_length, value, value_length);
 
   char *name_copy, *value_copy;
   size_t value_start = 0;
@@ -292,7 +293,7 @@ hpack_header_table_entry_t* hpack_header_table_add(hpack_context_t* context,
   header->value = value;
   header->value_length = value_length;
 
-  // add an extra 32 octets - see 
+  // add an extra 32 octets - see
   // http://tools.ietf.org/html/draft-ietf-httpbis-header-compression-05#section-3.3.1
   header->size_in_table = name_length + value_length + HEADER_TABLE_OVERHEAD;
 
@@ -313,7 +314,7 @@ hpack_header_table_entry_t* hpack_static_table_get(hpack_context_t* context, siz
     header->value = entry.value;
     header->value_length = value_length;
 
-    // add an extra 32 octets - see 
+    // add an extra 32 octets - see
     // http://tools.ietf.org/html/draft-ietf-httpbis-header-compression-05#section-3.3.1
     header->size_in_table = name_length + value_length + HEADER_TABLE_OVERHEAD;
 
@@ -358,9 +359,9 @@ string_and_length_t* hpack_decode_string_literal(
 
 void hpack_decode_literal_header(
     hpack_context_t* context, multimap_t* headers, uint8_t* buf,
-    size_t length, size_t* current, bool add_to_header_table) {
+    size_t length, size_t* current, size_t bit_offset, bool add_to_header_table) {
 
-  hpack_decode_quantity_result_t* index_result = hpack_decode_quantity(buf + (*current), length - (*current), 2);
+  hpack_decode_quantity_result_t* index_result = hpack_decode_quantity(buf + (*current), length - (*current), bit_offset);
   size_t header_table_index = index_result->value;
   *current += index_result->num_bytes;
   if (LOG_TRACE) log_trace("Adding literal header field: %ld, %ld\n", index_result->value, index_result->num_bytes);
@@ -375,7 +376,7 @@ void hpack_decode_literal_header(
     key_name = sl->value;
     key_name_length = sl->length;
     free(sl);
-    if (LOG_TRACE) log_trace("Literal name: %s, %ld\n", key_name, key_name_length);
+    if (LOG_TRACE) log_trace("Literal name: '%s' (%ld)\n", key_name, key_name_length);
 
   } else {
 
@@ -392,7 +393,7 @@ void hpack_decode_literal_header(
     }
     COPY_STRING(key_name, entry->name, entry->name_length);
     key_name_length = entry->name_length;
-    if (LOG_TRACE) log_trace("Indexed name: %s, %ld\n", key_name, key_name_length);
+    if (LOG_TRACE) log_trace("Indexed name: '%s' (%ld)\n", key_name, key_name_length);
     if (entry->from_static_table) {
       free(entry);
     }
@@ -426,6 +427,8 @@ void hpack_decode_indexed_header(
   hpack_decode_quantity_result_t* result = hpack_decode_quantity(buf + (*current), length - (*current), 1);
   *current += result->num_bytes;
   if (LOG_TRACE) log_trace("Adding indexed header field: %ld\n", result->value);
+
+  if (LOG_TRACE) log_trace("Header table size: %ld\n", context->header_table->entries->length);
 
   if (result->value == 0) {
 
@@ -508,22 +511,25 @@ multimap_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length) 
 
   if (LOG_TRACE) log_trace("Decompressing headers: %ld, %ld\n", current, length);
   while (current < length) {
-    bool first_bit = get_bit(buf + current, 0);
+    uint8_t four_high_bits = get_bits8(buf, current, 1, 0xf0) >> 4;
+    uint8_t two_high_bits = four_high_bits >> 2;
+    uint8_t first_bit = four_high_bits >> 3;
     if (first_bit) {
       // indexed header field (4.2)
       hpack_decode_indexed_header(context, headers, buf, length, &current);
+    } else if (two_high_bits == 1) {
+      // literal header field without indexing (4.3.1)
+      hpack_decode_literal_header(context, headers, buf, length, &current, 2, false);
+    } else if (four_high_bits == 0) {
+      // literal header field with incremental indexing (4.3.2)
+      hpack_decode_literal_header(context, headers, buf, length, &current, 4, true);
     } else {
-      bool second_bit = get_bit(buf + current, 1);
-      if (second_bit) {
-        // literal header field without indexing (4.3.1)
-        hpack_decode_literal_header(context, headers, buf, length, &current, false);
-      } else {
-        // literal header field with incremental indexing (4.3.2)
-        hpack_decode_literal_header(context, headers, buf, length, &current, true);
-      }
+      // literal header field never indexed 4.3.3
+      hpack_decode_literal_header(context, headers, buf, length, &current, 4, false);
     }
   }
 
+  // does this need to go below the emissionof reference set headers?
   concatenate_cookie_fields(headers);
 
   // emit reference set headers

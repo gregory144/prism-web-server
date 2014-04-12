@@ -10,7 +10,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       0,
-      47,
+      48,
       -1,
       -1,
     },
@@ -18,7 +18,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       1,
-      101,
+      49,
       -1,
       -1,
     },
@@ -34,38 +34,6 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       3,
-      46,
-      -1,
-      -1,
-    },
-  
-
-    {
-      4,
-      48,
-      -1,
-      -1,
-    },
-  
-
-    {
-      5,
-      -1,
-      3,
-      4,
-    },
-  
-
-    {
-      6,
-      49,
-      -1,
-      -1,
-    },
-  
-
-    {
-      7,
       50,
       -1,
       -1,
@@ -73,34 +41,66 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
+      4,
+      32,
+      -1,
+      -1,
+    },
+  
+
+    {
+      5,
+      47,
+      -1,
+      -1,
+    },
+  
+
+    {
+      6,
+      -1,
+      4,
+      5,
+    },
+  
+
+    {
+      7,
+      -1,
+      3,
+      6,
+    },
+  
+
+    {
       8,
       -1,
-      6,
+      2,
       7,
     },
   
 
     {
       9,
+      51,
       -1,
-      5,
-      8,
+      -1,
     },
   
 
     {
       10,
+      97,
       -1,
-      2,
-      9,
+      -1,
     },
   
 
     {
       11,
-      97,
       -1,
-      -1,
+      9,
+      10,
     },
   
 
@@ -114,14 +114,30 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       13,
+      101,
       -1,
-      11,
-      12,
+      -1,
     },
   
 
     {
       14,
+      -1,
+      12,
+      13,
+    },
+  
+
+    {
+      15,
+      -1,
+      11,
+      14,
+    },
+  
+
+    {
+      16,
       105,
       -1,
       -1,
@@ -129,39 +145,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      15,
-      108,
-      -1,
-      -1,
-    },
-  
-
-    {
-      16,
-      -1,
-      14,
-      15,
-    },
-  
-
-    {
       17,
-      -1,
-      13,
-      16,
-    },
-  
-
-    {
-      18,
-      110,
-      -1,
-      -1,
-    },
-  
-
-    {
-      19,
       111,
       -1,
       -1,
@@ -169,16 +153,32 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      20,
-      -1,
       18,
+      -1,
+      16,
+      17,
+    },
+  
+
+    {
       19,
+      116,
+      -1,
+      -1,
+    },
+  
+
+    {
+      20,
+      37,
+      -1,
+      -1,
     },
   
 
     {
       21,
-      112,
+      46,
       -1,
       -1,
     },
@@ -186,16 +186,16 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       22,
-      114,
       -1,
-      -1,
+      20,
+      21,
     },
   
 
     {
       23,
       -1,
-      21,
+      19,
       22,
     },
   
@@ -203,7 +203,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       24,
       -1,
-      20,
+      18,
       23,
     },
   
@@ -211,7 +211,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       25,
       -1,
-      17,
+      15,
       24,
     },
   
@@ -219,14 +219,14 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       26,
       -1,
-      10,
+      8,
       25,
     },
   
 
     {
       27,
-      115,
+      52,
       -1,
       -1,
     },
@@ -234,7 +234,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       28,
-      116,
+      53,
       -1,
       -1,
     },
@@ -250,7 +250,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       30,
-      37,
+      54,
       -1,
       -1,
     },
@@ -258,7 +258,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       31,
-      45,
+      55,
       -1,
       -1,
     },
@@ -274,78 +274,14 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       33,
-      51,
-      -1,
-      -1,
-    },
-  
-
-    {
-      34,
-      52,
-      -1,
-      -1,
-    },
-  
-
-    {
-      35,
-      -1,
-      33,
-      34,
-    },
-  
-
-    {
-      36,
-      -1,
-      32,
-      35,
-    },
-  
-
-    {
-      37,
       -1,
       29,
-      36,
+      32,
     },
   
 
     {
-      38,
-      53,
-      -1,
-      -1,
-    },
-  
-
-    {
-      39,
-      54,
-      -1,
-      -1,
-    },
-  
-
-    {
-      40,
-      -1,
-      38,
-      39,
-    },
-  
-
-    {
-      41,
-      55,
-      -1,
-      -1,
-    },
-  
-
-    {
-      42,
+      34,
       56,
       -1,
       -1,
@@ -353,23 +289,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      43,
-      -1,
-      41,
-      42,
-    },
-  
-
-    {
-      44,
-      -1,
-      40,
-      43,
-    },
-  
-
-    {
-      45,
+      35,
       57,
       -1,
       -1,
@@ -377,7 +297,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      46,
+      36,
+      -1,
+      34,
+      35,
+    },
+  
+
+    {
+      37,
+      58,
+      -1,
+      -1,
+    },
+  
+
+    {
+      38,
       61,
       -1,
       -1,
@@ -385,63 +321,39 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      47,
-      -1,
-      45,
-      46,
-    },
-  
-
-    {
-      48,
-      95,
-      -1,
-      -1,
-    },
-  
-
-    {
-      49,
-      98,
-      -1,
-      -1,
-    },
-  
-
-    {
-      50,
-      -1,
-      48,
-      49,
-    },
-  
-
-    {
-      51,
-      -1,
-      47,
-      50,
-    },
-  
-
-    {
-      52,
-      -1,
-      44,
-      51,
-    },
-  
-
-    {
-      53,
+      39,
       -1,
       37,
-      52,
+      38,
     },
   
 
     {
-      54,
+      40,
+      -1,
+      36,
+      39,
+    },
+  
+
+    {
+      41,
+      -1,
+      33,
+      40,
+    },
+  
+
+    {
+      42,
+      84,
+      -1,
+      -1,
+    },
+  
+
+    {
+      43,
       100,
       -1,
       -1,
@@ -449,23 +361,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      55,
-      102,
+      44,
       -1,
-      -1,
+      42,
+      43,
     },
   
 
     {
-      56,
-      -1,
-      54,
-      55,
-    },
-  
-
-    {
-      57,
+      45,
       103,
       -1,
       -1,
@@ -473,7 +377,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      58,
+      46,
       104,
       -1,
       -1,
@@ -481,23 +385,31 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      59,
+      47,
       -1,
-      57,
-      58,
+      45,
+      46,
     },
   
 
     {
-      60,
+      48,
       -1,
-      56,
-      59,
+      44,
+      47,
     },
   
 
     {
-      61,
+      49,
+      108,
+      -1,
+      -1,
+    },
+  
+
+    {
+      50,
       109,
       -1,
       -1,
@@ -505,8 +417,96 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
+      51,
+      -1,
+      49,
+      50,
+    },
+  
+
+    {
+      52,
+      110,
+      -1,
+      -1,
+    },
+  
+
+    {
+      53,
+      112,
+      -1,
+      -1,
+    },
+  
+
+    {
+      54,
+      -1,
+      52,
+      53,
+    },
+  
+
+    {
+      55,
+      -1,
+      51,
+      54,
+    },
+  
+
+    {
+      56,
+      -1,
+      48,
+      55,
+    },
+  
+
+    {
+      57,
+      -1,
+      41,
+      56,
+    },
+  
+
+    {
+      58,
+      114,
+      -1,
+      -1,
+    },
+  
+
+    {
+      59,
+      115,
+      -1,
+      -1,
+    },
+  
+
+    {
+      60,
+      -1,
+      58,
+      59,
+    },
+  
+
+    {
+      61,
+      38,
+      -1,
+      -1,
+    },
+  
+
+    {
       62,
-      117,
+      44,
       -1,
       -1,
     },
@@ -522,7 +522,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       64,
-      119,
+      45,
       -1,
       -1,
     },
@@ -530,7 +530,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       65,
-      38,
+      65,
       -1,
       -1,
     },
@@ -538,16 +538,16 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       66,
+      -1,
+      64,
       65,
-      -1,
-      -1,
     },
   
 
     {
       67,
       -1,
-      65,
+      63,
       66,
     },
   
@@ -555,38 +555,38 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       68,
       -1,
-      64,
+      60,
       67,
     },
   
 
     {
       69,
-      -1,
-      63,
       68,
+      -1,
+      -1,
     },
   
 
     {
       70,
+      70,
       -1,
-      60,
-      69,
+      -1,
     },
   
 
     {
       71,
+      -1,
+      69,
       70,
-      -1,
-      -1,
     },
   
 
     {
       72,
-      106,
+      71,
       -1,
       -1,
     },
@@ -594,55 +594,55 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       73,
+      77,
       -1,
-      71,
-      72,
+      -1,
     },
   
 
     {
       74,
-      107,
       -1,
-      -1,
+      72,
+      73,
     },
   
 
     {
       75,
-      118,
       -1,
-      -1,
+      71,
+      74,
     },
   
 
     {
       76,
+      78,
       -1,
-      74,
-      75,
+      -1,
     },
   
 
     {
       77,
+      83,
       -1,
-      73,
-      76,
+      -1,
     },
   
 
     {
       78,
-      32,
       -1,
-      -1,
+      76,
+      77,
     },
   
 
     {
       79,
-      44,
+      95,
       -1,
       -1,
     },
@@ -650,32 +650,32 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       80,
+      98,
       -1,
-      78,
-      79,
+      -1,
     },
   
 
     {
       81,
-      59,
       -1,
-      -1,
+      79,
+      80,
     },
   
 
     {
       82,
-      66,
       -1,
-      -1,
+      78,
+      81,
     },
   
 
     {
       83,
       -1,
-      81,
+      75,
       82,
     },
   
@@ -683,14 +683,14 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       84,
       -1,
-      80,
+      68,
       83,
     },
   
 
     {
       85,
-      67,
+      102,
       -1,
       -1,
     },
@@ -698,7 +698,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       86,
-      68,
+      117,
       -1,
       -1,
     },
@@ -714,7 +714,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       88,
-      69,
+      118,
       -1,
       -1,
     },
@@ -722,7 +722,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       89,
-      77,
+      119,
       -1,
       -1,
     },
@@ -746,78 +746,14 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       92,
+      120,
       -1,
-      84,
-      91,
+      -1,
     },
   
 
     {
       93,
-      -1,
-      77,
-      92,
-    },
-  
-
-    {
-      94,
-      83,
-      -1,
-      -1,
-    },
-  
-
-    {
-      95,
-      84,
-      -1,
-      -1,
-    },
-  
-
-    {
-      96,
-      -1,
-      94,
-      95,
-    },
-  
-
-    {
-      97,
-      113,
-      -1,
-      -1,
-    },
-  
-
-    {
-      98,
-      120,
-      -1,
-      -1,
-    },
-  
-
-    {
-      99,
-      -1,
-      97,
-      98,
-    },
-  
-
-    {
-      100,
-      -1,
-      96,
-      99,
-    },
-  
-
-    {
-      101,
       121,
       -1,
       -1,
@@ -825,95 +761,87 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      102,
-      122,
+      94,
+      -1,
+      92,
+      93,
+    },
+  
+
+    {
+      95,
+      59,
       -1,
       -1,
     },
   
 
     {
-      103,
-      -1,
-      101,
-      102,
-    },
-  
-
-    {
-      104,
-      58,
+      96,
+      66,
       -1,
       -1,
     },
   
 
     {
-      105,
-      63,
+      97,
+      -1,
+      95,
+      96,
+    },
+  
+
+    {
+      98,
+      67,
       -1,
       -1,
     },
   
 
     {
-      106,
-      -1,
-      104,
-      105,
-    },
-  
-
-    {
-      107,
-      71,
+      99,
+      69,
       -1,
       -1,
     },
   
 
     {
-      108,
-      72,
-      -1,
-      -1,
-    },
-  
-
-    {
-      109,
-      -1,
-      107,
-      108,
-    },
-  
-
-    {
-      110,
-      -1,
-      106,
-      109,
-    },
-  
-
-    {
-      111,
-      -1,
-      103,
-      110,
-    },
-  
-
-    {
-      112,
-      -1,
       100,
-      111,
+      -1,
+      98,
+      99,
     },
   
 
     {
-      113,
+      101,
+      -1,
+      97,
+      100,
+    },
+  
+
+    {
+      102,
+      -1,
+      94,
+      101,
+    },
+  
+
+    {
+      103,
+      -1,
+      91,
+      102,
+    },
+  
+
+    {
+      104,
       73,
       -1,
       -1,
@@ -921,55 +849,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      114,
-      74,
-      -1,
-      -1,
-    },
-  
-
-    {
-      115,
-      -1,
-      113,
-      114,
-    },
-  
-
-    {
-      116,
-      76,
-      -1,
-      -1,
-    },
-  
-
-    {
-      117,
-      78,
-      -1,
-      -1,
-    },
-  
-
-    {
-      118,
-      -1,
-      116,
-      117,
-    },
-  
-
-    {
-      119,
-      -1,
-      115,
-      118,
-    },
-  
-
-    {
-      120,
+      105,
       79,
       -1,
       -1,
@@ -977,7 +857,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      121,
+      106,
+      -1,
+      104,
+      105,
+    },
+  
+
+    {
+      107,
       80,
       -1,
       -1,
@@ -985,55 +873,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      122,
-      -1,
-      120,
-      121,
-    },
-  
-
-    {
-      123,
-      81,
-      -1,
-      -1,
-    },
-  
-
-    {
-      124,
-      82,
-      -1,
-      -1,
-    },
-  
-
-    {
-      125,
-      -1,
-      123,
-      124,
-    },
-  
-
-    {
-      126,
-      -1,
-      122,
-      125,
-    },
-  
-
-    {
-      127,
-      -1,
-      119,
-      126,
-    },
-  
-
-    {
-      128,
+      108,
       85,
       -1,
       -1,
@@ -1041,8 +881,168 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
+      109,
+      -1,
+      107,
+      108,
+    },
+  
+
+    {
+      110,
+      -1,
+      106,
+      109,
+    },
+  
+
+    {
+      111,
+      88,
+      -1,
+      -1,
+    },
+  
+
+    {
+      112,
+      106,
+      -1,
+      -1,
+    },
+  
+
+    {
+      113,
+      -1,
+      111,
+      112,
+    },
+  
+
+    {
+      114,
+      107,
+      -1,
+      -1,
+    },
+  
+
+    {
+      115,
+      122,
+      -1,
+      -1,
+    },
+  
+
+    {
+      116,
+      -1,
+      114,
+      115,
+    },
+  
+
+    {
+      117,
+      -1,
+      113,
+      116,
+    },
+  
+
+    {
+      118,
+      -1,
+      110,
+      117,
+    },
+  
+
+    {
+      119,
+      34,
+      -1,
+      -1,
+    },
+  
+
+    {
+      120,
+      41,
+      -1,
+      -1,
+    },
+  
+
+    {
+      121,
+      -1,
+      119,
+      120,
+    },
+  
+
+    {
+      122,
+      72,
+      -1,
+      -1,
+    },
+  
+
+    {
+      123,
+      74,
+      -1,
+      -1,
+    },
+  
+
+    {
+      124,
+      -1,
+      122,
+      123,
+    },
+  
+
+    {
+      125,
+      -1,
+      121,
+      124,
+    },
+  
+
+    {
+      126,
+      75,
+      -1,
+      -1,
+    },
+  
+
+    {
+      127,
+      76,
+      -1,
+      -1,
+    },
+  
+
+    {
+      128,
+      -1,
+      126,
+      127,
+    },
+  
+
+    {
       129,
-      86,
+      81,
       -1,
       -1,
     },
@@ -1050,46 +1050,62 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       130,
+      82,
       -1,
-      128,
-      129,
+      -1,
     },
   
 
     {
       131,
-      87,
       -1,
-      -1,
+      129,
+      130,
     },
   
 
     {
       132,
-      88,
       -1,
-      -1,
+      128,
+      131,
     },
   
 
     {
       133,
       -1,
-      131,
+      125,
       132,
     },
   
 
     {
       134,
+      86,
       -1,
-      130,
-      133,
+      -1,
     },
   
 
     {
       135,
+      87,
+      -1,
+      -1,
+    },
+  
+
+    {
+      136,
+      -1,
+      134,
+      135,
+    },
+  
+
+    {
+      137,
       89,
       -1,
       -1,
@@ -1097,39 +1113,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      136,
-      42,
-      -1,
-      -1,
-    },
-  
-
-    {
-      137,
-      75,
-      -1,
-      -1,
-    },
-  
-
-    {
       138,
-      -1,
-      136,
-      137,
-    },
-  
-
-    {
-      139,
-      -1,
-      135,
-      138,
-    },
-  
-
-    {
-      140,
       90,
       -1,
       -1,
@@ -1137,7 +1121,31 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
+      139,
+      -1,
+      137,
+      138,
+    },
+  
+
+    {
+      140,
+      -1,
+      136,
+      139,
+    },
+  
+
+    {
       141,
+      113,
+      -1,
+      -1,
+    },
+  
+
+    {
+      142,
       40,
       -1,
       -1,
@@ -1145,40 +1153,32 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      142,
-      41,
-      -1,
-      -1,
-    },
-  
-
-    {
       143,
+      42,
       -1,
-      141,
-      142,
+      -1,
     },
   
 
     {
       144,
       -1,
-      140,
+      142,
       143,
     },
   
 
     {
       145,
-      43,
       -1,
-      -1,
+      141,
+      144,
     },
   
 
     {
       146,
-      124,
+      43,
       -1,
       -1,
     },
@@ -1186,23 +1186,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       147,
+      63,
       -1,
-      145,
-      146,
+      -1,
     },
   
 
     {
       148,
-      33,
       -1,
-      -1,
+      146,
+      147,
     },
   
 
     {
       149,
-      126,
+      91,
       -1,
       -1,
     },
@@ -1210,14 +1210,6 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       150,
-      -1,
-      148,
-      149,
-    },
-  
-
-    {
-      151,
       93,
       -1,
       -1,
@@ -1225,8 +1217,16 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
+      151,
+      -1,
+      149,
+      150,
+    },
+  
+
+    {
       152,
-      34,
+      124,
       -1,
       -1,
     },
@@ -1234,7 +1234,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       153,
-      64,
+      126,
       -1,
       -1,
     },
@@ -1250,62 +1250,14 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       155,
+      33,
       -1,
-      151,
-      154,
+      -1,
     },
   
 
     {
       156,
-      91,
-      -1,
-      -1,
-    },
-  
-
-    {
-      157,
-      94,
-      -1,
-      -1,
-    },
-  
-
-    {
-      158,
-      -1,
-      156,
-      157,
-    },
-  
-
-    {
-      159,
-      35,
-      -1,
-      -1,
-    },
-  
-
-    {
-      160,
-      36,
-      -1,
-      -1,
-    },
-  
-
-    {
-      161,
-      -1,
-      159,
-      160,
-    },
-  
-
-    {
-      162,
       39,
       -1,
       -1,
@@ -1313,7 +1265,47 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      163,
+      157,
+      -1,
+      155,
+      156,
+    },
+  
+
+    {
+      158,
+      35,
+      -1,
+      -1,
+    },
+  
+
+    {
+      159,
+      94,
+      -1,
+      -1,
+    },
+  
+
+    {
+      160,
+      -1,
+      158,
+      159,
+    },
+  
+
+    {
+      161,
+      36,
+      -1,
+      -1,
+    },
+  
+
+    {
+      162,
       62,
       -1,
       -1,
@@ -1321,8 +1313,16 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
+      163,
+      -1,
+      161,
+      162,
+    },
+  
+
+    {
       164,
-      123,
+      64,
       -1,
       -1,
     },
@@ -1330,22 +1330,6 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
 
     {
       165,
-      -1,
-      163,
-      164,
-    },
-  
-
-    {
-      166,
-      125,
-      -1,
-      -1,
-    },
-  
-
-    {
-      167,
       60,
       -1,
       -1,
@@ -1353,7 +1337,31 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
+      166,
+      123,
+      -1,
+      -1,
+    },
+  
+
+    {
+      167,
+      -1,
+      165,
+      166,
+    },
+  
+
+    {
       168,
+      125,
+      -1,
+      -1,
+    },
+  
+
+    {
+      169,
       96,
       -1,
       -1,
@@ -1361,7 +1369,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      169,
+      170,
       164,
       -1,
       -1,
@@ -1369,7 +1377,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      170,
+      171,
       165,
       -1,
       -1,
@@ -1377,15 +1385,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      171,
+      172,
       -1,
-      169,
       170,
+      171,
     },
   
 
     {
-      172,
+      173,
       166,
       -1,
       -1,
@@ -1393,7 +1401,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      173,
+      174,
       167,
       -1,
       -1,
@@ -1401,23 +1409,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      174,
-      -1,
-      172,
-      173,
-    },
-  
-
-    {
       175,
       -1,
-      171,
+      173,
       174,
     },
   
 
     {
       176,
+      -1,
+      172,
+      175,
+    },
+  
+
+    {
+      177,
       168,
       -1,
       -1,
@@ -1425,7 +1433,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      177,
+      178,
       169,
       -1,
       -1,
@@ -1433,15 +1441,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      178,
+      179,
       -1,
-      176,
       177,
+      178,
     },
   
 
     {
-      179,
+      180,
       170,
       -1,
       -1,
@@ -1449,7 +1457,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      180,
+      181,
       171,
       -1,
       -1,
@@ -1457,17 +1465,9 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      181,
-      -1,
-      179,
-      180,
-    },
-  
-
-    {
       182,
       -1,
-      178,
+      180,
       181,
     },
   
@@ -1475,13 +1475,21 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       183,
       -1,
-      175,
+      179,
       182,
     },
   
 
     {
       184,
+      -1,
+      176,
+      183,
+    },
+  
+
+    {
+      185,
       172,
       -1,
       -1,
@@ -1489,7 +1497,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      185,
+      186,
       173,
       -1,
       -1,
@@ -1497,15 +1505,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      186,
+      187,
       -1,
-      184,
       185,
+      186,
     },
   
 
     {
-      187,
+      188,
       174,
       -1,
       -1,
@@ -1513,7 +1521,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      188,
+      189,
       175,
       -1,
       -1,
@@ -1521,23 +1529,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      189,
-      -1,
-      187,
-      188,
-    },
-  
-
-    {
       190,
       -1,
-      186,
+      188,
       189,
     },
   
 
     {
       191,
+      -1,
+      187,
+      190,
+    },
+  
+
+    {
+      192,
       176,
       -1,
       -1,
@@ -1545,7 +1553,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      192,
+      193,
       177,
       -1,
       -1,
@@ -1553,15 +1561,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      193,
+      194,
       -1,
-      191,
       192,
+      193,
     },
   
 
     {
-      194,
+      195,
       178,
       -1,
       -1,
@@ -1569,7 +1577,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      195,
+      196,
       179,
       -1,
       -1,
@@ -1577,17 +1585,9 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      196,
-      -1,
-      194,
-      195,
-    },
-  
-
-    {
       197,
       -1,
-      193,
+      195,
       196,
     },
   
@@ -1595,7 +1595,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       198,
       -1,
-      190,
+      194,
       197,
     },
   
@@ -1603,13 +1603,21 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       199,
       -1,
-      183,
+      191,
       198,
     },
   
 
     {
       200,
+      -1,
+      184,
+      199,
+    },
+  
+
+    {
+      201,
       180,
       -1,
       -1,
@@ -1617,7 +1625,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      201,
+      202,
       181,
       -1,
       -1,
@@ -1625,15 +1633,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      202,
+      203,
       -1,
-      200,
       201,
+      202,
     },
   
 
     {
-      203,
+      204,
       182,
       -1,
       -1,
@@ -1641,7 +1649,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      204,
+      205,
       183,
       -1,
       -1,
@@ -1649,23 +1657,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      205,
-      -1,
-      203,
-      204,
-    },
-  
-
-    {
       206,
       -1,
-      202,
+      204,
       205,
     },
   
 
     {
       207,
+      -1,
+      203,
+      206,
+    },
+  
+
+    {
+      208,
       184,
       -1,
       -1,
@@ -1673,7 +1681,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      208,
+      209,
       185,
       -1,
       -1,
@@ -1681,15 +1689,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      209,
+      210,
       -1,
-      207,
       208,
+      209,
     },
   
 
     {
-      210,
+      211,
       186,
       -1,
       -1,
@@ -1697,7 +1705,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      211,
+      212,
       187,
       -1,
       -1,
@@ -1705,17 +1713,9 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      212,
-      -1,
-      210,
-      211,
-    },
-  
-
-    {
       213,
       -1,
-      209,
+      211,
       212,
     },
   
@@ -1723,13 +1723,21 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       214,
       -1,
-      206,
+      210,
       213,
     },
   
 
     {
       215,
+      -1,
+      207,
+      214,
+    },
+  
+
+    {
+      216,
       188,
       -1,
       -1,
@@ -1737,7 +1745,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      216,
+      217,
       189,
       -1,
       -1,
@@ -1745,15 +1753,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      217,
+      218,
       -1,
-      215,
       216,
+      217,
     },
   
 
     {
-      218,
+      219,
       190,
       -1,
       -1,
@@ -1761,7 +1769,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      219,
+      220,
       191,
       -1,
       -1,
@@ -1769,23 +1777,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      220,
-      -1,
-      218,
-      219,
-    },
-  
-
-    {
       221,
       -1,
-      217,
+      219,
       220,
     },
   
 
     {
       222,
+      -1,
+      218,
+      221,
+    },
+  
+
+    {
+      223,
       192,
       -1,
       -1,
@@ -1793,7 +1801,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      223,
+      224,
       193,
       -1,
       -1,
@@ -1801,15 +1809,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      224,
+      225,
       -1,
-      222,
       223,
+      224,
     },
   
 
     {
-      225,
+      226,
       194,
       -1,
       -1,
@@ -1817,7 +1825,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      226,
+      227,
       195,
       -1,
       -1,
@@ -1825,17 +1833,9 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      227,
-      -1,
-      225,
-      226,
-    },
-  
-
-    {
       228,
       -1,
-      224,
+      226,
       227,
     },
   
@@ -1843,7 +1843,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       229,
       -1,
-      221,
+      225,
       228,
     },
   
@@ -1851,7 +1851,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       230,
       -1,
-      214,
+      222,
       229,
     },
   
@@ -1859,13 +1859,21 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       231,
       -1,
-      199,
+      215,
       230,
     },
   
 
     {
       232,
+      -1,
+      200,
+      231,
+    },
+  
+
+    {
+      233,
       196,
       -1,
       -1,
@@ -1873,7 +1881,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      233,
+      234,
       197,
       -1,
       -1,
@@ -1881,15 +1889,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      234,
+      235,
       -1,
-      232,
       233,
+      234,
     },
   
 
     {
-      235,
+      236,
       198,
       -1,
       -1,
@@ -1897,7 +1905,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      236,
+      237,
       199,
       -1,
       -1,
@@ -1905,23 +1913,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      237,
-      -1,
-      235,
-      236,
-    },
-  
-
-    {
       238,
       -1,
-      234,
+      236,
       237,
     },
   
 
     {
       239,
+      -1,
+      235,
+      238,
+    },
+  
+
+    {
+      240,
       200,
       -1,
       -1,
@@ -1929,7 +1937,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      240,
+      241,
       201,
       -1,
       -1,
@@ -1937,15 +1945,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      241,
+      242,
       -1,
-      239,
       240,
+      241,
     },
   
 
     {
-      242,
+      243,
       202,
       -1,
       -1,
@@ -1953,7 +1961,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      243,
+      244,
       203,
       -1,
       -1,
@@ -1961,17 +1969,9 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      244,
-      -1,
-      242,
-      243,
-    },
-  
-
-    {
       245,
       -1,
-      241,
+      243,
       244,
     },
   
@@ -1979,13 +1979,21 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       246,
       -1,
-      238,
+      242,
       245,
     },
   
 
     {
       247,
+      -1,
+      239,
+      246,
+    },
+  
+
+    {
+      248,
       204,
       -1,
       -1,
@@ -1993,7 +2001,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      248,
+      249,
       205,
       -1,
       -1,
@@ -2001,15 +2009,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      249,
+      250,
       -1,
-      247,
       248,
+      249,
     },
   
 
     {
-      250,
+      251,
       206,
       -1,
       -1,
@@ -2017,7 +2025,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      251,
+      252,
       207,
       -1,
       -1,
@@ -2025,23 +2033,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      252,
-      -1,
-      250,
-      251,
-    },
-  
-
-    {
       253,
       -1,
-      249,
+      251,
       252,
     },
   
 
     {
       254,
+      -1,
+      250,
+      253,
+    },
+  
+
+    {
+      255,
       208,
       -1,
       -1,
@@ -2049,7 +2057,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      255,
+      256,
       209,
       -1,
       -1,
@@ -2057,15 +2065,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      256,
+      257,
       -1,
-      254,
       255,
+      256,
     },
   
 
     {
-      257,
+      258,
       210,
       -1,
       -1,
@@ -2073,7 +2081,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      258,
+      259,
       211,
       -1,
       -1,
@@ -2081,17 +2089,9 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      259,
-      -1,
-      257,
-      258,
-    },
-  
-
-    {
       260,
       -1,
-      256,
+      258,
       259,
     },
   
@@ -2099,7 +2099,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       261,
       -1,
-      253,
+      257,
       260,
     },
   
@@ -2107,13 +2107,21 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       262,
       -1,
-      246,
+      254,
       261,
     },
   
 
     {
       263,
+      -1,
+      247,
+      262,
+    },
+  
+
+    {
+      264,
       212,
       -1,
       -1,
@@ -2121,7 +2129,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      264,
+      265,
       213,
       -1,
       -1,
@@ -2129,15 +2137,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      265,
+      266,
       -1,
-      263,
       264,
+      265,
     },
   
 
     {
-      266,
+      267,
       214,
       -1,
       -1,
@@ -2145,7 +2153,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      267,
+      268,
       215,
       -1,
       -1,
@@ -2153,23 +2161,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      268,
-      -1,
-      266,
-      267,
-    },
-  
-
-    {
       269,
       -1,
-      265,
+      267,
       268,
     },
   
 
     {
       270,
+      -1,
+      266,
+      269,
+    },
+  
+
+    {
+      271,
       216,
       -1,
       -1,
@@ -2177,7 +2185,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      271,
+      272,
       217,
       -1,
       -1,
@@ -2185,15 +2193,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      272,
+      273,
       -1,
-      270,
       271,
+      272,
     },
   
 
     {
-      273,
+      274,
       218,
       -1,
       -1,
@@ -2201,7 +2209,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      274,
+      275,
       219,
       -1,
       -1,
@@ -2209,17 +2217,9 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      275,
-      -1,
-      273,
-      274,
-    },
-  
-
-    {
       276,
       -1,
-      272,
+      274,
       275,
     },
   
@@ -2227,13 +2227,21 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       277,
       -1,
-      269,
+      273,
       276,
     },
   
 
     {
       278,
+      -1,
+      270,
+      277,
+    },
+  
+
+    {
+      279,
       220,
       -1,
       -1,
@@ -2241,7 +2249,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      279,
+      280,
       221,
       -1,
       -1,
@@ -2249,15 +2257,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      280,
+      281,
       -1,
-      278,
       279,
+      280,
     },
   
 
     {
-      281,
+      282,
       222,
       -1,
       -1,
@@ -2265,7 +2273,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      282,
+      283,
       223,
       -1,
       -1,
@@ -2273,23 +2281,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      283,
-      -1,
-      281,
-      282,
-    },
-  
-
-    {
       284,
       -1,
-      280,
+      282,
       283,
     },
   
 
     {
       285,
+      -1,
+      281,
+      284,
+    },
+  
+
+    {
+      286,
       224,
       -1,
       -1,
@@ -2297,7 +2305,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      286,
+      287,
       225,
       -1,
       -1,
@@ -2305,15 +2313,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      287,
+      288,
       -1,
-      285,
       286,
+      287,
     },
   
 
     {
-      288,
+      289,
       226,
       -1,
       -1,
@@ -2321,7 +2329,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      289,
+      290,
       227,
       -1,
       -1,
@@ -2329,17 +2337,9 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      290,
-      -1,
-      288,
-      289,
-    },
-  
-
-    {
       291,
       -1,
-      287,
+      289,
       290,
     },
   
@@ -2347,7 +2347,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       292,
       -1,
-      284,
+      288,
       291,
     },
   
@@ -2355,7 +2355,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       293,
       -1,
-      277,
+      285,
       292,
     },
   
@@ -2363,7 +2363,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       294,
       -1,
-      262,
+      278,
       293,
     },
   
@@ -2371,13 +2371,21 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       295,
       -1,
-      231,
+      263,
       294,
     },
   
 
     {
       296,
+      -1,
+      232,
+      295,
+    },
+  
+
+    {
+      297,
       228,
       -1,
       -1,
@@ -2385,7 +2393,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      297,
+      298,
       229,
       -1,
       -1,
@@ -2393,15 +2401,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      298,
+      299,
       -1,
-      296,
       297,
+      298,
     },
   
 
     {
-      299,
+      300,
       230,
       -1,
       -1,
@@ -2409,7 +2417,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      300,
+      301,
       231,
       -1,
       -1,
@@ -2417,23 +2425,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      301,
-      -1,
-      299,
-      300,
-    },
-  
-
-    {
       302,
       -1,
-      298,
+      300,
       301,
     },
   
 
     {
       303,
+      -1,
+      299,
+      302,
+    },
+  
+
+    {
+      304,
       232,
       -1,
       -1,
@@ -2441,7 +2449,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      304,
+      305,
       233,
       -1,
       -1,
@@ -2449,15 +2457,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      305,
+      306,
       -1,
-      303,
       304,
+      305,
     },
   
 
     {
-      306,
+      307,
       234,
       -1,
       -1,
@@ -2465,7 +2473,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      307,
+      308,
       235,
       -1,
       -1,
@@ -2473,17 +2481,9 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      308,
-      -1,
-      306,
-      307,
-    },
-  
-
-    {
       309,
       -1,
-      305,
+      307,
       308,
     },
   
@@ -2491,13 +2491,21 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       310,
       -1,
-      302,
+      306,
       309,
     },
   
 
     {
       311,
+      -1,
+      303,
+      310,
+    },
+  
+
+    {
+      312,
       236,
       -1,
       -1,
@@ -2505,7 +2513,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      312,
+      313,
       237,
       -1,
       -1,
@@ -2513,15 +2521,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      313,
+      314,
       -1,
-      311,
       312,
+      313,
     },
   
 
     {
-      314,
+      315,
       238,
       -1,
       -1,
@@ -2529,7 +2537,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      315,
+      316,
       239,
       -1,
       -1,
@@ -2537,23 +2545,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      316,
-      -1,
-      314,
-      315,
-    },
-  
-
-    {
       317,
       -1,
-      313,
+      315,
       316,
     },
   
 
     {
       318,
+      -1,
+      314,
+      317,
+    },
+  
+
+    {
+      319,
       240,
       -1,
       -1,
@@ -2561,7 +2569,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      319,
+      320,
       241,
       -1,
       -1,
@@ -2569,15 +2577,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      320,
+      321,
       -1,
-      318,
       319,
+      320,
     },
   
 
     {
-      321,
+      322,
       242,
       -1,
       -1,
@@ -2585,7 +2593,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      322,
+      323,
       243,
       -1,
       -1,
@@ -2593,17 +2601,9 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      323,
-      -1,
-      321,
-      322,
-    },
-  
-
-    {
       324,
       -1,
-      320,
+      322,
       323,
     },
   
@@ -2611,7 +2611,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       325,
       -1,
-      317,
+      321,
       324,
     },
   
@@ -2619,13 +2619,21 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       326,
       -1,
-      310,
+      318,
       325,
     },
   
 
     {
       327,
+      -1,
+      311,
+      326,
+    },
+  
+
+    {
+      328,
       244,
       -1,
       -1,
@@ -2633,7 +2641,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      328,
+      329,
       245,
       -1,
       -1,
@@ -2641,15 +2649,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      329,
+      330,
       -1,
-      327,
       328,
+      329,
     },
   
 
     {
-      330,
+      331,
       246,
       -1,
       -1,
@@ -2657,7 +2665,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      331,
+      332,
       247,
       -1,
       -1,
@@ -2665,23 +2673,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      332,
-      -1,
-      330,
-      331,
-    },
-  
-
-    {
       333,
       -1,
-      329,
+      331,
       332,
     },
   
 
     {
       334,
+      -1,
+      330,
+      333,
+    },
+  
+
+    {
+      335,
       248,
       -1,
       -1,
@@ -2689,7 +2697,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      335,
+      336,
       249,
       -1,
       -1,
@@ -2697,15 +2705,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      336,
+      337,
       -1,
-      334,
       335,
+      336,
     },
   
 
     {
-      337,
+      338,
       250,
       -1,
       -1,
@@ -2713,7 +2721,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      338,
+      339,
       251,
       -1,
       -1,
@@ -2721,17 +2729,9 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      339,
-      -1,
-      337,
-      338,
-    },
-  
-
-    {
       340,
       -1,
-      336,
+      338,
       339,
     },
   
@@ -2739,13 +2739,21 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       341,
       -1,
-      333,
+      337,
       340,
     },
   
 
     {
       342,
+      -1,
+      334,
+      341,
+    },
+  
+
+    {
+      343,
       252,
       -1,
       -1,
@@ -2753,7 +2761,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      343,
+      344,
       253,
       -1,
       -1,
@@ -2761,15 +2769,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      344,
+      345,
       -1,
-      342,
       343,
+      344,
     },
   
 
     {
-      345,
+      346,
       254,
       -1,
       -1,
@@ -2777,7 +2785,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      346,
+      347,
       255,
       -1,
       -1,
@@ -2785,23 +2793,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      347,
-      -1,
-      345,
-      346,
-    },
-  
-
-    {
       348,
       -1,
-      344,
+      346,
       347,
     },
   
 
     {
       349,
+      -1,
+      345,
+      348,
+    },
+  
+
+    {
+      350,
       256,
       -1,
       -1,
@@ -2809,7 +2817,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      350,
+      351,
       0,
       -1,
       -1,
@@ -2817,7 +2825,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      351,
+      352,
       1,
       -1,
       -1,
@@ -2825,23 +2833,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      352,
-      -1,
-      350,
-      351,
-    },
-  
-
-    {
       353,
       -1,
-      349,
+      351,
       352,
     },
   
 
     {
       354,
+      -1,
+      350,
+      353,
+    },
+  
+
+    {
+      355,
       2,
       -1,
       -1,
@@ -2849,7 +2857,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      355,
+      356,
       3,
       -1,
       -1,
@@ -2857,15 +2865,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      356,
+      357,
       -1,
-      354,
       355,
+      356,
     },
   
 
     {
-      357,
+      358,
       4,
       -1,
       -1,
@@ -2873,7 +2881,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      358,
+      359,
       5,
       -1,
       -1,
@@ -2881,17 +2889,9 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      359,
-      -1,
-      357,
-      358,
-    },
-  
-
-    {
       360,
       -1,
-      356,
+      358,
       359,
     },
   
@@ -2899,7 +2899,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       361,
       -1,
-      353,
+      357,
       360,
     },
   
@@ -2907,7 +2907,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       362,
       -1,
-      348,
+      354,
       361,
     },
   
@@ -2915,7 +2915,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       363,
       -1,
-      341,
+      349,
       362,
     },
   
@@ -2923,13 +2923,21 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       364,
       -1,
-      326,
+      342,
       363,
     },
   
 
     {
       365,
+      -1,
+      327,
+      364,
+    },
+  
+
+    {
+      366,
       6,
       -1,
       -1,
@@ -2937,7 +2945,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      366,
+      367,
       7,
       -1,
       -1,
@@ -2945,15 +2953,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      367,
+      368,
       -1,
-      365,
       366,
+      367,
     },
   
 
     {
-      368,
+      369,
       8,
       -1,
       -1,
@@ -2961,7 +2969,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      369,
+      370,
       9,
       -1,
       -1,
@@ -2969,23 +2977,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      370,
-      -1,
-      368,
-      369,
-    },
-  
-
-    {
       371,
       -1,
-      367,
+      369,
       370,
     },
   
 
     {
       372,
+      -1,
+      368,
+      371,
+    },
+  
+
+    {
+      373,
       10,
       -1,
       -1,
@@ -2993,7 +3001,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      373,
+      374,
       11,
       -1,
       -1,
@@ -3001,15 +3009,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      374,
+      375,
       -1,
-      372,
       373,
+      374,
     },
   
 
     {
-      375,
+      376,
       12,
       -1,
       -1,
@@ -3017,7 +3025,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      376,
+      377,
       13,
       -1,
       -1,
@@ -3025,17 +3033,9 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      377,
-      -1,
-      375,
-      376,
-    },
-  
-
-    {
       378,
       -1,
-      374,
+      376,
       377,
     },
   
@@ -3043,13 +3043,21 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       379,
       -1,
-      371,
+      375,
       378,
     },
   
 
     {
       380,
+      -1,
+      372,
+      379,
+    },
+  
+
+    {
+      381,
       14,
       -1,
       -1,
@@ -3057,7 +3065,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      381,
+      382,
       15,
       -1,
       -1,
@@ -3065,15 +3073,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      382,
+      383,
       -1,
-      380,
       381,
+      382,
     },
   
 
     {
-      383,
+      384,
       16,
       -1,
       -1,
@@ -3081,7 +3089,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      384,
+      385,
       17,
       -1,
       -1,
@@ -3089,23 +3097,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      385,
-      -1,
-      383,
-      384,
-    },
-  
-
-    {
       386,
       -1,
-      382,
+      384,
       385,
     },
   
 
     {
       387,
+      -1,
+      383,
+      386,
+    },
+  
+
+    {
+      388,
       18,
       -1,
       -1,
@@ -3113,7 +3121,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      388,
+      389,
       19,
       -1,
       -1,
@@ -3121,15 +3129,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      389,
+      390,
       -1,
-      387,
       388,
+      389,
     },
   
 
     {
-      390,
+      391,
       20,
       -1,
       -1,
@@ -3137,7 +3145,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      391,
+      392,
       21,
       -1,
       -1,
@@ -3145,17 +3153,9 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      392,
-      -1,
-      390,
-      391,
-    },
-  
-
-    {
       393,
       -1,
-      389,
+      391,
       392,
     },
   
@@ -3163,7 +3163,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       394,
       -1,
-      386,
+      390,
       393,
     },
   
@@ -3171,13 +3171,21 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       395,
       -1,
-      379,
+      387,
       394,
     },
   
 
     {
       396,
+      -1,
+      380,
+      395,
+    },
+  
+
+    {
+      397,
       22,
       -1,
       -1,
@@ -3185,7 +3193,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      397,
+      398,
       23,
       -1,
       -1,
@@ -3193,15 +3201,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      398,
+      399,
       -1,
-      396,
       397,
+      398,
     },
   
 
     {
-      399,
+      400,
       24,
       -1,
       -1,
@@ -3209,7 +3217,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      400,
+      401,
       25,
       -1,
       -1,
@@ -3217,23 +3225,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      401,
-      -1,
-      399,
-      400,
-    },
-  
-
-    {
       402,
       -1,
-      398,
+      400,
       401,
     },
   
 
     {
       403,
+      -1,
+      399,
+      402,
+    },
+  
+
+    {
+      404,
       26,
       -1,
       -1,
@@ -3241,7 +3249,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      404,
+      405,
       27,
       -1,
       -1,
@@ -3249,15 +3257,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      405,
+      406,
       -1,
-      403,
       404,
+      405,
     },
   
 
     {
-      406,
+      407,
       28,
       -1,
       -1,
@@ -3265,7 +3273,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      407,
+      408,
       29,
       -1,
       -1,
@@ -3273,17 +3281,9 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      408,
-      -1,
-      406,
-      407,
-    },
-  
-
-    {
       409,
       -1,
-      405,
+      407,
       408,
     },
   
@@ -3291,13 +3291,21 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       410,
       -1,
-      402,
+      406,
       409,
     },
   
 
     {
       411,
+      -1,
+      403,
+      410,
+    },
+  
+
+    {
+      412,
       30,
       -1,
       -1,
@@ -3305,7 +3313,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      412,
+      413,
       31,
       -1,
       -1,
@@ -3313,15 +3321,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      413,
+      414,
       -1,
-      411,
       412,
+      413,
     },
   
 
     {
-      414,
+      415,
       92,
       -1,
       -1,
@@ -3329,7 +3337,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      415,
+      416,
       127,
       -1,
       -1,
@@ -3337,23 +3345,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      416,
-      -1,
-      414,
-      415,
-    },
-  
-
-    {
       417,
       -1,
-      413,
+      415,
       416,
     },
   
 
     {
       418,
+      -1,
+      414,
+      417,
+    },
+  
+
+    {
+      419,
       128,
       -1,
       -1,
@@ -3361,7 +3369,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      419,
+      420,
       129,
       -1,
       -1,
@@ -3369,15 +3377,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      420,
+      421,
       -1,
-      418,
       419,
+      420,
     },
   
 
     {
-      421,
+      422,
       130,
       -1,
       -1,
@@ -3385,7 +3393,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      422,
+      423,
       131,
       -1,
       -1,
@@ -3393,17 +3401,9 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      423,
-      -1,
-      421,
-      422,
-    },
-  
-
-    {
       424,
       -1,
-      420,
+      422,
       423,
     },
   
@@ -3411,7 +3411,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       425,
       -1,
-      417,
+      421,
       424,
     },
   
@@ -3419,7 +3419,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       426,
       -1,
-      410,
+      418,
       425,
     },
   
@@ -3427,13 +3427,21 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       427,
       -1,
-      395,
+      411,
       426,
     },
   
 
     {
       428,
+      -1,
+      396,
+      427,
+    },
+  
+
+    {
+      429,
       132,
       -1,
       -1,
@@ -3441,7 +3449,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      429,
+      430,
       133,
       -1,
       -1,
@@ -3449,15 +3457,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      430,
+      431,
       -1,
-      428,
       429,
+      430,
     },
   
 
     {
-      431,
+      432,
       134,
       -1,
       -1,
@@ -3465,7 +3473,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      432,
+      433,
       135,
       -1,
       -1,
@@ -3473,23 +3481,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      433,
-      -1,
-      431,
-      432,
-    },
-  
-
-    {
       434,
       -1,
-      430,
+      432,
       433,
     },
   
 
     {
       435,
+      -1,
+      431,
+      434,
+    },
+  
+
+    {
+      436,
       136,
       -1,
       -1,
@@ -3497,7 +3505,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      436,
+      437,
       137,
       -1,
       -1,
@@ -3505,15 +3513,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      437,
+      438,
       -1,
-      435,
       436,
+      437,
     },
   
 
     {
-      438,
+      439,
       138,
       -1,
       -1,
@@ -3521,7 +3529,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      439,
+      440,
       139,
       -1,
       -1,
@@ -3529,17 +3537,9 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      440,
-      -1,
-      438,
-      439,
-    },
-  
-
-    {
       441,
       -1,
-      437,
+      439,
       440,
     },
   
@@ -3547,13 +3547,21 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       442,
       -1,
-      434,
+      438,
       441,
     },
   
 
     {
       443,
+      -1,
+      435,
+      442,
+    },
+  
+
+    {
+      444,
       140,
       -1,
       -1,
@@ -3561,7 +3569,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      444,
+      445,
       141,
       -1,
       -1,
@@ -3569,15 +3577,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      445,
+      446,
       -1,
-      443,
       444,
+      445,
     },
   
 
     {
-      446,
+      447,
       142,
       -1,
       -1,
@@ -3585,7 +3593,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      447,
+      448,
       143,
       -1,
       -1,
@@ -3593,23 +3601,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      448,
-      -1,
-      446,
-      447,
-    },
-  
-
-    {
       449,
       -1,
-      445,
+      447,
       448,
     },
   
 
     {
       450,
+      -1,
+      446,
+      449,
+    },
+  
+
+    {
+      451,
       144,
       -1,
       -1,
@@ -3617,7 +3625,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      451,
+      452,
       145,
       -1,
       -1,
@@ -3625,15 +3633,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      452,
+      453,
       -1,
-      450,
       451,
+      452,
     },
   
 
     {
-      453,
+      454,
       146,
       -1,
       -1,
@@ -3641,7 +3649,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      454,
+      455,
       147,
       -1,
       -1,
@@ -3649,17 +3657,9 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      455,
-      -1,
-      453,
-      454,
-    },
-  
-
-    {
       456,
       -1,
-      452,
+      454,
       455,
     },
   
@@ -3667,7 +3667,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       457,
       -1,
-      449,
+      453,
       456,
     },
   
@@ -3675,13 +3675,21 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       458,
       -1,
-      442,
+      450,
       457,
     },
   
 
     {
       459,
+      -1,
+      443,
+      458,
+    },
+  
+
+    {
+      460,
       148,
       -1,
       -1,
@@ -3689,7 +3697,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      460,
+      461,
       149,
       -1,
       -1,
@@ -3697,15 +3705,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      461,
+      462,
       -1,
-      459,
       460,
+      461,
     },
   
 
     {
-      462,
+      463,
       150,
       -1,
       -1,
@@ -3713,7 +3721,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      463,
+      464,
       151,
       -1,
       -1,
@@ -3721,23 +3729,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      464,
-      -1,
-      462,
-      463,
-    },
-  
-
-    {
       465,
       -1,
-      461,
+      463,
       464,
     },
   
 
     {
       466,
+      -1,
+      462,
+      465,
+    },
+  
+
+    {
+      467,
       152,
       -1,
       -1,
@@ -3745,7 +3753,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      467,
+      468,
       153,
       -1,
       -1,
@@ -3753,15 +3761,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      468,
+      469,
       -1,
-      466,
       467,
+      468,
     },
   
 
     {
-      469,
+      470,
       154,
       -1,
       -1,
@@ -3769,7 +3777,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      470,
+      471,
       155,
       -1,
       -1,
@@ -3777,17 +3785,9 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      471,
-      -1,
-      469,
-      470,
-    },
-  
-
-    {
       472,
       -1,
-      468,
+      470,
       471,
     },
   
@@ -3795,13 +3795,21 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       473,
       -1,
-      465,
+      469,
       472,
     },
   
 
     {
       474,
+      -1,
+      466,
+      473,
+    },
+  
+
+    {
+      475,
       156,
       -1,
       -1,
@@ -3809,7 +3817,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      475,
+      476,
       157,
       -1,
       -1,
@@ -3817,15 +3825,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      476,
+      477,
       -1,
-      474,
       475,
+      476,
     },
   
 
     {
-      477,
+      478,
       158,
       -1,
       -1,
@@ -3833,7 +3841,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      478,
+      479,
       159,
       -1,
       -1,
@@ -3841,23 +3849,23 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      479,
-      -1,
-      477,
-      478,
-    },
-  
-
-    {
       480,
       -1,
-      476,
+      478,
       479,
     },
   
 
     {
       481,
+      -1,
+      477,
+      480,
+    },
+  
+
+    {
+      482,
       160,
       -1,
       -1,
@@ -3865,7 +3873,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      482,
+      483,
       161,
       -1,
       -1,
@@ -3873,15 +3881,15 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      483,
+      484,
       -1,
-      481,
       482,
+      483,
     },
   
 
     {
-      484,
+      485,
       162,
       -1,
       -1,
@@ -3889,7 +3897,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      485,
+      486,
       163,
       -1,
       -1,
@@ -3897,17 +3905,9 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
   
 
     {
-      486,
-      -1,
-      484,
-      485,
-    },
-  
-
-    {
       487,
       -1,
-      483,
+      485,
       486,
     },
   
@@ -3915,7 +3915,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       488,
       -1,
-      480,
+      484,
       487,
     },
   
@@ -3923,7 +3923,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       489,
       -1,
-      473,
+      481,
       488,
     },
   
@@ -3931,7 +3931,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       490,
       -1,
-      458,
+      474,
       489,
     },
   
@@ -3939,7 +3939,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       491,
       -1,
-      427,
+      459,
       490,
     },
   
@@ -3947,7 +3947,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       492,
       -1,
-      364,
+      428,
       491,
     },
   
@@ -3955,7 +3955,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       493,
       -1,
-      295,
+      365,
       492,
     },
   
@@ -3963,7 +3963,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       494,
       -1,
-      168,
+      296,
       493,
     },
   
@@ -3971,7 +3971,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       495,
       -1,
-      167,
+      169,
       494,
     },
   
@@ -3979,7 +3979,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       496,
       -1,
-      166,
+      168,
       495,
     },
   
@@ -3987,7 +3987,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       497,
       -1,
-      165,
+      167,
       496,
     },
   
@@ -3995,7 +3995,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       498,
       -1,
-      162,
+      164,
       497,
     },
   
@@ -4003,7 +4003,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       499,
       -1,
-      161,
+      163,
       498,
     },
   
@@ -4011,7 +4011,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       500,
       -1,
-      158,
+      160,
       499,
     },
   
@@ -4019,7 +4019,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       501,
       -1,
-      155,
+      157,
       500,
     },
   
@@ -4027,7 +4027,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       502,
       -1,
-      150,
+      154,
       501,
     },
   
@@ -4035,7 +4035,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       503,
       -1,
-      147,
+      151,
       502,
     },
   
@@ -4043,7 +4043,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       504,
       -1,
-      144,
+      148,
       503,
     },
   
@@ -4051,7 +4051,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       505,
       -1,
-      139,
+      145,
       504,
     },
   
@@ -4059,7 +4059,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       506,
       -1,
-      134,
+      140,
       505,
     },
   
@@ -4067,7 +4067,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       507,
       -1,
-      127,
+      133,
       506,
     },
   
@@ -4075,7 +4075,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       508,
       -1,
-      112,
+      118,
       507,
     },
   
@@ -4083,7 +4083,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       509,
       -1,
-      93,
+      103,
       508,
     },
   
@@ -4091,7 +4091,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       510,
       -1,
-      70,
+      84,
       509,
     },
   
@@ -4099,7 +4099,7 @@ static const huffman_decoder_entry_t huffman_decoder_table[] = {
     {
       511,
       -1,
-      53,
+      57,
       510,
     },
   
