@@ -44,7 +44,7 @@ typedef struct hpack_header_table_entry_t {
   // TODO can these flags be moved to a bitset?
   bool from_static_table;
 
-  bool in_refset; 
+  bool in_refset;
 
   bool added_on_current_request;
 
@@ -69,9 +69,9 @@ typedef struct hpack_context_t {
 
 } hpack_context_t;
 
-hpack_decode_quantity_result_t* hpack_decode_quantity(uint8_t* buf, size_t length, uint8_t offset); 
+hpack_decode_quantity_result_t* hpack_decode_quantity(uint8_t* buf, size_t length, uint8_t offset);
 
-size_t hpack_encode_quantity(uint8_t* buf, size_t offset, size_t quantity); 
+size_t hpack_encode_quantity(uint8_t* buf, size_t offset, size_t quantity);
 
 hpack_context_t* hpack_context_init(size_t header_table_size);
 
