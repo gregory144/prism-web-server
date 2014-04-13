@@ -373,7 +373,7 @@ void hpack_decode_literal_header(
 
     // literal name
     string_and_length_t* sl = hpack_decode_string_literal(context, buf, length, current);
-    key_name = sl->value;
+    key_name = (char*)sl->value;
     key_name_length = sl->length;
     free(sl);
     if (LOG_TRACE) log_trace("Literal name: '%s' (%ld)\n", key_name, key_name_length);
@@ -401,7 +401,7 @@ void hpack_decode_literal_header(
   }
   // literal value
   string_and_length_t* sl = hpack_decode_string_literal(context, buf, length, current);
-  char* value = sl->value;
+  char* value = (char*)sl->value;
   size_t value_length = sl->length;
   free(sl);
   if (LOG_TRACE) log_trace("Emitting header literal value: %s (%ld), %s (%ld)\n", key_name, key_name_length, value, value_length);

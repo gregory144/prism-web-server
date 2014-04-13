@@ -10,11 +10,11 @@
 extern const size_t huffman_decoder_size;
 extern const huffman_decoder_entry_t huffman_decoder_table[];
 
-huffman_result_t* huffman_decode(uint8_t* input, size_t input_length_in_octets) {
-  size_t input_length = input_length_in_octets * 8;
+huffman_result_t* huffman_decode(const uint8_t* input, size_t input_length_in_octets) {
+  const size_t input_length = input_length_in_octets * 8;
   // Every 4 bits might represent a character, so a char can be 2 characters
-  size_t output_length = (input_length / 4) + 1;
-  uint8_t* output = calloc(sizeof(uint8_t), output_length);
+  const size_t output_length = (input_length / 4) + 1;
+  uint8_t* output = malloc(sizeof(uint8_t) * output_length);
   size_t output_index = 0,
          input_index = 0;
 
@@ -36,13 +36,13 @@ huffman_result_t* huffman_decode(uint8_t* input, size_t input_length_in_octets) 
     output[output_index++] = current.value;
   }
 
-  huffman_result_t* result = malloc(sizeof(huffman_result_t));
+  huffman_result_t* const result = malloc(sizeof(huffman_result_t));
   result->value = output;
   result->length = output_index;
   return result;
 }
 
-huffman_result_t* huffman_encode(uint8_t* buf, size_t len) {
+huffman_result_t* huffman_encode(const uint8_t* buf, size_t len) {
   size_t max_len = len;
   uint8_t* encoded = malloc(sizeof(char) * (max_len + 1));
   size_t encoded_index = 0;

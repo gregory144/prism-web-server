@@ -31,28 +31,28 @@ START_TEST(test_huffman_decode_single_char) {
   uint8_t buf[] = { 0xed }; // 0b11101101 (66/B)
   huffman_result_t* result = huffman_decode(buf, 1);
   ck_assert_int_eq(1, result->length);
-  ck_assert_str_eq("B", result->value);
+  ck_assert_str_eq("B", (char*)result->value);
 } END_TEST
 
 START_TEST(test_huffman_decode_single_char_with_eos) {
   uint8_t buf[] = { 0x2f }; // 0b00101111 (50/2)
   huffman_result_t* result = huffman_decode(buf, 1);
   ck_assert_int_eq(1, result->length);
-  ck_assert_str_eq("2", result->value);
+  ck_assert_str_eq("2", (char*)result->value);
 } END_TEST
 
 START_TEST(test_huffman_decode_two_chars) {
   uint8_t buf[] = { 0xd9, 0xf6 }; // 0b1101100111110110 (78/N, 81/Q)
   huffman_result_t* result = huffman_decode(buf, 2);
   ck_assert_int_eq(2, result->length);
-  ck_assert_str_eq("NQ", result->value);
+  ck_assert_str_eq("NQ", (char*)result->value);
 } END_TEST
 
 START_TEST(test_huffman_decode_two_chars_with_eos) {
   uint8_t buf[] = { 0xd3, 0xab }; // 0b1101 0011 1010 1011 (70/F, 71/G)
   huffman_result_t* result = huffman_decode(buf, 2);
   ck_assert_int_eq(2, result->length);
-  ck_assert_str_eq("FG", result->value);
+  ck_assert_str_eq("FG", (char*)result->value);
 } END_TEST
 
 START_TEST(test_huffman_encode_single_8bit_char) {

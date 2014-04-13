@@ -7,15 +7,15 @@
 
 #include "util.h"
 
-string_and_length_t* string_and_length(char* string, size_t length) {
+string_and_length_t* string_and_length(const char* string, size_t length) {
   string_and_length_t* sl = malloc(sizeof(string_and_length_t));
   sl->value = string;
   sl->length = length;
   return sl;
 }
 
-bool get_bit(uint8_t* buffer, size_t total_bit_index) {
-  uint8_t* at_byte = buffer + (total_bit_index / 8);
+bool get_bit(const uint8_t* buffer, size_t total_bit_index) {
+  const uint8_t* at_byte = buffer + (total_bit_index / 8);
   size_t bit_index = total_bit_index % 8;
 
   int b = *at_byte;

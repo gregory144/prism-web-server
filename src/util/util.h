@@ -77,13 +77,13 @@
     dest[len] = '\0'
 
 typedef struct {
-  char* value;
+  const char* value;
   size_t length;
 } string_and_length_t;
 
-string_and_length_t* string_and_length(char* string, size_t length);
+string_and_length_t* string_and_length(const char* string, size_t length);
 
-bool get_bit(uint8_t* buffer, size_t total_bit_index);
+bool get_bit(const uint8_t* buffer, size_t total_bit_index);
 
 uint8_t get_bits8(uint8_t* buf, size_t offset, size_t num_bytes, uint8_t mask);
 
