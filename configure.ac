@@ -1,4 +1,4 @@
-AC_INIT([weta],[0.0.1],[greg@gtgross.com])
+AC_INIT([conduit],[0.0.1],[greg@gtgross.com])
 AM_INIT_AUTOMAKE([foreign -Wall -Werror])
 
 CFLAGS="-g -O0 -Wall -Wextra"
