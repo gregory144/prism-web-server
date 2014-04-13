@@ -105,10 +105,12 @@ void http_emit_headers(http_connection_t* connection, http_stream_t* stream, mul
   size_t headers_length = 0;
   uint8_t* hpack_buf = NULL;
   if (headers != NULL) {
-    hpack_encode_result_t* encoded = hpack_encode(connection->encoding_context, headers);
-    hpack_buf = encoded->buf;
-    headers_length = encoded->buf_length;
-    free(encoded);
+    hpack_encode_result_t encoded;
+    if (!hpack_encode(connection->encoding_context, headers, &encoded)) {
+      abort();
+    }
+    hpack_buf = encoded.buf;
+    headers_length = encoded.buf_length;
   }
   size_t buf_length = FRAME_HEADER_SIZE + headers_length;
   uint8_t buf[buf_length];

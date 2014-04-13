@@ -69,7 +69,7 @@ typedef struct hpack_context_t {
 
 } hpack_context_t;
 
-hpack_decode_quantity_result_t* hpack_decode_quantity(uint8_t* buf, size_t length, uint8_t offset);
+void hpack_decode_quantity(uint8_t* buf, size_t length, uint8_t offset, hpack_decode_quantity_result_t* result);
 
 size_t hpack_encode_quantity(uint8_t* buf, size_t offset, size_t quantity);
 
@@ -81,6 +81,6 @@ void hpack_header_table_adjust_size(hpack_context_t* context, size_t new_size);
 
 multimap_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length);
 
-hpack_encode_result_t* hpack_encode(hpack_context_t* context, multimap_t* headers);
+bool hpack_encode(hpack_context_t* context, multimap_t* headers, hpack_encode_result_t* result);
 
 #endif

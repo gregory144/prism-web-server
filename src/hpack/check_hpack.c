@@ -18,23 +18,26 @@ void teardown() {
 
 START_TEST(test_hpack_decode_quantity_in_8bit_prefix) {
   unsigned char buf[] = { 0x2a };
-  hpack_decode_quantity_result_t* decoded = hpack_decode_quantity(buf, 1, 0);
-  ck_assert_int_eq(decoded->value, 42);
-  ck_assert_int_eq(decoded->num_bytes, 1);
+  hpack_decode_quantity_result_t decoded;
+  hpack_decode_quantity(buf, 1, 0, &decoded);
+  ck_assert_int_eq(decoded.value, 42);
+  ck_assert_int_eq(decoded.num_bytes, 1);
 } END_TEST
 
 START_TEST(test_hpack_decode_quantity_in_5bit_prefix) {
   unsigned char buf[] = { 0xea };
-  hpack_decode_quantity_result_t* decoded = hpack_decode_quantity(buf, 1, 3);
-  ck_assert_int_eq(decoded->value, 10);
-  ck_assert_int_eq(decoded->num_bytes, 1);
+  hpack_decode_quantity_result_t decoded;
+  hpack_decode_quantity(buf, 1, 3, &decoded);
+  ck_assert_int_eq(decoded.value, 10);
+  ck_assert_int_eq(decoded.num_bytes, 1);
 } END_TEST
 
 START_TEST(test_hpack_decode_large_quantity_in_5bit_prefix) {
   unsigned char buf[] = { 0xff, 0x9a, 0x0a };
-  hpack_decode_quantity_result_t* decoded = hpack_decode_quantity(buf, 3, 3);
-  ck_assert_int_eq(decoded->value, 1337);
-  ck_assert_int_eq(decoded->num_bytes, 3);
+  hpack_decode_quantity_result_t decoded;
+  hpack_decode_quantity(buf, 3, 3, &decoded);
+  ck_assert_int_eq(decoded.value, 1337);
+  ck_assert_int_eq(decoded.num_bytes, 3);
 } END_TEST
 
 START_TEST(test_hpack_encode_10_in_5bit_prefix) {
@@ -73,8 +76,9 @@ START_TEST(test_hpack_encode_and_decode_smaller_numbers) {
   size_t i;
   for (i = 0; i < INT_MAX; i += 1000000) {
     hpack_encode_quantity(buf, 0, i);
-    hpack_decode_quantity_result_t* decoded = hpack_decode_quantity(buf, 1024, 0);
-    ck_assert_int_eq(decoded->value, i);
+    hpack_decode_quantity_result_t decoded;
+    hpack_decode_quantity(buf, 1024, 0, &decoded);
+    ck_assert_int_eq(decoded.value, i);
   }
 } END_TEST
 
@@ -83,8 +87,9 @@ START_TEST(test_hpack_encode_and_decode_small_numbers) { // 1 - 2^16
   size_t i;
   for (i = 0; i < 2 << 15; i++) {
     hpack_encode_quantity(buf, 0, i);
-    hpack_decode_quantity_result_t* decoded = hpack_decode_quantity(buf, 1024, 0);
-    ck_assert_int_eq(decoded->value, i);
+    hpack_decode_quantity_result_t decoded;
+    hpack_decode_quantity(buf, 1024, 0, &decoded);
+    ck_assert_int_eq(decoded.value, i);
   }
 } END_TEST
 
@@ -96,8 +101,9 @@ START_TEST(test_hpack_encode_and_decode_large_numbers) {
   int addand = 6;
   for (i = 0; i < 25; i++) {
     hpack_encode_quantity(buf, 0, value);
-    hpack_decode_quantity_result_t* decoded = hpack_decode_quantity(buf, 1024, 0);
-    ck_assert_int_eq(decoded->value, value);
+    hpack_decode_quantity_result_t decoded;
+    hpack_decode_quantity(buf, 1024, 0, &decoded);
+    ck_assert_int_eq(decoded.value, value);
     value = value * multiplier + addand;
   }
 } END_TEST

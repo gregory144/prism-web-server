@@ -80,8 +80,8 @@ static_entry_t static_table[] = {
 
 const size_t static_table_length = sizeof(static_table) / sizeof(static_entry_t);
 
-hpack_decode_quantity_result_t* hpack_decode_quantity(uint8_t* buf,
-    size_t length, uint8_t offset) {
+void hpack_decode_quantity(uint8_t* buf, size_t length, uint8_t offset,
+    hpack_decode_quantity_result_t* result) {
   size_t prefix_length = 8 - offset;
   uint8_t limit = (1 << prefix_length) - 1; // 2^prefix_length - 1
   size_t i = 0;
@@ -106,11 +106,8 @@ hpack_decode_quantity_result_t* hpack_decode_quantity(uint8_t* buf,
     index++;
   }
 
-  hpack_decode_quantity_result_t* result = malloc(
-      sizeof(hpack_decode_quantity_result_t));
   result->num_bytes = index;
   result->value = i;
-  return result;
 }
 
 /**
@@ -337,10 +334,10 @@ string_and_length_t* hpack_decode_string_literal(
     size_t* current) {
   UNUSED(context);
   bool first_bit = get_bit(buf + (*current), 0); // is it huffman encoded?
-  hpack_decode_quantity_result_t* key_name_result = hpack_decode_quantity(buf + (*current), length - (*current), 1);
-  *current += key_name_result->num_bytes;
-  size_t key_name_length = key_name_result->value;
-  free(key_name_result);
+  hpack_decode_quantity_result_t key_name_result;
+  hpack_decode_quantity(buf + (*current), length - (*current), 1, &key_name_result);
+  *current += key_name_result.num_bytes;
+  size_t key_name_length = key_name_result.value;
   if (LOG_TRACE) log_trace("Decoding string literal length: %ld\n", key_name_length);
   char* key_name;
   if (first_bit) {
@@ -361,11 +358,11 @@ void hpack_decode_literal_header(
     hpack_context_t* context, multimap_t* headers, uint8_t* buf,
     size_t length, size_t* current, size_t bit_offset, bool add_to_header_table) {
 
-  hpack_decode_quantity_result_t* index_result = hpack_decode_quantity(buf + (*current), length - (*current), bit_offset);
-  size_t header_table_index = index_result->value;
-  *current += index_result->num_bytes;
-  if (LOG_TRACE) log_trace("Adding literal header field: %ld, %ld\n", index_result->value, index_result->num_bytes);
-  free(index_result);
+  hpack_decode_quantity_result_t index_result;
+  hpack_decode_quantity(buf + (*current), length - (*current), bit_offset, &index_result);
+  size_t header_table_index = index_result.value;
+  *current += index_result.num_bytes;
+  if (LOG_TRACE) log_trace("Adding literal header field: %ld, %ld\n", index_result.value, index_result.num_bytes);
 
   char* key_name = NULL;
   size_t key_name_length = 0;
@@ -424,13 +421,15 @@ void hpack_decode_indexed_header(
     hpack_context_t* context, multimap_t* headers, uint8_t* buf,
     size_t length, size_t* current) {
 
-  hpack_decode_quantity_result_t* result = hpack_decode_quantity(buf + (*current), length - (*current), 1);
-  *current += result->num_bytes;
-  if (LOG_TRACE) log_trace("Adding indexed header field: %ld\n", result->value);
+  hpack_decode_quantity_result_t result;
+  hpack_decode_quantity(buf + (*current), length - (*current), 1, &result);
+  *current += result.num_bytes;
+  size_t index = result.value;
+  if (LOG_TRACE) log_trace("Adding indexed header field: %ld\n", index);
 
   if (LOG_TRACE) log_trace("Header table size: %ld\n", context->header_table->entries->length);
 
-  if (result->value == 0) {
+  if (index == 0) {
 
     // decoding error (see 4.2)
     abort();
@@ -438,12 +437,12 @@ void hpack_decode_indexed_header(
   } else {
 
     // if the value is in the reference set - remove it from the reference set
-    hpack_header_table_entry_t* entry = hpack_header_table_get(context, result->value);
+    hpack_header_table_entry_t* entry = hpack_header_table_get(context, index);
     if (entry && hpack_reference_set_contains(entry)) {
       hpack_reference_set_remove(entry);
     } else {
       if (!entry) {
-        entry = hpack_static_table_get(context, result->value);
+        entry = hpack_static_table_get(context, index);
       }
       if (!entry) {
         // TODO protocol error - invalid index
@@ -457,18 +456,16 @@ void hpack_decode_indexed_header(
 
   }
 
-  free(result);
-
 }
 
 void hpack_decode_context_update(
     hpack_context_t* context, uint8_t* buf,
     size_t length, size_t* current, bool fourth_bit) {
 
-  hpack_decode_quantity_result_t* result = hpack_decode_quantity(buf + (*current), length - (*current), 4);
-  *current += result->num_bytes;
-  size_t new_size = result->value;
-  free(result);
+  hpack_decode_quantity_result_t result;
+  hpack_decode_quantity(buf + (*current), length - (*current), 4, &result);
+  *current += result.num_bytes;
+  size_t new_size = result.value;
 
   // 4.4 encoding context update
   if (fourth_bit == 0) {
@@ -540,6 +537,12 @@ multimap_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length) 
 
   size_t current = 0;
   multimap_t* headers = multimap_init_with_string_keys();
+  if (!headers) {
+    if (LOG_ERROR) {
+      log_error("Could not allocate memory for headers\n");
+    }
+    return NULL;
+  }
 
   if (LOG_TRACE) log_trace("Decompressing headers: %ld, %ld\n", current, length);
   while (current < length) {
@@ -583,11 +586,17 @@ multimap_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length) 
   return headers;
 }
 
-hpack_encode_result_t* hpack_encode(hpack_context_t* context, multimap_t* headers) {
+bool hpack_encode(hpack_context_t* context, multimap_t* headers, hpack_encode_result_t* result) {
   UNUSED(context);
 
   // naive hpack encoding - never add to the header table
   uint8_t* encoded = malloc(4096); // TODO - we need to construct this dynamically
+  if (!encoded) {
+    if (LOG_ERROR) {
+      log_error("Could not allocate memory for hpack encoding\n");
+    }
+    return false;
+  }
   size_t encoded_index = 0;
 
   multimap_iter_t iter;
@@ -603,10 +612,10 @@ hpack_encode_result_t* hpack_encode(hpack_context_t* context, multimap_t* header
     encoded[encoded_index] = 0x80; // set huffman encoded bit
     huffman_result_t encoded_name;
     if (!huffman_encode((uint8_t*)name, name_length, &encoded_name)) {
-      abort();
+      log_error("Could not allocate memory for huffman encoding\n");
+      return false;
     }
     encoded_index += hpack_encode_quantity(encoded, (encoded_index * 8) + 1, encoded_name.length);
-    // TODO how does memcpy fail?
     memcpy(encoded + encoded_index, encoded_name.value, encoded_name.length);
     encoded_index += encoded_name.length;
     free(encoded_name.value);
@@ -614,7 +623,8 @@ hpack_encode_result_t* hpack_encode(hpack_context_t* context, multimap_t* header
     encoded[encoded_index] = 0x80; // set huffman encoded bit
     huffman_result_t encoded_value;
     if (!huffman_encode((uint8_t*)value, value_length, &encoded_value)) {
-      abort();
+      log_error("Could not allocate memory for huffman encoding\n");
+      return false;
     }
     encoded_index += hpack_encode_quantity(encoded, (encoded_index * 8) + 1, encoded_value.length);
     // TODO how does memcpy fail?
@@ -622,10 +632,9 @@ hpack_encode_result_t* hpack_encode(hpack_context_t* context, multimap_t* header
     encoded_index += encoded_value.length;
     free(encoded_value.value);
   }
-  hpack_encode_result_t* result = malloc(sizeof(hpack_encode_result_t));
   result->buf = encoded;
   result->buf_length = encoded_index;
   if (LOG_TRACE) log_trace("Encoded headers into %ld bytes\n", encoded_index);
-  return result;
+  return true;
 }
 
