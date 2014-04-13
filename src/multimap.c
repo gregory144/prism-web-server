@@ -49,7 +49,7 @@ multimap_t* multimap_init_with_size(hash_func_t hash_func,
   if (table == NULL) {
     return NULL;
   }
-  table->buckets= calloc(initial_size, sizeof(multimap_entry_t));
+  table->buckets = calloc(initial_size, sizeof(multimap_entry_t));
   if (table->buckets == NULL) {
     return NULL;
   }
@@ -135,7 +135,7 @@ bool multimap_grow(multimap_t* table) {
     }
   }
   return true;
-} 
+}
 
 /**
  * Adds the given key and value to the end of the list of values
