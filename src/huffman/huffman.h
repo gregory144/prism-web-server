@@ -2,7 +2,7 @@
  *
  * Implements Huffman encoding/decoding for HPACK. See
  *
- * http://tools.ietf.org/html/draft-ietf-httpbis-header-compression-05
+ * http://tools.ietf.org/html/draft-ietf-httpbis-header-compression-07#section-4.1.2
  */
 
 #ifndef HUFFMAN_H
@@ -30,21 +30,33 @@ typedef struct huffman_decoder_entry_t {
  */
 typedef struct huffman_encoder_entry_t {
   uint16_t index;
-  // the binary data used to represent the ascii code
+  // the binary data used to represent the ASCII code
   uint32_t value;
+  // the length in bits of the huffman code for this value
   uint8_t length;
 } huffman_encoder_entry_t;
 
+/**
+ * A string + length pair
+ */
 typedef struct huffman_result_t {
   uint8_t* value;
+  // length in octets
   size_t length;
 } huffman_result_t;
 
 /**
+ * Decodes a HTTP2 huffman code into an ASCII string.
  *
+ * See http://tools.ietf.org/html/draft-ietf-httpbis-header-compression-07
  */
-huffman_result_t* huffman_decode(const uint8_t* buf, size_t len);
+bool huffman_decode(const uint8_t* buf, size_t len, huffman_result_t* const result);
 
-huffman_result_t* huffman_encode(const uint8_t* buf, size_t len);
+/**
+ * Encodes an ASCII string into HTTP2 huffman code.
+ *
+ * See http://tools.ietf.org/html/draft-ietf-httpbis-header-compression-07
+ */
+bool huffman_encode(const uint8_t* buf, size_t len, huffman_result_t* const result);
 
 #endif

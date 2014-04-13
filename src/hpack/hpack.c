@@ -344,12 +344,12 @@ string_and_length_t* hpack_decode_string_literal(
   if (LOG_TRACE) log_trace("Decoding string literal length: %ld\n", key_name_length);
   char* key_name;
   if (first_bit) {
-    huffman_result_t* huffman_result = huffman_decode(buf + (*current), key_name_length);
+    huffman_result_t huffman_result;
+    huffman_decode(buf + (*current), key_name_length, &huffman_result);
     *current += key_name_length;
-    key_name_length = huffman_result->length;
-    COPY_STRING(key_name, huffman_result->value, key_name_length);
-    free(huffman_result->value);
-    free(huffman_result);
+    key_name_length = huffman_result.length;
+    COPY_STRING(key_name, huffman_result.value, key_name_length);
+    free(huffman_result.value);
   } else {
     COPY_STRING(key_name, buf + (*current), key_name_length);
     *current += key_name_length;
@@ -601,20 +601,26 @@ hpack_encode_result_t* hpack_encode(hpack_context_t* context, multimap_t* header
     encoded[encoded_index++] = 0x40; // 4.3.1. Literal Header Field without Indexing
 
     encoded[encoded_index] = 0x80; // set huffman encoded bit
-    huffman_result_t* encoded_name = huffman_encode((uint8_t*)name, name_length);
-    encoded_index += hpack_encode_quantity(encoded, (encoded_index * 8) + 1, encoded_name->length);
-    memcpy(encoded + encoded_index, encoded_name->value, encoded_name->length);
-    encoded_index += encoded_name->length;
-    free(encoded_name->value);
-    free(encoded_name);
+    huffman_result_t encoded_name;
+    if (!huffman_encode((uint8_t*)name, name_length, &encoded_name)) {
+      abort();
+    }
+    encoded_index += hpack_encode_quantity(encoded, (encoded_index * 8) + 1, encoded_name.length);
+    // TODO how does memcpy fail?
+    memcpy(encoded + encoded_index, encoded_name.value, encoded_name.length);
+    encoded_index += encoded_name.length;
+    free(encoded_name.value);
 
     encoded[encoded_index] = 0x80; // set huffman encoded bit
-    huffman_result_t* encoded_value = huffman_encode((uint8_t*)value, value_length);
-    encoded_index += hpack_encode_quantity(encoded, (encoded_index * 8) + 1, encoded_value->length);
-    memcpy(encoded + encoded_index, encoded_value->value, encoded_value->length);
-    encoded_index += encoded_value->length;
-    free(encoded_value->value);
-    free(encoded_value);
+    huffman_result_t encoded_value;
+    if (!huffman_encode((uint8_t*)value, value_length, &encoded_value)) {
+      abort();
+    }
+    encoded_index += hpack_encode_quantity(encoded, (encoded_index * 8) + 1, encoded_value.length);
+    // TODO how does memcpy fail?
+    memcpy(encoded + encoded_index, encoded_value.value, encoded_value.length);
+    encoded_index += encoded_value.length;
+    free(encoded_value.value);
   }
   hpack_encode_result_t* result = malloc(sizeof(hpack_encode_result_t));
   result->buf = encoded;

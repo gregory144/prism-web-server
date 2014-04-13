@@ -44,27 +44,23 @@ int main(int argc, char* argv[]) {
     bool free_intermediate = false;
     size_t intermediate_length = bytes_read;
 
-    huffman_result_t* result;
+    huffman_result_t result;
 
     if (encode) {
 
-      result = huffman_encode(intermediate, intermediate_length);
-      if (!result) {
+      if (!huffman_encode(intermediate, intermediate_length, &result)) {
         fprintf(stderr, "Encode failed\n");
         exit(EXIT_FAILURE);
       }
 
-      intermediate = result->value;
+      intermediate = result.value;
       free_intermediate = true;
-      intermediate_length = result->length;
-
-      free(result);
+      intermediate_length = result.length;
     }
 
     if (decode) {
 
-      result = huffman_decode(intermediate, intermediate_length);
-      if (!result) {
+      if (!huffman_decode(intermediate, intermediate_length, &result)) {
         fprintf(stderr, "Decode failed\n");
         exit(EXIT_FAILURE);
       }
@@ -73,11 +69,9 @@ int main(int argc, char* argv[]) {
         free(intermediate);
       }
 
-      intermediate = result->value;
+      intermediate = result.value;
       free_intermediate = true;
-      intermediate_length = result->length;
-
-      free(result);
+      intermediate_length = result.length;
     }
 
     total_bytes_written += intermediate_length;

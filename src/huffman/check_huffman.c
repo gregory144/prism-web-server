@@ -29,61 +29,69 @@ void teardown() {
 
 START_TEST(test_huffman_decode_single_char) {
   uint8_t buf[] = { 0xed }; // 0b11101101 (66/B)
-  huffman_result_t* result = huffman_decode(buf, 1);
-  ck_assert_int_eq(1, result->length);
-  ck_assert_str_eq("B", (char*)result->value);
+  huffman_result_t result;
+  ck_assert(huffman_decode(buf, 1, &result));
+  ck_assert_int_eq(1, result.length);
+  ck_assert_str_eq("B", (char*)result.value);
 } END_TEST
 
 START_TEST(test_huffman_decode_single_char_with_eos) {
   uint8_t buf[] = { 0x2f }; // 0b00101111 (50/2)
-  huffman_result_t* result = huffman_decode(buf, 1);
-  ck_assert_int_eq(1, result->length);
-  ck_assert_str_eq("2", (char*)result->value);
+  huffman_result_t result;
+  ck_assert(huffman_decode(buf, 1, &result));
+  ck_assert_int_eq(1, result.length);
+  ck_assert_str_eq("2", (char*)result.value);
 } END_TEST
 
 START_TEST(test_huffman_decode_two_chars) {
   uint8_t buf[] = { 0xd9, 0xf6 }; // 0b1101100111110110 (78/N, 81/Q)
-  huffman_result_t* result = huffman_decode(buf, 2);
-  ck_assert_int_eq(2, result->length);
-  ck_assert_str_eq("NQ", (char*)result->value);
+  huffman_result_t result;
+  ck_assert(huffman_decode(buf, 2, &result));
+  ck_assert_int_eq(2, result.length);
+  ck_assert_str_eq("NQ", (char*)result.value);
 } END_TEST
 
 START_TEST(test_huffman_decode_two_chars_with_eos) {
   uint8_t buf[] = { 0xd3, 0xab }; // 0b1101 0011 1010 1011 (70/F, 71/G)
-  huffman_result_t* result = huffman_decode(buf, 2);
-  ck_assert_int_eq(2, result->length);
-  ck_assert_str_eq("FG", (char*)result->value);
+  huffman_result_t result;
+  ck_assert(huffman_decode(buf, 2, &result));
+  ck_assert_int_eq(2, result.length);
+  ck_assert_str_eq("FG", (char*)result.value);
 } END_TEST
 
 START_TEST(test_huffman_encode_single_8bit_char) {
   uint8_t buf[] = { 'E' };
   uint8_t encoded[] = { 0xef };
 
-  huffman_result_t* result = huffman_encode(buf, 1);
-  check_encoded_val(encoded, 1, result->value, result->length);
+  huffman_result_t result;
+  ck_assert(huffman_encode(buf, 1, &result));
+  check_encoded_val(encoded, 1, result.value, result.length);
 } END_TEST
 
 START_TEST(test_huffman_encode_single_5bit_char) {
   uint8_t buf[] = { 't' };
   uint8_t encoded[] = { 0x77 }; // padded with 1s
 
-  huffman_result_t* result = huffman_encode(buf, 1);
-  check_encoded_val(encoded, 1, result->value, result->length);
+  huffman_result_t result;
+  ck_assert(huffman_encode(buf, 1, &result));
+  check_encoded_val(encoded, 1, result.value, result.length);
 } END_TEST
 
 START_TEST(test_huffman_encode_single_9bit_char) {
   uint8_t buf[] = { 'Z' };
   uint8_t encoded[] = { 0xfd, 0xff }; // padded with 1s
 
-  huffman_result_t* result = huffman_encode(buf, 1);
-  check_encoded_val(encoded, 2, result->value, result->length);
+  huffman_result_t result;
+  ck_assert(huffman_encode(buf, 1, &result));
+  check_encoded_val(encoded, 2, result.value, result.length);
 } END_TEST
 
 START_TEST(test_huffman_encode_12bit_out) {
   uint8_t buf[] = { '5', '4' };
   uint8_t encoded[] = { 0x86, 0x0f }; // padded with 1s
-  huffman_result_t* result = huffman_encode(buf, 2);
-  check_encoded_val(encoded, 2, result->value, result->length);
+  huffman_result_t result;
+  ck_assert(huffman_encode(buf, 2, &result));
+  check_encoded_val(encoded, 2, result.value, result.length);
 } END_TEST
 
 START_TEST(test_huffman_encode_longer_string) {
@@ -91,8 +99,9 @@ START_TEST(test_huffman_encode_longer_string) {
   uint8_t encoded[] = {
     0xf9, 0x2e, 0xcb, 0x1a, 0x6f, 0xcb, 0x70, 0xb2, 0x9f, 0xfe, 0x7f
   }; // padded with 1s
-  huffman_result_t* result = huffman_encode((uint8_t*)buf, 12);
-  check_encoded_val(encoded, 11, result->value, result->length);
+  huffman_result_t result;
+  ck_assert(huffman_encode((uint8_t*)buf, 12, &result));
+  check_encoded_val(encoded, 11, result.value, result.length);
 } END_TEST
 
 START_TEST(test_huffman_encode_date) {
@@ -102,8 +111,9 @@ START_TEST(test_huffman_encode_date) {
     0x18, 0x80, 0x60, 0x30, 0x4b, 0x31, 0x04, 0xd0,
     0xc8, 0x6d, 0x5a, 0xe8
   }; // padded with 1s
-  huffman_result_t* result = huffman_encode((uint8_t*)buf, strlen(buf));
-  check_encoded_val(encoded, 20, result->value, result->length);
+  huffman_result_t result;
+  ck_assert(huffman_encode((uint8_t*)buf, strlen(buf), &result));
+  check_encoded_val(encoded, 20, result.value, result.length);
 } END_TEST
 
 Suite* suite() {
