@@ -7,20 +7,13 @@
 
 #include "util.h"
 
-string_and_length_t* string_and_length(const char* string, size_t length) {
-  string_and_length_t* sl = malloc(sizeof(string_and_length_t));
-  sl->value = string;
-  sl->length = length;
-  return sl;
-}
-
-bool get_bit(const uint8_t* buffer, size_t total_bit_index) {
+bool get_bit(const uint8_t * buffer, size_t total_bit_index) {
   const uint8_t* at_byte = buffer + (total_bit_index / 8);
   size_t bit_index = total_bit_index % 8;
 
-  int b = *at_byte;
-  int shifted = b >> (7 - bit_index);
-  int res = shifted & 1;
+  uint8_t b = *at_byte;
+  uint8_t shifted = b >> (7 - bit_index);
+  bool res = (bool)(shifted & 1);
   return res;
 }
 
@@ -56,28 +49,42 @@ static const char *DAY_NAMES[] =
 static const char *MONTH_NAMES[] =
   { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+static const size_t RFC1123_TIME_LEN = 29;
 
-char* date_rfc1123() {
-    const int RFC1123_TIME_LEN = 29;
+/**
+ * Returns the current date + time as a string as specified
+ * by RFC1123
+ *
+ * Returns NULL if malloc or strftime fail.
+ */
+/*@null@*/ char* date_rfc1123() {
     time_t t;
     struct tm* tm;
-    char* buf = malloc(RFC1123_TIME_LEN+1);
+    size_t buf_len = RFC1123_TIME_LEN + 1;
+    char* date_buf = malloc(sizeof(char) * buf_len);
+    ASSERT_OR_RETURN_NULL(date_buf);
 
-    time(&t);
+    t = time(NULL);
     tm = gmtime(&t);
 
-    strftime(buf, RFC1123_TIME_LEN+1, "---, %d --- %Y %H:%M:%S GMT", tm);
-    memcpy(buf, DAY_NAMES[tm->tm_wday], 3);
-    memcpy(buf+8, MONTH_NAMES[tm->tm_mon], 3);
+    if (strftime(date_buf, buf_len, "---, %d --- %Y %H:%M:%S GMT", tm) < 1) {
+      log_fatal("Unable to get date as string\n");
+      free(date_buf);
+      return NULL;
+    }
+    memcpy(date_buf, DAY_NAMES[tm->tm_wday], 3);
+    memcpy(date_buf+8, MONTH_NAMES[tm->tm_mon], 3);
 
-    return buf;
+    return date_buf;
 }
 
 #define LOG_WITH_LEVEL(level) \
   va_list ap; \
   fprintf(stdout, "%s\t", level); \
   va_start(ap, format); \
-  vfprintf(stdout, format, ap); \
+  if (vfprintf(stdout, format, ap) < 0) { \
+    abort(); \
+  } \
   va_end(ap);
 
 void log_fatal(char* format, ...) {

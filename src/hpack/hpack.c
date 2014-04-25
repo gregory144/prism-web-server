@@ -329,10 +329,11 @@ hpack_header_table_entry_t* hpack_header_table_get(hpack_context_t* context, siz
   return NULL;
 }
 
-string_and_length_t* hpack_decode_string_literal(
+static bool hpack_decode_string_literal(
     hpack_context_t* context, uint8_t* buf, size_t length,
-    size_t* current) {
+    size_t* current, string_and_length_t* ret) {
   UNUSED(context);
+  ASSERT_OR_RETURN_FALSE(ret);
   bool first_bit = get_bit(buf + (*current), 0); // is it huffman encoded?
   hpack_decode_quantity_result_t key_name_result;
   hpack_decode_quantity(buf + (*current), length - (*current), 1, &key_name_result);
@@ -351,7 +352,9 @@ string_and_length_t* hpack_decode_string_literal(
     COPY_STRING(key_name, buf + (*current), key_name_length);
     *current += key_name_length;
   }
-  return string_and_length(key_name, key_name_length);
+  ret->value = key_name;
+  ret->length = key_name_length;
+  return true;
 }
 
 void hpack_decode_literal_header(
@@ -369,10 +372,11 @@ void hpack_decode_literal_header(
   if (header_table_index == 0) {
 
     // literal name
-    string_and_length_t* sl = hpack_decode_string_literal(context, buf, length, current);
-    key_name = (char*)sl->value;
-    key_name_length = sl->length;
-    free(sl);
+    string_and_length_t ret;
+    if (hpack_decode_string_literal(context, buf, length, current, &ret)) {
+      key_name = ret.value;
+      key_name_length = ret.length;
+    }
     if (LOG_TRACE) log_trace("Literal name: '%s' (%ld)\n", key_name, key_name_length);
 
   } else {
@@ -397,10 +401,12 @@ void hpack_decode_literal_header(
 
   }
   // literal value
-  string_and_length_t* sl = hpack_decode_string_literal(context, buf, length, current);
-  char* value = (char*)sl->value;
-  size_t value_length = sl->length;
-  free(sl);
+  string_and_length_t ret;
+  if (!hpack_decode_string_literal(context, buf, length, current, &ret)) {
+    abort();
+  }
+  char* value = ret.value;
+  size_t value_length = ret.length;
   if (LOG_TRACE) log_trace("Emitting header literal value: %s (%ld), %s (%ld)\n", key_name, key_name_length, value, value_length);
 
   if (add_to_header_table) {

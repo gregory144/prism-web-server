@@ -76,12 +76,26 @@
     memcpy(dest, src, len); \
     dest[len] = '\0'
 
+/**
+ * If the given value is false, return false
+ */
+#define ASSERT_OR_RETURN_FALSE(value) \
+  if (!value) { \
+    return false; \
+  }
+
+/**
+ * If the given value is false, return the value
+ */
+#define ASSERT_OR_RETURN_NULL(value) \
+  if (!value) { \
+    return NULL; \
+  }
+
 typedef struct {
-  const char* value;
+  char* value;
   size_t length;
 } string_and_length_t;
-
-string_and_length_t* string_and_length(const char* string, size_t length);
 
 bool get_bit(const uint8_t* buffer, size_t total_bit_index);
 
@@ -91,7 +105,7 @@ uint16_t get_bits16(uint8_t* buf, size_t offset, size_t num_bytes, uint16_t mask
 
 uint32_t get_bits32(uint8_t* buf, size_t offset, size_t num_bytes, uint32_t mask);
 
-char* date_rfc1123();
+/*@null@*/ char* date_rfc1123();
 
 void log_fatal(char* format, ...);
 
