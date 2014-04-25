@@ -7,17 +7,13 @@
 #include "huffman_decoder_data.c"
 #include "huffman_encoder_data.c"
 
-extern const size_t huffman_decoder_size;
-extern const huffman_decoder_entry_t huffman_decoder_table[];
-
 bool huffman_decode(const uint8_t* input, size_t input_length_in_octets, huffman_result_t * const result) {
   const size_t input_length = input_length_in_octets * 8;
   // Every 4 bits might represent a character, so a char can be 2 characters
   const size_t output_length = (input_length / 4) + 1;
   uint8_t* output = malloc(sizeof(uint8_t) * output_length);
-  if (!output) {
-    return false;
-  }
+  ASSERT_OR_RETURN_FALSE(output);
+
   size_t output_index = 0,
          input_index = 0;
 

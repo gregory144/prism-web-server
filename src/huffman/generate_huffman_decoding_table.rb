@@ -67,15 +67,14 @@ tree.postorder do |node|
 end
 
 # construct the c language representation of the huffman table
-start_index = tree.index
 puts %Q(
 #include <stdio.h>
 
 #include "huffman.h"
 
-static const size_t huffman_decoder_size = #{c_rep.length};
+static size_t huffman_decoder_size = #{c_rep.length};
 
-static const huffman_decoder_entry_t huffman_decoder_table[] = {
+static huffman_decoder_entry_t huffman_decoder_table[] = {
 
 )
 
