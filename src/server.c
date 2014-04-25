@@ -274,7 +274,7 @@ int server_start() {
     return 1;
   }
   int ret = uv_run(loop, UV_RUN_DEFAULT);
-  uv_loop_delete(loop); 
+  uv_loop_delete(loop);
   return ret;
 }
 
