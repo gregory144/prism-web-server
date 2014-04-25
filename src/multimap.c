@@ -6,12 +6,12 @@
 
 #include "multimap.h"
 
-#define DEFAULT_multimap_INITIAL_SIZE 128
+#define DEFAULT_MULTIMAP_INITIAL_SIZE 128
 
 /**
  * From http://www.cse.yorku.ca/~oz/hash.html
  */
-size_t string_hash(void* key) {
+static size_t string_hash(void* key) {
   unsigned char* string_key = key;
   size_t hash = 5381;
   int c;
@@ -22,13 +22,13 @@ size_t string_hash(void* key) {
   return hash;
 }
 
-int string_cmp_key(void* key1, void* key2) {
+static int string_cmp_key(void* key1, void* key2) {
   return strcmp(key1, key2);
 }
 
 multimap_t* multimap_init_with_string_keys() {
   return multimap_init_with_string_keys_and_size(
-      DEFAULT_multimap_INITIAL_SIZE);
+      DEFAULT_MULTIMAP_INITIAL_SIZE);
 }
 
 multimap_t* multimap_init_with_string_keys_and_size(
@@ -40,7 +40,7 @@ multimap_t* multimap_init_with_string_keys_and_size(
 multimap_t* multimap_init(hash_func_t hash_func,
     hash_cmp_key_func_t cmp_key_func) {
   return multimap_init_with_size(hash_func, cmp_key_func,
-      DEFAULT_multimap_INITIAL_SIZE);
+      DEFAULT_MULTIMAP_INITIAL_SIZE);
 }
 
 multimap_t* multimap_init_with_size(hash_func_t hash_func,
@@ -60,7 +60,7 @@ multimap_t* multimap_init_with_size(hash_func_t hash_func,
   return table;
 }
 
-void multimap_values_free(multimap_values_t* values, free_func_t free_key, free_func_t free_value) {
+static void multimap_values_free(multimap_values_t* values, free_func_t free_key, free_func_t free_value) {
   // don't free the first value container - it will be free'd when the entry is free'd
   free_key(values->key);
   free_value(values->value);
@@ -91,12 +91,12 @@ void multimap_free(multimap_t* table, free_func_t free_key, free_func_t free_val
   free(table);
 }
 
-size_t hash_key(multimap_t* table, void* key) {
+static size_t hash_key(multimap_t* table, void* key) {
   size_t hash_value = table->hash_func(key);
   return hash_value % table->capacity;
 }
 
-multimap_entry_t* multimap_get_entry(multimap_t* table, void* key) {
+static multimap_entry_t* multimap_get_entry(multimap_t* table, void* key) {
   size_t hash_value = hash_key(table, key);
   multimap_entry_t* current;
   for (current = table->buckets[hash_value]; current != NULL;
@@ -117,7 +117,7 @@ multimap_values_t* multimap_get(multimap_t* table, void* key) {
   return NULL;
 }
 
-bool multimap_grow(multimap_t* table) {
+static bool multimap_grow(multimap_t* table) {
   // TODO
   abort();
   size_t new_size = table->capacity * 2;
@@ -141,8 +141,11 @@ bool multimap_grow(multimap_t* table) {
  * Adds the given key and value to the end of the list of values
  * (maintains order)
  */
-void multimap_values_add(multimap_values_t* values, void* key, void* value) {
+static bool multimap_values_add(multimap_values_t* values, void* key, void* value) {
   multimap_values_t* new_value = malloc(sizeof(multimap_values_t));
+  if (!new_value) {
+    return false;
+  }
   new_value->key = key;
   new_value->value = value;
   new_value->next = NULL;
@@ -151,6 +154,8 @@ void multimap_values_add(multimap_values_t* values, void* key, void* value) {
     values = values->next;
   }
   values->next = new_value;
+
+  return true;
 }
 
 /**
@@ -171,10 +176,10 @@ bool multimap_put(multimap_t* table, void* key, void* value) {
 
     // create a new entry and put it in the table
     entry = malloc(sizeof(multimap_entry_t));
-    entry->values = &entry->first_value;
     if (entry == NULL) {
       return false;
     }
+    entry->values = &entry->first_value;
     entry->key = key;
     entry->next = table->buckets[hash_value];
     table->buckets[hash_value] = entry;
@@ -186,7 +191,9 @@ bool multimap_put(multimap_t* table, void* key, void* value) {
     entry->values->value = value;
     entry->values->next = NULL;
   } else {
-    multimap_values_add(entry->values, key, value);
+    if (!multimap_values_add(entry->values, key, value)) {
+      return false;
+    }
     entry->size++;
   }
   table->size++;
