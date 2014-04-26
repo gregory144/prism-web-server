@@ -7,11 +7,11 @@
 #include "huffman_decoder_data.c"
 #include "huffman_encoder_data.c"
 
-bool huffman_decode(const uint8_t* input, size_t input_length_in_octets, huffman_result_t * const result) {
+bool huffman_decode(const uint8_t * const input, const size_t input_length_in_octets, huffman_result_t * const result) {
   const size_t input_length = input_length_in_octets * 8;
   // Every 4 bits might represent a character, so a char can be 2 characters
   const size_t output_length = (input_length / 4) + 1;
-  uint8_t* output = malloc(sizeof(uint8_t) * output_length);
+  uint8_t * const output = malloc(sizeof(uint8_t) * output_length);
   ASSERT_OR_RETURN_FALSE(output);
 
   size_t output_index = 0,
@@ -40,13 +40,13 @@ bool huffman_decode(const uint8_t* input, size_t input_length_in_octets, huffman
   return true;
 }
 
-bool huffman_encode(const uint8_t* buf, size_t len, huffman_result_t* result) {
+bool huffman_encode(const uint8_t * const buf, const size_t len, huffman_result_t * const result) {
   size_t max_len = len;
   uint8_t* encoded = malloc(sizeof(char) * (max_len + 1));
-  if (!encoded) return false;
+  ASSERT_OR_RETURN_FALSE(encoded);
+
   size_t encoded_index = 0;
   size_t buf_index;
-
   uint8_t bits_left_in_byte = 8;
   uint8_t current_byte = 0;
 
@@ -69,7 +69,7 @@ bool huffman_encode(const uint8_t* buf, size_t len, huffman_result_t* result) {
         if (encoded_index >= max_len) {
           max_len += max_len;
           encoded = realloc(encoded, sizeof(char) * (max_len + 1));
-          if (!encoded) return false;
+          ASSERT_OR_RETURN_FALSE(encoded);
         }
         encoded[encoded_index++] = current_byte;
 

@@ -50,13 +50,13 @@ typedef struct huffman_result_t {
  *
  * See http://tools.ietf.org/html/draft-ietf-httpbis-header-compression-07
  */
-bool huffman_decode(const uint8_t* buf, size_t len, huffman_result_t* const result);
+bool huffman_decode(const uint8_t * const buf, const size_t len, huffman_result_t * const result);
 
 /**
  * Encodes an ASCII string into HTTP2 huffman code.
  *
  * See http://tools.ietf.org/html/draft-ietf-httpbis-header-compression-07
  */
-bool huffman_encode(const uint8_t* buf, size_t len, huffman_result_t* const result);
+bool huffman_encode(const uint8_t * const buf, const size_t len, huffman_result_t * const result);
 
 #endif
