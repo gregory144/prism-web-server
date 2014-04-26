@@ -27,16 +27,16 @@ typedef struct hpack_decode_quantity_result_t {
 } hpack_decode_quantity_result_t;
 
 typedef struct hpack_encode_result_t {
-  uint8_t* buf;
+  uint8_t * buf;
   size_t buf_length;
 } hpack_encode_result_t;
 
 typedef struct hpack_header_table_entry_t {
 
-  char* name;
+  char * name;
   size_t name_length;
 
-  char* value;
+  char * value;
   size_t value_length;
 
   size_t size_in_table;
@@ -59,28 +59,28 @@ typedef struct hpack_header_table_t {
   // the spec
   size_t current_size;
 
-  circular_buffer_t* entries;
+  circular_buffer_t * entries;
 
 } hpack_header_table_t;
 
 typedef struct hpack_context_t {
 
-  hpack_header_table_t* header_table;
+  hpack_header_table_t * header_table;
 
 } hpack_context_t;
 
-void hpack_decode_quantity(uint8_t* buf, size_t length, uint8_t offset, hpack_decode_quantity_result_t* result);
+void hpack_decode_quantity(const uint8_t * const buf, const size_t length, const uint8_t offset, hpack_decode_quantity_result_t * const result);
 
-size_t hpack_encode_quantity(uint8_t* buf, size_t offset, size_t quantity);
+size_t hpack_encode_quantity(uint8_t * const buf, const size_t offset, const size_t quantity);
 
-hpack_context_t* hpack_context_init(size_t header_table_size);
+hpack_context_t * hpack_context_init(const size_t header_table_size);
 
-void hpack_context_free(hpack_context_t* context);
+void hpack_context_free(const hpack_context_t * const context);
 
-void hpack_header_table_adjust_size(hpack_context_t* context, size_t new_size);
+void hpack_header_table_adjust_size(const hpack_context_t * const context, size_t new_size);
 
-multimap_t* hpack_decode(hpack_context_t* context, uint8_t* buf, size_t length);
+multimap_t* hpack_decode(const hpack_context_t * const context, const uint8_t * const buf, const size_t length);
 
-bool hpack_encode(hpack_context_t* context, multimap_t* headers, hpack_encode_result_t* result);
+bool hpack_encode(const hpack_context_t * const context, const multimap_t * const headers, hpack_encode_result_t * const result);
 
 #endif

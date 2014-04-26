@@ -103,7 +103,7 @@ void http_frame_header_write(uint8_t* buf, uint16_t length, uint8_t type, uint8_
 void http_emit_headers(http_connection_t* connection, http_stream_t* stream, multimap_t* headers) {
   // TODO split large headers into multiple frames
   size_t headers_length = 0;
-  uint8_t* hpack_buf = NULL;
+  uint8_t * hpack_buf = NULL;
   if (headers != NULL) {
     hpack_encode_result_t encoded;
     if (!hpack_encode(connection->encoding_context, headers, &encoded)) {
