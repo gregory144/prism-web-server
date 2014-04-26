@@ -269,7 +269,7 @@ void http_adjust_initial_window_size(http_connection_t* connection, long differe
   }
 }
 
-void http_setting_set(http_connection_t* connection, uint8_t id, uint32_t value) {
+void http_setting_set(http_connection_t* connection, enum settings_e id, uint32_t value) {
   if (LOG_TRACE) log_trace("Settings: %d: %d\n", id, value);
   switch (id) {
     case SETTINGS_HEADER_TABLE_SIZE:
@@ -441,7 +441,7 @@ void http_parse_frame_settings(http_connection_t* connection, http_frame_setting
     size_t i;
     for (i = 0; i < num_settings; i++) {
       uint8_t* curr_setting = pos + (i * setting_size);
-      uint32_t setting_id = curr_setting[0];
+      uint8_t setting_id = curr_setting[0];
       uint32_t setting_value = get_bits32(curr_setting, 1, 4, 0xFFFFFFFF);
       http_setting_set(connection, setting_id, setting_value);
     }
@@ -507,7 +507,7 @@ void http_parse_frame_goaway(http_connection_t* connection, http_frame_goaway_t*
   free(frame->debug_data);
 }
 
-http_frame_t* http_frame_init(uint16_t length, char type, char flags, uint32_t stream_id) {
+http_frame_t* http_frame_init(uint16_t length, uint8_t type, uint8_t flags, uint32_t stream_id) {
   http_frame_t* frame;
   switch(type) {
     case FRAME_TYPE_DATA:
