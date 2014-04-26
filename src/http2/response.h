@@ -5,20 +5,20 @@
 
 typedef struct http_response_t {
 
-  http_request_t* request;
+  http_request_t * request;
 
   uint16_t status;
 
-  multimap_t* headers;
+  multimap_t * headers;
 
 } http_response_t;
 
-http_response_t* http_response_init(http_request_t* request);
+http_response_t * http_response_init(http_request_t * const request);
 
-void http_response_header_add(http_response_t* response, char* name, char* value);
+void http_response_header_add(const http_response_t * const response, char * name, char * value);
 
-void http_response_status_set(http_response_t* response, uint16_t status);
+void http_response_status_set(http_response_t * const response, const uint16_t status);
 
-void http_response_free(http_response_t* response);
+void http_response_free(http_response_t * const response);
 
 #endif

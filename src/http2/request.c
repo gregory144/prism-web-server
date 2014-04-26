@@ -10,10 +10,10 @@
  * Parses the ':authority' special header
  * into the host and port
  */
-void parse_authority(http_request_t* request) {
-  char* authority = http_request_header_get(request, ":authority");
+static void parse_authority(http_request_t * const request) {
+  char * authority = http_request_header_get(request, ":authority");
   if (authority) {
-    char* port = strchr(authority, ':');
+    char * port = strchr(authority, ':');
     if (port) {
       COPY_STRING(request->host, authority, port - authority);
       request->port = strtoul(port + 1, NULL, 10);
@@ -31,13 +31,13 @@ void parse_authority(http_request_t* request) {
  * Parses the ':path' special header into a plain
  * path and a query string
  */
-bool parse_path(http_request_t* request) {
-  char* path = http_request_header_get(request, ":path");
+static bool parse_path(http_request_t * const request) {
+  char * path = http_request_header_get(request, ":path");
   if (!path) {
     log_error("No :path header provided\n");
     return false;
   }
-  char* query = strchr(path, '?');
+  char * query = strchr(path, '?');
   if (query) {
     COPY_STRING(request->path, path, query - path);
   } else {
@@ -47,7 +47,7 @@ bool parse_path(http_request_t* request) {
   return true;
 }
 
-unsigned char ascii_to_hex(unsigned char in) {
+static unsigned char ascii_to_hex(const unsigned char in) {
   if (in >= '0' && in <= '9') {
     return in - '0';
   } else if (in >= 'A' && in <= 'F') {
@@ -66,8 +66,8 @@ unsigned char ascii_to_hex(unsigned char in) {
  *
  * The encoding of SPACE as '+' and the selection of "as-is" characters distinguishes this encoding from RFC 1738.
  */
-char* url_decode(char* encoded, size_t length) {
-  char* decoded = malloc(sizeof(char) * length + 1);
+static char * url_decode(char * encoded, const size_t length) {
+  char * decoded = malloc(sizeof(char) * length + 1);
   size_t decoded_index = 0;
   size_t encoded_index = 0;
   while (encoded_index < length) {
@@ -90,17 +90,17 @@ char* url_decode(char* encoded, size_t length) {
 /**
  * Parses the query string into parameters
  */
-void parse_parameters(multimap_t* params, char* query_string) {
+static void parse_parameters(multimap_t * const params, char * query_string) {
   if (query_string) {
     size_t query_string_len = strlen(query_string);
-    char* buf = query_string;
-    char* end_buf = buf + query_string_len;
-    char* key = NULL;
+    char * buf = query_string;
+    char * end_buf = buf + query_string_len;
+    char * key = NULL;
     size_t key_len = 0;
-    char* value = NULL;
+    char * value = NULL;
     size_t value_len = 0;
     while (buf < end_buf) {
-      char* end = strpbrk(buf, "=&;#");
+      char * end = strpbrk(buf, "=&;#");
       size_t len = end ? end - buf : end_buf - buf;
       char next = end ? *end : 0;
       switch(next) {
@@ -126,8 +126,8 @@ void parse_parameters(multimap_t* params, char* query_string) {
               value_len = 0;
             }
 
-            char* decoded_key = url_decode(key, key_len);
-            char* decoded_value = url_decode(value, value_len);
+            char * decoded_key = url_decode(key, key_len);
+            char * decoded_value = url_decode(value, value_len);
 
             multimap_put(params, decoded_key, decoded_value);
             key = NULL;
@@ -144,14 +144,14 @@ void parse_parameters(multimap_t* params, char* query_string) {
  * Removes all headers that start with ':'
  * from the set of headers that will be exposed
  */
-void remove_special_headers(multimap_t* headers) {
+static void remove_special_headers(multimap_t * const headers) {
   size_t found = 0;
-  char* special_names[headers->size];
+  char * special_names[headers->size];
 
   multimap_iter_t iter;
   multimap_iterator_init(&iter, headers);
   while (multimap_iterate(&iter)) {
-    char* key = iter.key;
+    char * key = iter.key;
     if (*key == ':') {
       special_names[found++] = key;
     }
@@ -162,9 +162,9 @@ void remove_special_headers(multimap_t* headers) {
   }
 }
 
-http_request_t* http_request_init_internal(_http_connection_t connection,
-    _http_stream_t stream, multimap_t* headers) {
-  http_request_t* request = malloc(sizeof(http_request_t));
+http_request_t * http_request_init_internal(const _http_connection_t connection,
+    const _http_stream_t stream, multimap_t * const headers) {
+  http_request_t * request = malloc(sizeof(http_request_t));
 
   request->connection = (_http_connection_t)connection;
   request->stream = (_http_stream_t)stream;
@@ -172,14 +172,14 @@ http_request_t* http_request_init_internal(_http_connection_t connection,
   request->headers = headers;
   request->params = multimap_init_with_string_keys();
 
-  char* method = http_request_header_get(request, ":method");
+  char * method = http_request_header_get(request, ":method");
   if (!method) {
     log_error("Missing :method header\n");
     return NULL;
   }
   request->method = strdup(method);
 
-  char* scheme = http_request_header_get(request, ":scheme");
+  char * scheme = http_request_header_get(request, ":scheme");
   if (!scheme) {
     log_error("Missing :scheme header\n");
     return NULL;
@@ -202,15 +202,15 @@ http_request_t* http_request_init_internal(_http_connection_t connection,
  * Returns the first header value for the given name
  * (ignores any other defined header values)
  */
-char* http_request_header_get(http_request_t* request, char* name) {
-  multimap_values_t* values = multimap_get(request->headers, name);
+char * http_request_header_get(const http_request_t * const request, char * name) {
+  multimap_values_t * values = multimap_get(request->headers, name);
   return values ? values->value : NULL;
 }
 
 /**
  * Returns a reference to the first header value for the given name.
  */
-multimap_values_t* http_request_header_get_values(http_request_t* request, char* name) {
+multimap_values_t * http_request_header_get_values(const http_request_t * const request, char * name) {
   return multimap_get(request->headers, name);
 }
 
@@ -218,43 +218,43 @@ multimap_values_t* http_request_header_get_values(http_request_t* request, char*
  * Returns the first param value for the given name
  * (ignores any other defined parameter values)
  */
-char* http_request_param_get(http_request_t* request, char* name) {
-  multimap_values_t* values = multimap_get(request->params, name);
+char * http_request_param_get(const http_request_t * const request, char * name) {
+  multimap_values_t * values = multimap_get(request->params, name);
   return values ? values->value : NULL;
 }
 
 /**
  * Returns a reference to the first header value for the given name.
  */
-multimap_values_t* http_request_param_get_values(http_request_t* request, char* name) {
+multimap_values_t * http_request_param_get_values(const http_request_t * const request, char * name) {
   return multimap_get(request->params, name);
 }
 
-char* http_request_method(http_request_t* request) {
+char * http_request_method(const http_request_t * const request) {
   return request->method;
 }
 
-char* http_request_scheme(http_request_t* request) {
+char * http_request_scheme(const http_request_t * const request) {
   return request->scheme;
 }
 
-char* http_request_host(http_request_t* request) {
+char * http_request_host(const http_request_t * const request) {
   return request->host;
 }
 
-char* http_request_path(http_request_t* request) {
+char * http_request_path(const http_request_t * const request) {
   return request->path;
 }
 
-int http_request_port(http_request_t* request) {
+int http_request_port(const http_request_t * const request) {
   return request->port;
 }
 
-char* http_request_query_string(http_request_t* request) {
+char * http_request_query_string(const http_request_t * const request) {
   return request->query_string;
 }
 
-void http_request_free(http_request_t* request) {
+void http_request_free(http_request_t * const request) {
   multimap_free(request->headers, free, free);
   multimap_free(request->params, free, free);
 

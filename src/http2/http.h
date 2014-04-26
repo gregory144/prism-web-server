@@ -197,7 +197,7 @@ typedef struct {
   uint32_t last_stream_id;
   uint32_t error_code;
 
-  uint8_t* debug_data;
+  uint8_t * debug_data;
 
 } http_frame_goaway_t;
 
@@ -210,9 +210,9 @@ typedef struct {
 } http_frame_window_update_t;
 
 typedef struct http_header_fragment_s {
-  uint8_t* buffer;
+  uint8_t * buffer;
   size_t length;
-  struct http_header_fragment_s* next;
+  struct http_header_fragment_s * next;
 } http_header_fragment_t;
 
 typedef struct {
@@ -227,7 +227,7 @@ typedef struct {
   bool priority;
 
   size_t header_block_fragment_size;
-  uint8_t* header_block_fragment;
+  uint8_t * header_block_fragment;
 
 } http_frame_headers_t;
 
@@ -253,9 +253,9 @@ typedef struct {
 } http_frame_data_t;
 
 typedef struct http_queued_frame_s {
-  struct http_queued_frame_s* next;
+  struct http_queued_frame_s * next;
 
-  uint8_t* buf;
+  uint8_t * buf;
   size_t buf_length;
 
   /**
@@ -264,7 +264,7 @@ typedef struct http_queued_frame_s {
    * If the buffer should be free'd after the data
    * is sent, this is the point to the full buffer.
    */
-  void* buf_begin;
+  void * buf_begin;
 
   bool continuation;
   bool end_stream;
@@ -296,24 +296,24 @@ typedef struct {
 
   long window_size;
 
-  http_header_fragment_t* header_fragments;
+  http_header_fragment_t * header_fragments;
 
-  http_queued_frame_t* queued_data_frames;
+  http_queued_frame_t * queued_data_frames;
 
-  multimap_t* headers;
+  multimap_t * headers;
 } http_stream_t;
 
-typedef void (*request_cb)(http_request_t* request, http_response_t* response);
+typedef void (*request_cb)(http_request_t * request, http_response_t * response);
 
-typedef void (*write_cb)(void* data, uint8_t* buf, size_t len);
+typedef void (*write_cb)(void * data, uint8_t * buf, size_t len);
 
-typedef void (*close_cb)(void* data);
+typedef void (*close_cb)(void * data);
 
 /**
  * Stores state for a client.
  */
 typedef struct {
-  void* data;
+  void * data;
   write_cb writer;
   close_cb closer;
   request_cb request_listener;
@@ -329,7 +329,7 @@ typedef struct {
   /**
    * what's currently being read
    */
-  uint8_t* buffer;
+  uint8_t * buffer;
   size_t buffer_length;
   size_t buffer_position;
 
@@ -342,18 +342,19 @@ typedef struct {
   size_t initial_window_size;
 
   // TODO - use a better data structure to get a stream
-  http_stream_t **streams;
+  http_stream_t * * streams;
 
-  hpack_context_t* encoding_context;
-  hpack_context_t* decoding_context;
+  hpack_context_t * encoding_context;
+  hpack_context_t * decoding_context;
 } http_connection_t;
 
-http_connection_t* http_connection_init(void* data, request_cb request_handler, write_cb writer, close_cb closer);
+http_connection_t * http_connection_init(void * const data, const request_cb request_handler,
+    const write_cb writer, const close_cb closer);
 
-void http_connection_free(http_connection_t* connection);
+void http_connection_free(http_connection_t * const connection);
 
-void http_connection_read(http_connection_t* connection, uint8_t* buffer, size_t len);
+void http_connection_read(http_connection_t * const connection, uint8_t * const buffer, const size_t len);
 
-void http_response_write(http_response_t* response, char* text, size_t text_length);
+void http_response_write(http_response_t * const response, char * text, const size_t text_length);
 
 #endif

@@ -16,11 +16,12 @@
 #define MAX_FRAME_SIZE 0x3FFF // 16,383
 #define MAX_WINDOW_SIZE 0x7FFFFFFF // 2^31 - 1
 
-const char* HTTP_CONNECTION_HEADER = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+const char * HTTP_CONNECTION_HEADER = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 const size_t HTTP_CONNECTION_HEADER_LENGTH = 24;
 
-http_connection_t* http_connection_init(void* data, request_cb request_handler, write_cb writer, close_cb closer) {
-  http_connection_t* connection = malloc(sizeof(http_connection_t));
+http_connection_t * http_connection_init(void * const data, const request_cb request_handler,
+    const write_cb writer, const close_cb closer) {
+  http_connection_t * connection = malloc(sizeof(http_connection_t));
 
   connection->data = data;
   connection->writer = writer;
@@ -40,7 +41,7 @@ http_connection_t* http_connection_init(void* data, request_cb request_handler, 
   connection->max_concurrent_streams = DEFAULT_MAX_CONNCURRENT_STREAMS;
   connection->initial_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
 
-  connection->streams = calloc(sizeof(http_stream_t*), 4096);
+  connection->streams = calloc(sizeof(http_stream_t *), 4096);
 
   connection->request_listener = request_handler;
 
@@ -50,19 +51,19 @@ http_connection_t* http_connection_init(void* data, request_cb request_handler, 
   return connection;
 }
 
-http_stream_t* http_stream_get(http_connection_t* connection, uint32_t stream_id) {
+static http_stream_t * http_stream_get(const http_connection_t * const connection, const uint32_t stream_id) {
   // TODO - use a better data structure than an array
   if (stream_id >= 4096) {
     if (LOG_ERROR) log_error("Unsupported stream identifier (too high): %d\n", stream_id);
     abort();
   }
 
-  http_stream_t* stream = connection->streams[stream_id];
+  http_stream_t * stream = connection->streams[stream_id];
 
   return stream;
 }
 
-void http_stream_close(http_connection_t* connection, http_stream_t* stream) {
+static void http_stream_close(const http_connection_t * const connection, http_stream_t * const stream) {
   if (stream->headers) {
     multimap_free(stream->headers, free, free);
   }
@@ -70,10 +71,10 @@ void http_stream_close(http_connection_t* connection, http_stream_t* stream) {
   free(stream);
 }
 
-void http_connection_free(http_connection_t* connection) {
+void http_connection_free(http_connection_t * const connection) {
   int i;
   for (i = 0; i < 4096; i++) {
-    http_stream_t* stream = connection->streams[i];
+    http_stream_t * stream = connection->streams[i];
     if (stream) {
       http_stream_close(connection, stream);
     }
@@ -84,7 +85,8 @@ void http_connection_free(http_connection_t* connection) {
   free(connection);
 }
 
-void http_frame_header_write(uint8_t* buf, uint16_t length, uint8_t type, uint8_t flags, uint32_t stream_id) {
+static void http_frame_header_write(uint8_t * const buf, const uint16_t length, const uint8_t type,
+    const uint8_t flags, uint32_t stream_id) {
   size_t pos = 0;
 
   buf[pos++] = (length >> 8) & 0x3F; // only the first 6 bits (first 2 bits are reserved)
@@ -100,7 +102,8 @@ void http_frame_header_write(uint8_t* buf, uint16_t length, uint8_t type, uint8_
   buf[pos++] = (stream_id) & 0xFF;
 }
 
-void http_emit_headers(http_connection_t* connection, http_stream_t* stream, multimap_t* headers) {
+static void http_emit_headers(const http_connection_t * const connection, const http_stream_t * const stream,
+    const multimap_t * const headers) {
   // TODO split large headers into multiple frames
   size_t headers_length = 0;
   uint8_t * hpack_buf = NULL;
@@ -112,12 +115,13 @@ void http_emit_headers(http_connection_t* connection, http_stream_t* stream, mul
     hpack_buf = encoded.buf;
     headers_length = encoded.buf_length;
   }
-  size_t buf_length = FRAME_HEADER_SIZE + headers_length;
+  const size_t buf_length = FRAME_HEADER_SIZE + headers_length;
   uint8_t buf[buf_length];
   uint8_t flags = 0;
-  bool end_stream = false;
-  bool end_headers = true;
-  bool priority = false;
+  // TODO - these should be dynamic
+  const bool end_stream = false;
+  const bool end_headers = true;
+  const bool priority = false;
   if (end_stream) flags |= HEADERS_FLAG_END_STREAM;
   if (end_headers) flags |= HEADERS_FLAG_END_HEADERS;
   if (priority) flags |= HEADERS_FLAG_PRIORITY;
@@ -133,7 +137,8 @@ void http_emit_headers(http_connection_t* connection, http_stream_t* stream, mul
   connection->writer(connection->data, buf, buf_length);
 }
 
-void http_emit_data_frame(http_connection_t* connection, http_stream_t* stream, http_queued_frame_t* frame) {
+static void http_emit_data_frame(const http_connection_t * const connection, const http_stream_t * const stream,
+    const http_queued_frame_t * const frame) {
   size_t header_length = FRAME_HEADER_SIZE;
   uint8_t header_buf[header_length];
   uint8_t flags = 0;
@@ -145,13 +150,13 @@ void http_emit_data_frame(http_connection_t* connection, http_stream_t* stream, 
   connection->writer(connection->data, frame->buf, frame->buf_length);
 }
 
-void http_trigger_send_data(http_connection_t* connection, http_stream_t* stream) {
+static void http_trigger_send_data(http_connection_t * const connection, const http_stream_t * const stream) {
   uint32_t i;
   for (i = 0; i < 4096; i++) {
-    http_stream_t* stream = http_stream_get(connection, i);
+    http_stream_t * stream = http_stream_get(connection, i);
     if (stream) {
       while (stream->queued_data_frames) {
-        http_queued_frame_t* frame = stream->queued_data_frames;
+        http_queued_frame_t * frame = stream->queued_data_frames;
         size_t frame_payload_size = frame->buf_length;
         if ((long)frame_payload_size <= connection->window_size &&
             (long)frame_payload_size <= stream->window_size) {
@@ -182,9 +187,9 @@ void http_trigger_send_data(http_connection_t* connection, http_stream_t* stream
   if (LOG_TRACE) log_trace("Connection window size: %ld, stream window: %ld\n", connection->window_size, stream->window_size);
 }
 
-void http_queue_data_frame(http_stream_t* stream, uint8_t* buf,
-    size_t buf_length, bool end_stream, void* buf_begin) {
-  http_queued_frame_t* new_frame = malloc(sizeof(http_queued_frame_t));
+static void http_queue_data_frame(http_stream_t * const stream, uint8_t * buf,
+    const size_t buf_length, const bool end_stream, void * const buf_begin) {
+  http_queued_frame_t * new_frame = malloc(sizeof(http_queued_frame_t));
   new_frame->buf = buf;
   new_frame->buf_length = buf_length;
   new_frame->end_stream = end_stream;
@@ -195,7 +200,7 @@ void http_queue_data_frame(http_stream_t* stream, uint8_t* buf,
   if (!stream->queued_data_frames) {
     stream->queued_data_frames = new_frame;
   } else {
-    http_queued_frame_t* curr = stream->queued_data_frames;
+    http_queued_frame_t * curr = stream->queued_data_frames;
     while (curr->next) {
       curr = curr->next;
     }
@@ -203,14 +208,15 @@ void http_queue_data_frame(http_stream_t* stream, uint8_t* buf,
   }
 }
 
-void http_emit_data(http_connection_t* connection, http_stream_t* stream, uint8_t* text, size_t text_length) {
+static void http_emit_data(http_connection_t * const connection, http_stream_t * const stream,
+    uint8_t * text, const size_t text_length) {
   // TODO support padding?
 
   size_t frame_payload_size = text_length;
   if (frame_payload_size > MAX_FRAME_SIZE) {
     size_t remaining_length = text_length;
     size_t per_frame_length;
-    uint8_t* per_frame_text = text;
+    uint8_t * per_frame_text = text;
     bool last = false;
     while (remaining_length > 0) {
       if (remaining_length > MAX_FRAME_SIZE) {
@@ -230,7 +236,7 @@ void http_emit_data(http_connection_t* connection, http_stream_t* stream, uint8_
   http_trigger_send_data(connection, stream);
 }
 
-void http_emit_settings_ack(http_connection_t* connection) {
+static void http_emit_settings_ack(const http_connection_t * const connection) {
   size_t buf_length = FRAME_HEADER_SIZE;
   uint8_t buf[buf_length];
   uint8_t flags = 0;
@@ -245,7 +251,7 @@ void http_emit_settings_ack(http_connection_t* connection) {
  * Returns true if the first part of data is the http connection
  * header string
  */
-bool http_connection_recognize_connection_header(http_connection_t* connection) {
+static bool http_connection_recognize_connection_header(http_connection_t * const connection) {
   if (connection->buffer_length >= HTTP_CONNECTION_HEADER_LENGTH) {
     connection->buffer_position = HTTP_CONNECTION_HEADER_LENGTH;
     return memcmp(connection->buffer, HTTP_CONNECTION_HEADER,
@@ -254,11 +260,11 @@ bool http_connection_recognize_connection_header(http_connection_t* connection) 
   return false;
 }
 
-void http_adjust_initial_window_size(http_connection_t* connection, long difference) {
-  http_stream_t** streams = connection->streams;
+static void http_adjust_initial_window_size(const http_connection_t * const connection, const long difference) {
+  http_stream_t * * streams = connection->streams;
   size_t i;
   for (i = 0; i < 4096; i++) {
-    http_stream_t* stream = streams[i];
+    http_stream_t * stream = streams[i];
     if (stream) {
       stream->window_size += difference;
       if (stream->window_size > MAX_WINDOW_SIZE) {
@@ -269,7 +275,7 @@ void http_adjust_initial_window_size(http_connection_t* connection, long differe
   }
 }
 
-void http_setting_set(http_connection_t* connection, enum settings_e id, uint32_t value) {
+static void http_setting_set(http_connection_t * const connection, const enum settings_e id, const uint32_t value) {
   if (LOG_TRACE) log_trace("Settings: %d: %d\n", id, value);
   switch (id) {
     case SETTINGS_HEADER_TABLE_SIZE:
@@ -297,8 +303,8 @@ void http_setting_set(http_connection_t* connection, enum settings_e id, uint32_
   }
 }
 
-http_stream_t* http_stream_init(http_connection_t* connection, uint32_t stream_id) {
-  http_stream_t* stream = http_stream_get(connection, stream_id);
+static http_stream_t * http_stream_init(const http_connection_t * const connection, const uint32_t stream_id) {
+  http_stream_t * stream = http_stream_get(connection, stream_id);
   if (stream != NULL) {
     // got a HEADERS frame for an existing stream
     // TODO emit protocol error
@@ -320,13 +326,13 @@ http_stream_t* http_stream_init(http_connection_t* connection, uint32_t stream_i
   return stream;
 }
 
-void http_trigger_request(http_connection_t* connection, http_stream_t* stream) {
+void http_trigger_request(const http_connection_t * const connection, http_stream_t * const stream) {
   if (!connection->request_listener) {
     if (LOG_ERROR) log_error("No request listener set up\n");
     abort();
   }
 
-  http_request_t* request = http_request_init(connection, stream, stream->headers);
+  http_request_t * request = http_request_init(connection, stream, stream->headers);
   if (!request) {
     abort();
   }
@@ -334,19 +340,19 @@ void http_trigger_request(http_connection_t* connection, http_stream_t* stream) 
   // transfer ownership of headers to the request
   stream->headers = NULL;
 
-  http_response_t* response = http_response_init(request);
+  http_response_t * response = http_response_init(request);
 
   connection->request_listener(request, response);
 }
 
-void http_stream_add_header_fragment(http_stream_t* stream, uint8_t* buffer, size_t length) {
-  http_header_fragment_t* fragment = malloc(sizeof(http_header_fragment_t));
+static void http_stream_add_header_fragment(http_stream_t * const stream, const uint8_t * const buffer, const size_t length) {
+  http_header_fragment_t * fragment = malloc(sizeof(http_header_fragment_t));
   fragment->buffer = malloc(length);
   memcpy(fragment->buffer, buffer, length);
   fragment->length = length;
   fragment->next = NULL;
 
-  http_header_fragment_t* current = stream->header_fragments;
+  http_header_fragment_t * current = stream->header_fragments;
   for (; current && current->next; current = current->next);
   if (current == NULL) {
     stream->header_fragments = fragment;
@@ -355,21 +361,21 @@ void http_stream_add_header_fragment(http_stream_t* stream, uint8_t* buffer, siz
   }
 }
 
-void http_parse_header_fragments(http_connection_t* connection, http_stream_t* stream) {
+static void http_parse_header_fragments(const http_connection_t * const connection, http_stream_t * const stream) {
   size_t headers_length = 0;
-  http_header_fragment_t* current = stream->header_fragments;
+  http_header_fragment_t * current = stream->header_fragments;
   for (; current; current = current->next) {
     if (LOG_TRACE) log_trace("Counting header fragment lengths: %ld\n", current->length);
     headers_length += current->length;
   }
-  uint8_t* headers = malloc(headers_length + 1);
-  uint8_t* header_appender = headers;
+  uint8_t * headers = malloc(headers_length + 1);
+  uint8_t * header_appender = headers;
   current = stream->header_fragments;
   while (current) {
     if (LOG_TRACE) log_trace("Appending header fragment: %s (%ld)\n", current->buffer, current->length);
     memcpy(header_appender, current->buffer, current->length);
     header_appender += current->length;
-    http_header_fragment_t* prev = current;
+    http_header_fragment_t * prev = current;
     current = current->next;
     free(prev->buffer);
     free(prev);
@@ -384,15 +390,16 @@ void http_parse_header_fragments(http_connection_t* connection, http_stream_t* s
   http_trigger_request(connection, stream);
 }
 
-void http_parse_frame_headers(http_connection_t* connection, http_frame_headers_t* frame) {
+static void http_parse_frame_headers(const http_connection_t * const connection,
+    const http_frame_headers_t * const frame) {
   if (frame->stream_id < 1) {
     // protocol error, do we need to read the rest of the frame anyway so that the
     // decoding context is still synced?
     abort();
   }
-  uint8_t* pos = connection->buffer + connection->buffer_position;
+  uint8_t * pos = connection->buffer + connection->buffer_position;
   size_t header_block_fragment_size = frame->length;
-  http_stream_t* stream = http_stream_init(connection, frame->stream_id);
+  http_stream_t * stream = http_stream_init(connection, frame->stream_id);
   if (frame->priority) {
     stream->priority = get_bits32(pos, 4, 0x7FFFFFFF);
     pos += 4;
@@ -406,10 +413,11 @@ void http_parse_frame_headers(http_connection_t* connection, http_frame_headers_
   }
 }
 
-void http_parse_frame_continuation(http_connection_t* connection, http_frame_continuation_t* frame) {
-  uint8_t* pos = connection->buffer + connection->buffer_position;
+static void http_parse_frame_continuation(const http_connection_t * const connection,
+    const http_frame_continuation_t * const frame) {
+  uint8_t * pos = connection->buffer + connection->buffer_position;
   size_t header_block_fragment_size = frame->length;
-  http_stream_t* stream = http_stream_get(connection, frame->stream_id);
+  http_stream_t * stream = http_stream_get(connection, frame->stream_id);
   http_stream_add_header_fragment(stream, pos, header_block_fragment_size);
   if (frame->end_headers) {
     // parse the headers
@@ -418,7 +426,7 @@ void http_parse_frame_continuation(http_connection_t* connection, http_frame_con
   }
 }
 
-void http_parse_frame_settings(http_connection_t* connection, http_frame_settings_t* frame) {
+static void http_parse_frame_settings(http_connection_t * const connection, const http_frame_settings_t * const frame) {
   if (frame->stream_id != 0) {
     // TODO emit PROTOCOL_ERROR
     if (LOG_ERROR) log_error("Invalid stream identifier for settings frame\n");
@@ -434,13 +442,13 @@ void http_parse_frame_settings(http_connection_t* connection, http_frame_setting
     if (LOG_TRACE) log_trace("Received settings ACK\n");
     abort();
   } else {
-    uint8_t* pos = connection->buffer + connection->buffer_position;
+    uint8_t * pos = connection->buffer + connection->buffer_position;
     size_t setting_size = 5;
     size_t num_settings = frame->length / setting_size;
     if (LOG_TRACE) log_trace("Settings: Found #%ld settings\n", num_settings);
     size_t i;
     for (i = 0; i < num_settings; i++) {
-      uint8_t* curr_setting = pos + (i * setting_size);
+      uint8_t * curr_setting = pos + (i * setting_size);
       uint8_t setting_id = curr_setting[0];
       uint32_t setting_value = get_bits32(curr_setting, 1, 0xFFFFFFFF);
       http_setting_set(connection, setting_id, setting_value);
@@ -453,15 +461,16 @@ void http_parse_frame_settings(http_connection_t* connection, http_frame_setting
   }
 }
 
-void http_increment_connection_window_size(http_connection_t* connection, uint32_t increment) {
+static void http_increment_connection_window_size(http_connection_t * const connection, const uint32_t increment) {
   connection->window_size += increment;
   if (LOG_TRACE) log_trace("Connection window size incremented to: %ld\n", connection->window_size);
 
   http_trigger_send_data(connection, NULL);
 }
 
-void http_increment_stream_window_size(http_connection_t* connection, uint32_t stream_id, uint32_t increment) {
-  http_stream_t* stream = http_stream_get(connection, stream_id);
+static void http_increment_stream_window_size(http_connection_t * const connection, const uint32_t stream_id,
+    const uint32_t increment) {
+  http_stream_t * stream = http_stream_get(connection, stream_id);
   if (stream) {
     stream->window_size += increment;
     if (LOG_TRACE) log_trace("Stream window size incremented to: %ld\n", stream->window_size);
@@ -473,8 +482,8 @@ void http_increment_stream_window_size(http_connection_t* connection, uint32_t s
   }
 }
 
-void http_parse_frame_window_update(http_connection_t* connection, http_frame_window_update_t* frame) {
-  uint8_t* buf = connection->buffer + connection->buffer_position;
+static void http_parse_frame_window_update(http_connection_t * const connection, http_frame_window_update_t * const frame) {
+  uint8_t * buf = connection->buffer + connection->buffer_position;
   frame->increment = get_bits32(buf, 0, 0x7FFFFFFF);
 
   if (frame->stream_id > 0) {
@@ -487,13 +496,13 @@ void http_parse_frame_window_update(http_connection_t* connection, http_frame_wi
       frame->stream_id, frame->increment);
 }
 
-void http_parse_frame_goaway(http_connection_t* connection, http_frame_goaway_t* frame) {
+static void http_parse_frame_goaway(http_connection_t * const connection, http_frame_goaway_t * const frame) {
   if (frame->stream_id != 0) {
     // TODO emit PROTOCOL_ERROR
     if (LOG_ERROR) log_error("Invalid stream identifier for goaway frame\n");
     abort();
   }
-  uint8_t* buf = connection->buffer + connection->buffer_position;
+  uint8_t * buf = connection->buffer + connection->buffer_position;
   frame->last_stream_id = get_bits32(buf, 0, 0x7FFFFFFF);
   frame->error_code = get_bits32(buf, 4, 0xFFFFFFFF);
   size_t debug_data_length = (frame->length - 8);
@@ -507,15 +516,16 @@ void http_parse_frame_goaway(http_connection_t* connection, http_frame_goaway_t*
   free(frame->debug_data);
 }
 
-http_frame_t* http_frame_init(uint16_t length, uint8_t type, uint8_t flags, uint32_t stream_id) {
-  http_frame_t* frame;
+static http_frame_t * http_frame_init(const uint16_t length, const uint8_t type, const uint8_t flags,
+    const uint32_t stream_id) {
+  http_frame_t * frame;
   switch(type) {
     case FRAME_TYPE_DATA:
     {
       http_frame_data_t *data_frame = malloc(sizeof(http_frame_data_t));
       data_frame->end_stream = flags & DATA_FLAG_END_STREAM;
       // TODO padding flags
-      frame = (http_frame_t*) data_frame;
+      frame = (http_frame_t *) data_frame;
       break;
     }
     case FRAME_TYPE_HEADERS:
@@ -525,7 +535,7 @@ http_frame_t* http_frame_init(uint16_t length, uint8_t type, uint8_t flags, uint
       headers_frame->end_headers = flags & HEADERS_FLAG_END_HEADERS;
       headers_frame->priority = flags & HEADERS_FLAG_PRIORITY;
       // TODO padding flags
-      frame = (http_frame_t*) headers_frame;
+      frame = (http_frame_t *) headers_frame;
       break;
     }
     /*
@@ -538,7 +548,7 @@ http_frame_t* http_frame_init(uint16_t length, uint8_t type, uint8_t flags, uint
     {
       http_frame_settings_t *settings_frame = malloc(sizeof(http_frame_settings_t));
       settings_frame->ack = flags & SETTINGS_FLAG_ACK;
-      frame = (http_frame_t*) settings_frame;
+      frame = (http_frame_t *) settings_frame;
       break;
     }
     /*
@@ -550,13 +560,13 @@ http_frame_t* http_frame_init(uint16_t length, uint8_t type, uint8_t flags, uint
     case FRAME_TYPE_GOAWAY:
     {
       http_frame_goaway_t *goaway_frame = malloc(sizeof(http_frame_goaway_t));
-      frame = (http_frame_t*) goaway_frame;
+      frame = (http_frame_t *) goaway_frame;
       break;
     }
     case FRAME_TYPE_WINDOW_UPDATE:
     {
       http_frame_window_update_t *window_update_frame = malloc(sizeof(http_frame_window_update_t));
-      frame = (http_frame_t*) window_update_frame;
+      frame = (http_frame_t *) window_update_frame;
       break;
     }
     case FRAME_TYPE_CONTINUATION:
@@ -564,7 +574,7 @@ http_frame_t* http_frame_init(uint16_t length, uint8_t type, uint8_t flags, uint
       http_frame_continuation_t *continuation_frame = malloc(sizeof(http_frame_continuation_t));
       continuation_frame->end_headers = flags & CONTINUATION_FLAG_END_HEADERS;
       // TODO padding flags
-      frame = (http_frame_t*) continuation_frame;
+      frame = (http_frame_t *) continuation_frame;
       break;
     }
     default:
@@ -577,7 +587,7 @@ http_frame_t* http_frame_init(uint16_t length, uint8_t type, uint8_t flags, uint
   return frame;
 }
 
-bool http_connection_add_from_buffer(http_connection_t* connection) {
+static bool http_connection_add_from_buffer(http_connection_t * const connection) {
   if (LOG_TRACE) log_trace("Reading %ld bytes\n", connection->buffer_length);
   if (connection->buffer_position == connection->buffer_length) {
     if (LOG_TRACE) log_trace("Finished with current buffer\n");
@@ -590,7 +600,7 @@ bool http_connection_add_from_buffer(http_connection_t* connection) {
     return false;
   }
 
-  uint8_t* pos = connection->buffer + connection->buffer_position;
+  uint8_t * pos = connection->buffer + connection->buffer_position;
 
   // get 14 bits of first 2 bytes
   uint16_t frame_length = get_bits16(pos, 0, 0x3FFF);
@@ -606,7 +616,7 @@ bool http_connection_add_from_buffer(http_connection_t* connection) {
     // TODO - if the previous frame type was headers, and headers haven't been completed,
     // this frame must be a continuation frame, or else this is a protocol error
 
-    http_frame_t* frame = http_frame_init(frame_length, frame_type, frame_flags, stream_id);
+    http_frame_t * frame = http_frame_init(frame_length, frame_type, frame_flags, stream_id);
 
     connection->buffer_position += FRAME_HEADER_SIZE;
     // TODO off-by-one?
@@ -621,7 +631,7 @@ bool http_connection_add_from_buffer(http_connection_t* connection) {
           parse_frame_data(connection);
         */
         case FRAME_TYPE_HEADERS:
-          http_parse_frame_headers(connection, (http_frame_headers_t*) frame);
+          http_parse_frame_headers(connection, (http_frame_headers_t *) frame);
           break;
         /*
         case FRAME_TYPE_PRIORITY:
@@ -630,7 +640,7 @@ bool http_connection_add_from_buffer(http_connection_t* connection) {
           parse_frame_reset_stream(connection);
         */
         case FRAME_TYPE_SETTINGS:
-          http_parse_frame_settings(connection, (http_frame_settings_t*) frame);
+          http_parse_frame_settings(connection, (http_frame_settings_t *) frame);
           break;
         /*
         case FRAME_TYPE_PUSH_PROMISE:
@@ -639,13 +649,13 @@ bool http_connection_add_from_buffer(http_connection_t* connection) {
           parse_frame_ping(connection);
         */
         case FRAME_TYPE_GOAWAY:
-          http_parse_frame_goaway(connection, (http_frame_goaway_t*) frame);
+          http_parse_frame_goaway(connection, (http_frame_goaway_t *) frame);
           break;
         case FRAME_TYPE_WINDOW_UPDATE:
-          http_parse_frame_window_update(connection, (http_frame_window_update_t*) frame);
+          http_parse_frame_window_update(connection, (http_frame_window_update_t *) frame);
           break;
         case FRAME_TYPE_CONTINUATION:
-          http_parse_frame_continuation(connection, (http_frame_continuation_t*) frame);
+          http_parse_frame_continuation(connection, (http_frame_continuation_t *) frame);
           break;
         default:
           if (LOG_ERROR) log_error("Invalid frame type: %d\n", frame->type);
@@ -666,7 +676,7 @@ bool http_connection_add_from_buffer(http_connection_t* connection) {
  * Reads the given buffer and acts on it. Caller must give up ownership of the
  * buffer.
  */
-void http_connection_read(http_connection_t* connection, uint8_t* buffer, size_t len) {
+void http_connection_read(http_connection_t * const connection, uint8_t * const buffer, const size_t len) {
   if (LOG_TRACE) log_trace("Reading from buffer: %ld\n", len);
   size_t unprocessed_bytes = connection->buffer_length;
   if (unprocessed_bytes > 0) {
@@ -713,20 +723,20 @@ void http_connection_read(http_connection_t* connection, uint8_t* buffer, size_t
   }
 }
 
-void http_response_write(http_response_t* response, char* text, size_t text_length) {
+void http_response_write(http_response_t * const response, char * text, const size_t text_length) {
   char status_buf[10];
   snprintf(status_buf, 10, "%d", response->status);
   // add the status header
   http_response_header_add(response, ":status", status_buf);
 
-  http_connection_t* connection = (http_connection_t*)response->request->connection;
-  http_stream_t* stream = (http_stream_t*)response->request->stream;
+  http_connection_t * connection = (http_connection_t *)response->request->connection;
+  http_stream_t * stream = (http_stream_t *)response->request->stream;
 
   // emit headers frame
   http_emit_headers(connection, stream, response->headers);
 
   // emit data frame
-  http_emit_data(connection, stream, (uint8_t*)text, text_length);
+  http_emit_data(connection, stream, (uint8_t *)text, text_length);
 
   http_response_free(response);
 }
