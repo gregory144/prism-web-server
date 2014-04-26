@@ -552,10 +552,10 @@ multimap_t * hpack_decode(const hpack_context_t * const context, const uint8_t *
 
   if (LOG_TRACE) log_trace("Decompressing headers: %ld, %ld\n", current, length);
   while (current < length) {
-    uint8_t first_bit = get_bits8(buf, current, 1, 0x80);
-    uint8_t second_bit = get_bits8(buf, current, 1, 0x40);
-    uint8_t third_bit = get_bits8(buf, current, 1, 0x20);
-    uint8_t fourth_bit = get_bits8(buf, current, 1, 0x10);
+    uint8_t first_bit = get_bits8(buf, current, 0x80);
+    uint8_t second_bit = get_bits8(buf, current, 0x40);
+    uint8_t third_bit = get_bits8(buf, current, 0x20);
+    uint8_t fourth_bit = get_bits8(buf, current, 0x10);
     if (first_bit) {
       // indexed header field (4.2)
       hpack_decode_indexed_header(context, headers, buf, length, &current);

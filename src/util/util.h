@@ -99,11 +99,11 @@ typedef struct {
 
 bool get_bit(const uint8_t * const buffer, const size_t total_bit_index);
 
-uint8_t get_bits8(const uint8_t * const buf, const size_t offset, const size_t num_bytes, const uint8_t mask);
+uint8_t get_bits8(const uint8_t * const buf, const size_t offset, const uint8_t mask);
 
-uint16_t get_bits16(const uint8_t * const buf, const size_t offset, const size_t num_bytes, const uint16_t mask);
+uint16_t get_bits16(const uint8_t * const buf, const size_t offset, const uint16_t mask);
 
-uint32_t get_bits32(const uint8_t * const buf, const size_t offset, const size_t num_bytes, const uint32_t mask);
+uint32_t get_bits32(const uint8_t * const buf, const size_t offset, const uint32_t mask);
 
 /*@null@*/ char* date_rfc1123();
 

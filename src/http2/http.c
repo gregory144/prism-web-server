@@ -394,7 +394,7 @@ void http_parse_frame_headers(http_connection_t* connection, http_frame_headers_
   size_t header_block_fragment_size = frame->length;
   http_stream_t* stream = http_stream_init(connection, frame->stream_id);
   if (frame->priority) {
-    stream->priority = get_bits32(pos, 4, 4, 0x7FFFFFFF);
+    stream->priority = get_bits32(pos, 4, 0x7FFFFFFF);
     pos += 4;
     header_block_fragment_size -= 4;
   }
@@ -442,7 +442,7 @@ void http_parse_frame_settings(http_connection_t* connection, http_frame_setting
     for (i = 0; i < num_settings; i++) {
       uint8_t* curr_setting = pos + (i * setting_size);
       uint8_t setting_id = curr_setting[0];
-      uint32_t setting_value = get_bits32(curr_setting, 1, 4, 0xFFFFFFFF);
+      uint32_t setting_value = get_bits32(curr_setting, 1, 0xFFFFFFFF);
       http_setting_set(connection, setting_id, setting_value);
     }
     connection->received_settings = true;
@@ -475,7 +475,7 @@ void http_increment_stream_window_size(http_connection_t* connection, uint32_t s
 
 void http_parse_frame_window_update(http_connection_t* connection, http_frame_window_update_t* frame) {
   uint8_t* buf = connection->buffer + connection->buffer_position;
-  frame->increment = get_bits32(buf, 0, 4, 0x7FFFFFFF);
+  frame->increment = get_bits32(buf, 0, 0x7FFFFFFF);
 
   if (frame->stream_id > 0) {
     http_increment_stream_window_size(connection, frame->stream_id, frame->increment);
@@ -494,8 +494,8 @@ void http_parse_frame_goaway(http_connection_t* connection, http_frame_goaway_t*
     abort();
   }
   uint8_t* buf = connection->buffer + connection->buffer_position;
-  frame->last_stream_id = get_bits32(buf, 0, 4, 0x7FFFFFFF);
-  frame->error_code = get_bits32(buf, 4, 4, 0xFFFFFFFF);
+  frame->last_stream_id = get_bits32(buf, 0, 0x7FFFFFFF);
+  frame->error_code = get_bits32(buf, 4, 0xFFFFFFFF);
   size_t debug_data_length = (frame->length - 8);
   frame->debug_data = malloc(sizeof(char) * (debug_data_length + 1));
   memcpy(frame->debug_data, buf + 8, debug_data_length);
@@ -593,7 +593,7 @@ bool http_connection_add_from_buffer(http_connection_t* connection) {
   uint8_t* pos = connection->buffer + connection->buffer_position;
 
   // get 14 bits of first 2 bytes
-  uint16_t frame_length = get_bits16(pos, 0, 2, 0x3FFF);
+  uint16_t frame_length = get_bits16(pos, 0, 0x3FFF);
 
   // is there enough in the buffer to read the frame payload?
   if (connection->buffer_position + FRAME_HEADER_SIZE + frame_length <= connection->buffer_length) {
@@ -601,7 +601,7 @@ bool http_connection_add_from_buffer(http_connection_t* connection) {
     uint8_t frame_type = pos[2];
     uint8_t frame_flags = pos[3];
     // get 31 bits
-    uint32_t stream_id = get_bits32(pos, 4, 4, 0x7FFFFFFF);
+    uint32_t stream_id = get_bits32(pos, 4, 0x7FFFFFFF);
 
     // TODO - if the previous frame type was headers, and headers haven't been completed,
     // this frame must be a continuation frame, or else this is a protocol error
