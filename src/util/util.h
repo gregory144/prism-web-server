@@ -93,30 +93,30 @@
   }
 
 typedef struct {
-  char* value;
+  char * value;
   size_t length;
 } string_and_length_t;
 
-bool get_bit(const uint8_t* buffer, size_t total_bit_index);
+bool get_bit(const uint8_t * const buffer, const size_t total_bit_index);
 
-uint8_t get_bits8(uint8_t* buf, size_t offset, size_t num_bytes, uint8_t mask);
+uint8_t get_bits8(const uint8_t * const buf, const size_t offset, const size_t num_bytes, const uint8_t mask);
 
-uint16_t get_bits16(uint8_t* buf, size_t offset, size_t num_bytes, uint16_t mask);
+uint16_t get_bits16(const uint8_t * const buf, const size_t offset, const size_t num_bytes, const uint16_t mask);
 
-uint32_t get_bits32(uint8_t* buf, size_t offset, size_t num_bytes, uint32_t mask);
+uint32_t get_bits32(const uint8_t * const buf, const size_t offset, const size_t num_bytes, const uint32_t mask);
 
 /*@null@*/ char* date_rfc1123();
 
-void log_fatal(char* format, ...);
+void log_fatal(char * format, ...);
 
-void log_error(char* format, ...);
+void log_error(char * format, ...);
 
-void log_warning(char* format, ...);
+void log_warning(char * format, ...);
 
-void log_info(char* format, ...);
+void log_info(char * format, ...);
 
-void log_debug(char* format, ...);
+void log_debug(char * format, ...);
 
-void log_trace(char* format, ...);
+void log_trace(char * format, ...);
 
 #endif

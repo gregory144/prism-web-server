@@ -7,7 +7,7 @@
 
 #include "util.h"
 
-bool get_bit(const uint8_t * buffer, size_t total_bit_index) {
+bool get_bit(const uint8_t * const buffer, const size_t total_bit_index) {
   const uint8_t* at_byte = buffer + (total_bit_index / 8);
   size_t bit_index = total_bit_index % 8;
 
@@ -17,8 +17,8 @@ bool get_bit(const uint8_t * buffer, size_t total_bit_index) {
   return res;
 }
 
-uint8_t get_bits8(uint8_t* buf, size_t offset, size_t num_bytes, uint8_t mask) {
-  uint8_t* curr = buf + offset;
+uint8_t get_bits8(const uint8_t * const buf, const size_t offset, const size_t num_bytes, const uint8_t mask) {
+  const uint8_t * curr = buf + offset;
   uint8_t val = 0;
   for (; curr < buf + offset + num_bytes; curr++) {
     val = (val << 8) | *curr;
@@ -26,8 +26,8 @@ uint8_t get_bits8(uint8_t* buf, size_t offset, size_t num_bytes, uint8_t mask) {
   return val & mask;
 }
 
-uint16_t get_bits16(uint8_t* buf, size_t offset, size_t num_bytes, uint16_t mask) {
-  uint8_t* curr = buf + offset;
+uint16_t get_bits16(const uint8_t * const buf, const size_t offset, const size_t num_bytes, const uint16_t mask) {
+  const uint8_t * curr = buf + offset;
   uint16_t val = 0;
   for (; curr < buf + offset + num_bytes; curr++) {
     val = (val << 8) | *curr;
@@ -35,8 +35,8 @@ uint16_t get_bits16(uint8_t* buf, size_t offset, size_t num_bytes, uint16_t mask
   return val & mask;
 }
 
-uint32_t get_bits32(uint8_t* buf, size_t offset, size_t num_bytes, uint32_t mask) {
-  uint8_t* curr = buf + offset;
+uint32_t get_bits32(const uint8_t * const buf, const size_t offset, const size_t num_bytes, const uint32_t mask) {
+  const uint8_t * curr = buf + offset;
   uint32_t val = 0;
   for (; curr < buf + offset + num_bytes; curr++) {
     val = (val << 8) | *curr;
@@ -87,37 +87,37 @@ static const size_t RFC1123_TIME_LEN = 29;
   } \
   va_end(ap);
 
-void log_fatal(char* format, ...) {
+void log_fatal(char * format, ...) {
   if (LOG_FATAL) {
     LOG_WITH_LEVEL("FATAL")
   }
 }
 
-void log_warning(char* format, ...) {
+void log_warning(char * format, ...) {
   if (LOG_WARN) {
     LOG_WITH_LEVEL("WARN")
   }
 }
 
-void log_error(char* format, ...) {
+void log_error(char * format, ...) {
   if (LOG_ERROR) {
     LOG_WITH_LEVEL("ERROR")
   }
 }
 
-void log_info(char* format, ...) {
+void log_info(char * format, ...) {
   if (LOG_INFO) {
     LOG_WITH_LEVEL("INFO")
   }
 }
 
-void log_debug(char* format, ...) {
+void log_debug(char * format, ...) {
   if (LOG_DEBUG) {
     LOG_WITH_LEVEL("DEBUG")
   }
 }
 
-void log_trace(char* format, ...) {
+void log_trace(char * format, ...) {
   if (LOG_TRACE) {
     LOG_WITH_LEVEL("TRACE")
   }
