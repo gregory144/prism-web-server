@@ -4,7 +4,7 @@
 
 #include "huffman.h"
 
-int main(int argc, char* argv[]) {
+int main(int argc, char * argv[]) {
 
   bool print_stats = false;
 
@@ -14,7 +14,7 @@ int main(int argc, char* argv[]) {
   if (argc > 1) {
     size_t arg_index;
     for (arg_index = 1; arg_index < (size_t)argc; arg_index++) {
-      char* arg = argv[arg_index];
+      char * arg = argv[arg_index];
       if (strcmp(arg, "-s") == 0) {
         print_stats = true;
       } else if (strcmp(arg, "-d") == 0) {
@@ -40,7 +40,7 @@ int main(int argc, char* argv[]) {
     bytes_read = fread(buffer, sizeof(uint8_t), block_size, stdin);
     total_bytes_read += bytes_read;
 
-    uint8_t* intermediate = buffer;
+    uint8_t * intermediate = buffer;
     bool free_intermediate = false;
     size_t intermediate_length = bytes_read;
 
