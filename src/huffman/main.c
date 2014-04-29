@@ -93,7 +93,7 @@ int main(int argc, char * argv[]) {
   } while (bytes_read > 0);
 
   if (print_stats) {
-    double ratio = (total_bytes_written * 1.0) / total_bytes_read;
+    double ratio = total_bytes_read > 0 ? (total_bytes_written * 1.0) / total_bytes_read : 0;
     fprintf(stdout, "Read: %ld bytes\nWrote: %ld bytes\nRatio: %.3f%%\n", total_bytes_read, total_bytes_written, ratio);
   }
 
