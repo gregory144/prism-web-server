@@ -7,14 +7,14 @@
 
 typedef struct http_server_data_s http_server_data_t;
 struct http_server_data_s {
-  uv_loop_t *loop;
+  uv_loop_t * loop;
 };
 
 typedef struct http_client_data_s http_client_data_t;
 struct http_client_data_s {
-  uv_stream_t *stream;
+  uv_stream_t * stream;
 
-  http_connection_t *connection;
+  http_connection_t * connection;
 
   /**
    * Keep track of some stats for each client
@@ -27,13 +27,13 @@ struct http_client_data_s {
 
 typedef struct http_write_req_data_s http_write_req_data_t;
 struct http_write_req_data_s {
-  uv_stream_t* stream;
-  uv_buf_t *buf;
+  uv_stream_t * stream;
+  uv_buf_t * buf;
 };
 
 typedef struct http_shutdown_data_s http_shutdown_data_t;
 struct http_shutdown_data_s {
-  uv_stream_t* stream;
+  uv_stream_t * stream;
 };
 
 /**
