@@ -159,7 +159,7 @@ hpack_context_t * hpack_context_init(const size_t header_table_size) {
   return context;
 }
 
-void hpack_header_table_entry_free(void * entry) {
+static void hpack_header_table_entry_free(void * entry) {
   hpack_header_table_entry_t * header = entry;
   if (!header->from_static_table) {
     free(header->name);
@@ -168,7 +168,7 @@ void hpack_header_table_entry_free(void * entry) {
   free(header);
 }
 
-void hpack_header_table_free(hpack_header_table_t * header_table) {
+static void hpack_header_table_free(hpack_header_table_t * header_table) {
   circular_buffer_free(header_table->entries, hpack_header_table_entry_free);
   free(header_table);
 }
@@ -178,23 +178,23 @@ void hpack_context_free(const hpack_context_t * const context) {
   free((void *)context);
 }
 
-hpack_header_table_entry_t * hpack_header_table_get(const hpack_context_t * const context, const size_t index);
+static hpack_header_table_entry_t * hpack_header_table_get(const hpack_context_t * const context, const size_t index);
 
-void hpack_reference_set_add(const hpack_context_t * const context,
+static void hpack_reference_set_add(const hpack_context_t * const context,
     hpack_header_table_entry_t * const header) {
   UNUSED(context);
   header->in_refset = true;
 }
 
-void hpack_reference_set_remove(hpack_header_table_entry_t * const entry) {
+static void hpack_reference_set_remove(hpack_header_table_entry_t * const entry) {
   entry->in_refset = false;
 }
 
-bool hpack_reference_set_contains(hpack_header_table_entry_t * const entry) {
+static bool hpack_reference_set_contains(hpack_header_table_entry_t * const entry) {
   return entry->in_refset;
 }
 
-void hpack_reference_set_clear(const hpack_context_t * const context) {
+static void hpack_reference_set_clear(const hpack_context_t * const context) {
   circular_buffer_iter_t iter;
   circular_buffer_iterator_init(&iter, context->header_table->entries);
   while (circular_buffer_iterate(&iter)) {
@@ -202,7 +202,7 @@ void hpack_reference_set_clear(const hpack_context_t * const context) {
   }
 }
 
-void hpack_header_table_evict(const hpack_context_t * const context) {
+static void hpack_header_table_evict(const hpack_context_t * const context) {
   hpack_header_table_t * header_table = context->header_table;
 
   const size_t last_index = header_table->entries->length;
@@ -224,7 +224,7 @@ void hpack_header_table_adjust_size(const hpack_context_t * const context, const
   }
 }
 
-void hpack_emit_header(const multimap_t * const headers, char * name,
+static void hpack_emit_header(const multimap_t * const headers, char * name,
     size_t name_length, char * value, size_t value_length) {
 
   if (LOG_TRACE) log_trace("Emitting header: '%s' (%ld): '%s' (%ld)\n", name, name_length, value, value_length);
@@ -250,7 +250,7 @@ void hpack_emit_header(const multimap_t * const headers, char * name,
 
 }
 
-hpack_header_table_entry_t * hpack_header_table_add_existing_entry(
+static hpack_header_table_entry_t * hpack_header_table_add_existing_entry(
     const hpack_context_t * const context, hpack_header_table_entry_t * const header) {
 
   hpack_header_table_t * header_table = context->header_table;
@@ -283,7 +283,7 @@ hpack_header_table_entry_t * hpack_header_table_add_existing_entry(
   return header;
 }
 
-hpack_header_table_entry_t * hpack_header_table_add(const hpack_context_t * const context,
+static hpack_header_table_entry_t * hpack_header_table_add(const hpack_context_t * const context,
     char * name, size_t name_length, char * value, size_t value_length) {
   hpack_header_table_entry_t * const header = malloc(sizeof(hpack_header_table_entry_t));
   header->from_static_table = false;
@@ -299,7 +299,7 @@ hpack_header_table_entry_t * hpack_header_table_add(const hpack_context_t * cons
   return hpack_header_table_add_existing_entry(context, header);
 }
 
-hpack_header_table_entry_t * hpack_static_table_get(const hpack_context_t * const context, const size_t index) {
+static hpack_header_table_entry_t * hpack_static_table_get(const hpack_context_t * const context, const size_t index) {
   size_t header_table_length = context->header_table->entries->length;
   if (index + 1 > header_table_length) {
     size_t static_table_index = index - header_table_length - 1;
@@ -324,7 +324,7 @@ hpack_header_table_entry_t * hpack_static_table_get(const hpack_context_t * cons
   return NULL;
 }
 
-hpack_header_table_entry_t * hpack_header_table_get(const hpack_context_t * const context, const size_t index) {
+static hpack_header_table_entry_t * hpack_header_table_get(const hpack_context_t * const context, const size_t index) {
   if (index > 0 && index + 1 <= context->header_table->entries->length) {
     return circular_buffer_get(context->header_table->entries, index);
   }
@@ -359,7 +359,7 @@ static bool hpack_decode_string_literal(
   return true;
 }
 
-void hpack_decode_literal_header(
+static void hpack_decode_literal_header(
     const hpack_context_t * const context, const multimap_t * const headers, const uint8_t * const buf,
     const size_t length, size_t * const current, const size_t bit_offset, const bool add_to_header_table) {
 
@@ -425,7 +425,7 @@ void hpack_decode_literal_header(
 
 }
 
-void hpack_decode_indexed_header(
+static void hpack_decode_indexed_header(
     const hpack_context_t * const context, const multimap_t * const headers, const uint8_t * const buf,
     const size_t length, size_t * const current) {
 
@@ -466,7 +466,7 @@ void hpack_decode_indexed_header(
 
 }
 
-void hpack_decode_context_update(
+static void hpack_decode_context_update(
     const hpack_context_t * const context, const uint8_t * const buf,
     const size_t length, size_t * const current, const bool fourth_bit) {
 
@@ -499,7 +499,7 @@ void hpack_decode_context_update(
 /**
  * Finds any cookie values and transforms them into a single value
  */
-void concatenate_cookie_fields(multimap_t * headers) {
+static void concatenate_cookie_fields(multimap_t * headers) {
   char * name = "cookie";
   multimap_values_t * values = multimap_get(headers, name);
   if (values) {
