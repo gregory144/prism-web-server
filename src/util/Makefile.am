@@ -1,5 +1,5 @@
 lib_LTLIBRARIES = libhttp2_util.la
-libhttp2_util_la_SOURCES = util.c
+libhttp2_util_la_SOURCES = util.c multimap.c
 
 TESTS = check_util
 check_PROGRAMS = check_util

@@ -2,11 +2,12 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "util/util.h"
+#include "util.h"
 
 #include "multimap.h"
 
 #define DEFAULT_MULTIMAP_INITIAL_SIZE 128
+#define DEFAULT_MULTIMAP_LOAD_FACTOR 0.75
 
 /**
  * From http://www.cse.yorku.ca/~oz/hash.html
@@ -118,11 +119,8 @@ multimap_values_t * multimap_get(const multimap_t * const table, void * key) {
 }
 
 static bool multimap_grow(multimap_t * const table) {
-  // TODO
-  abort();
   size_t new_size = table->capacity * 2;
-  multimap_entry_t * new_buckets = calloc(new_size,
-      sizeof(multimap_entry_t));
+  multimap_entry_t * new_buckets = calloc(new_size, sizeof(multimap_entry_t));
   if (new_buckets == NULL) {
     return false;
   }
@@ -135,6 +133,10 @@ static bool multimap_grow(multimap_t * const table) {
     }
   }
   return true;
+}
+
+size_t multimap_size(multimap_t * const map) {
+  return map->size;
 }
 
 /**
@@ -168,7 +170,8 @@ bool multimap_put(multimap_t * const table, void * key, void * value) {
     // not found
 
     // grow the table if necessary
-    if ((table->size + 1.0) / table->capacity > 0.75) {
+    fprintf(stdout, "Size: %ld, Capacity: %ld\n", table->size, table->capacity);
+    if ((table->size + 1.0) / table->capacity > DEFAULT_MULTIMAP_LOAD_FACTOR) {
       if (!multimap_grow(table)) {
         return false;
       }

@@ -12,7 +12,7 @@
 #include <stdbool.h>
 
 #include "circular_buffer.h"
-#include "../multimap.h"
+#include "../util/multimap.h"
 
 #define HEADER_TABLE_OVERHEAD 32
 

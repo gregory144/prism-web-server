@@ -4,7 +4,7 @@
 #include <limits.h>
 
 #include "../util/util.c"
-#include "../multimap.c"
+#include "../util/multimap.c"
 #include "../huffman/huffman.c"
 
 #include "hpack.c"

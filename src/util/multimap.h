@@ -60,6 +60,8 @@ multimap_values_t * multimap_get(const multimap_t * const table, void * key);
 
 bool multimap_put(multimap_t * const table, void * key, void * value);
 
+size_t multimap_size(multimap_t * const map);
+
 void multimap_remove(multimap_t * const table, void * key, const free_func_t free_key, const free_func_t free_value);
 
 void multimap_iterator_init(multimap_iter_t * const iter, multimap_t * table);

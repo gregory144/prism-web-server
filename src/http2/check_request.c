@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <check.h>
 
-#include "../multimap.c"
 #include "../util/util.c"
+#include "../util/multimap.c"
 
 #include "request.c"
 
