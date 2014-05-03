@@ -30,6 +30,7 @@ LT_INIT
 # suggested by libtoolize
 AC_CONFIG_MACRO_DIR([m4])
 
+AC_CHECK_LIB(uv, uv_run)
 # require pthread for libuv
 AC_CHECK_LIB(pthread, pthread_create)
 
