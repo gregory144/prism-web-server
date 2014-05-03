@@ -592,6 +592,20 @@ multimap_t * hpack_decode(const hpack_context_t * const context, const uint8_t *
   return headers;
 }
 
+
+static bool hpack_encode_string_literal(uint8_t * encoded, size_t * encoded_index, char * name, size_t name_length) {
+  encoded[*encoded_index] = 0x80; // set huffman encoded bit
+  huffman_result_t encoded_name;
+  ASSERT_OR_RETURN_FALSE(huffman_encode((uint8_t *) name, name_length, &encoded_name));
+  *encoded_index += hpack_encode_quantity(encoded, (*encoded_index * 8) + 1, encoded_name.length);
+  memcpy(encoded + *encoded_index, encoded_name.value, encoded_name.length);
+  *encoded_index += encoded_name.length;
+  free(encoded_name.value);
+
+  return true;
+}
+
+
 bool hpack_encode(const hpack_context_t * const context, const multimap_t * const headers,
     hpack_encode_result_t * const result) {
   UNUSED(context);
@@ -616,28 +630,8 @@ bool hpack_encode(const hpack_context_t * const context, const multimap_t * cons
     if (LOG_TRACE) log_trace("Encoding Reponse Header: %s (%ld): %s (%ld)\n", name, name_length, value, value_length);
     encoded[encoded_index++] = 0x40; // 4.3.1. Literal Header Field without Indexing
 
-    encoded[encoded_index] = 0x80; // set huffman encoded bit
-    huffman_result_t encoded_name;
-    if (!huffman_encode((uint8_t *) name, name_length, &encoded_name)) {
-      log_error("Could not allocate memory for huffman encoding\n");
-      return false;
-    }
-    encoded_index += hpack_encode_quantity(encoded, (encoded_index * 8) + 1, encoded_name.length);
-    memcpy(encoded + encoded_index, encoded_name.value, encoded_name.length);
-    encoded_index += encoded_name.length;
-    free(encoded_name.value);
-
-    encoded[encoded_index] = 0x80; // set huffman encoded bit
-    huffman_result_t encoded_value;
-    if (!huffman_encode((uint8_t *) value, value_length, &encoded_value)) {
-      log_error("Could not allocate memory for huffman encoding\n");
-      return false;
-    }
-    encoded_index += hpack_encode_quantity(encoded, (encoded_index * 8) + 1, encoded_value.length);
-    // TODO how does memcpy fail?
-    memcpy(encoded + encoded_index, encoded_value.value, encoded_value.length);
-    encoded_index += encoded_value.length;
-    free(encoded_value.value);
+    hpack_encode_string_literal(encoded, &encoded_index, name, name_length);
+    hpack_encode_string_literal(encoded, &encoded_index, value, value_length);
   }
   result->buf = encoded;
   result->buf_length = encoded_index;
