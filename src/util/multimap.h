@@ -50,6 +50,10 @@ multimap_t * multimap_init_with_string_keys();
 
 multimap_t * multimap_init_with_string_keys_and_size(const size_t initial_size);
 
+multimap_t * multimap_init_with_int_keys();
+
+multimap_t * multimap_init_with_int_keys_and_size(const size_t initial_size);
+
 multimap_t * multimap_init_with_size(const hash_func_t hash_func,
     const hash_cmp_key_func_t cmp_key_func, const size_t initial_size);
 

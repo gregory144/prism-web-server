@@ -17,14 +17,25 @@ static size_t string_hash(void * key) {
   size_t hash = 5381;
   int c;
 
-  while ((c = * string_key++))
+  while ((c = * (string_key++)))
     hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
 
   return hash;
 }
 
+static size_t int_hash(void * key) {
+  size_t i = * (long *) key;
+  return i * 2654435761;
+}
+
 static int string_cmp_key(void * key1, void * key2) {
   return strcmp(key1, key2);
+}
+
+static int int_cmp_key(void * key1, void * key2) {
+  long k1 = * (long *) key1;
+  long k2 = * (long *) key2;
+  return k1 - k2;
 }
 
 multimap_t * multimap_init_with_string_keys() {
@@ -35,6 +46,17 @@ multimap_t * multimap_init_with_string_keys() {
 multimap_t * multimap_init_with_string_keys_and_size(
   size_t initial_size) {
   return multimap_init_with_size(string_hash, string_cmp_key,
+      initial_size);
+}
+
+multimap_t * multimap_init_with_int_keys() {
+  return multimap_init_with_int_keys_and_size(
+      DEFAULT_MULTIMAP_INITIAL_SIZE);
+}
+
+multimap_t * multimap_init_with_int_keys_and_size(
+  size_t initial_size) {
+  return multimap_init_with_size(int_hash, int_cmp_key,
       initial_size);
 }
 
@@ -207,7 +229,9 @@ bool multimap_put(multimap_t * const table, void * key, void * value) {
     entry->values->key = key;
     entry->values->value = value;
     entry->values->next = NULL;
+
   } else {
+
     if (!multimap_values_add(entry->values, key, value)) {
       return false;
     }
