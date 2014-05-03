@@ -17,7 +17,7 @@ static size_t string_hash(void * key) {
   size_t hash = 5381;
   int c;
 
-  while ((c = *string_key++))
+  while ((c = * string_key++))
     hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
 
   return hash;
@@ -50,8 +50,9 @@ multimap_t * multimap_init_with_size(hash_func_t hash_func,
   if (table == NULL) {
     return NULL;
   }
-  table->buckets = calloc(initial_size, sizeof(multimap_entry_t));
+  table->buckets = calloc(initial_size, sizeof(multimap_entry_t *));
   if (table->buckets == NULL) {
+    free(table);
     return NULL;
   }
   table->hash_func = hash_func;
@@ -92,13 +93,13 @@ void multimap_free(multimap_t * const table, const free_func_t free_key, const f
   free(table);
 }
 
-static size_t hash_key(const multimap_t * const table, void * key) {
+static size_t hash_key(const multimap_t * const table, size_t capacity, void * key) {
   size_t hash_value = table->hash_func(key);
-  return hash_value % table->capacity;
+  return hash_value % capacity;
 }
 
 static multimap_entry_t * multimap_get_entry(const multimap_t * const table, void * key) {
-  size_t hash_value = hash_key(table, key);
+  size_t hash_value = hash_key(table, table->capacity, key);
   multimap_entry_t * current;
   for (current = table->buckets[hash_value]; current != NULL;
       current = current->next) {
@@ -119,19 +120,32 @@ multimap_values_t * multimap_get(const multimap_t * const table, void * key) {
 }
 
 static bool multimap_grow(multimap_t * const table) {
-  size_t new_size = table->capacity * 2;
-  multimap_entry_t * new_buckets = calloc(new_size, sizeof(multimap_entry_t));
+  size_t new_capacity = table->capacity * 2;
+  multimap_entry_t * * new_buckets = calloc(new_capacity, sizeof(multimap_entry_t *));
   if (new_buckets == NULL) {
     return false;
   }
   // iterate through all entries in table and re-insert into
   // new table
-  for (size_t i = 0; i < table->capacity; i++) {
-    multimap_entry_t *current = table->buckets[i];
-    for (; current != NULL; current = current->next) {
-      // TODO
+  size_t i;
+  for (i = 0; i < table->capacity; i++) {
+    multimap_entry_t * current = table->buckets[i];
+    while (current) {
+      multimap_entry_t * next = current->next;
+
+      // find which bucket to place the entry in in the new array of buckets
+      size_t hash_value = hash_key(table, new_capacity, current->key);
+      current->next = new_buckets[hash_value];
+      new_buckets[hash_value] = current;
+
+      current = next;
     }
   }
+
+  free(table->buckets);
+  table->buckets = new_buckets;
+  table->capacity = new_capacity;
+
   return true;
 }
 
@@ -164,13 +178,11 @@ static bool multimap_values_add(multimap_values_t * values, void * key, void * v
  * Adds a key/value to the map
  */
 bool multimap_put(multimap_t * const table, void * key, void * value) {
-  size_t hash_value = hash_key(table, key);
   multimap_entry_t * entry;
   if ((entry = multimap_get_entry(table, key)) == NULL) {
     // not found
 
     // grow the table if necessary
-    fprintf(stdout, "Size: %ld, Capacity: %ld\n", table->size, table->capacity);
     if ((table->size + 1.0) / table->capacity > DEFAULT_MULTIMAP_LOAD_FACTOR) {
       if (!multimap_grow(table)) {
         return false;
@@ -184,6 +196,8 @@ bool multimap_put(multimap_t * const table, void * key, void * value) {
     }
     entry->values = &entry->first_value;
     entry->key = key;
+
+    size_t hash_value = hash_key(table, table->capacity, key);
     entry->next = table->buckets[hash_value];
     table->buckets[hash_value] = entry;
 
@@ -204,7 +218,7 @@ bool multimap_put(multimap_t * const table, void * key, void * value) {
 }
 
 void multimap_remove(multimap_t * const table, void * key, const free_func_t free_key, const free_func_t free_value) {
-  size_t hash_value = hash_key(table, key);
+  size_t hash_value = hash_key(table, table->capacity, key);
   multimap_entry_t * current;
   multimap_entry_t * prev = NULL;
   for (current = table->buckets[hash_value]; current != NULL;
