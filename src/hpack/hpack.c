@@ -345,7 +345,7 @@ static bool hpack_decode_string_literal(
   char * key_name;
   if (first_bit) {
     huffman_result_t huffman_result;
-    huffman_decode(buf + (*current), key_name_length, &huffman_result);
+    ASSERT_OR_RETURN_FALSE(huffman_decode(buf + (*current), key_name_length, &huffman_result));
     *current += key_name_length;
     key_name_length = huffman_result.length;
     COPY_STRING(key_name, huffman_result.value, key_name_length);
