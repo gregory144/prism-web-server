@@ -7,6 +7,25 @@
 
 #include "util.h"
 
+/**
+ *
+ * Round this value to the next highest power of 2
+ *
+ * See http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
+ *
+ */
+size_t roundup_to_power_of_2(size_t v) {
+  v--;
+  v |= v >> 1;
+  v |= v >> 2;
+  v |= v >> 4;
+  v |= v >> 8;
+  v |= v >> 16;
+  v++;
+
+  return v;
+}
+
 bool get_bit(const uint8_t * const buffer, const size_t total_bit_index) {
   const uint8_t* at_byte = buffer + (total_bit_index / 8);
   size_t bit_index = total_bit_index % 8;

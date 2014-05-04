@@ -124,34 +124,31 @@ void hpack_decode_quantity(const uint8_t * const buf, const size_t length, const
  *          I = I / 128
  *     encode (I) on 8 bits
  */
-size_t hpack_encode_quantity(uint8_t * const buf, const size_t offset, const size_t quantity) {
+bool hpack_encode_quantity(binary_buffer_t * const buf, const uint8_t first_byte, const size_t bit_offset, const size_t quantity) {
   size_t i = (size_t) quantity;
-  size_t buf_index = offset / 8;
-  size_t original_buf_index = buf_index;
-  uint8_t byte_offset = offset % 8;
-  uint8_t n = 8 - byte_offset;
-  uint8_t bitmask = ((1 << byte_offset) - 1) << n;
-  uint8_t first_byte = buf[buf_index] & bitmask;
+  uint8_t n = 8 - bit_offset;
   uint8_t p = (1 << n) - 1; // 2^n - 1
 
   if (i < p) {
-    buf[buf_index++] = first_byte | i;
+    ASSERT_OR_RETURN_FALSE(binary_buffer_write_curr_index(buf, first_byte | i));
   } else {
-    buf[buf_index++] = first_byte | p;
+    ASSERT_OR_RETURN_FALSE(binary_buffer_write_curr_index(buf, first_byte | p));
     i -= p;
     while (i >= 128) {
-      buf[buf_index++] = (i % 128) + 128;
+      ASSERT_OR_RETURN_FALSE(binary_buffer_write_curr_index(buf, (i % 128) + 128));
       i /= 128;
     }
-    buf[buf_index++] = i;
+    ASSERT_OR_RETURN_FALSE(binary_buffer_write_curr_index(buf, i));
   }
-  return buf_index - original_buf_index;
+  return true;
 }
 
 hpack_context_t * hpack_context_init(const size_t header_table_size) {
   hpack_context_t * context = malloc(sizeof(hpack_context_t));
+  ASSERT_OR_RETURN_NULL(context);
 
   context->header_table = malloc(sizeof(hpack_header_table_t));
+  ASSERT_OR_RETURN_NULL(context->header_table);
   context->header_table->max_size = header_table_size;
   context->header_table->current_size = 0;
   context->header_table->entries = circular_buffer_init(header_table_size / ESTIMATED_HEADER_ENTRY_SIZE);
@@ -291,6 +288,7 @@ static hpack_header_table_entry_t * hpack_header_table_add_existing_entry(
 static hpack_header_table_entry_t * hpack_header_table_add(const hpack_context_t * const context,
     char * name, size_t name_length, char * value, size_t value_length) {
   hpack_header_table_entry_t * const header = malloc(sizeof(hpack_header_table_entry_t));
+  ASSERT_OR_RETURN_NULL(header);
   header->from_static_table = false;
   header->name = name;
   header->name_length = name_length;
@@ -310,6 +308,7 @@ static hpack_header_table_entry_t * hpack_static_table_get(const hpack_context_t
     size_t static_table_index = index - header_table_length - 1;
     static_entry_t entry = static_table[static_table_index];
     hpack_header_table_entry_t * header = malloc(sizeof(hpack_header_table_entry_t));
+    ASSERT_OR_RETURN_NULL(header);
     size_t name_length = strlen(entry.name);
     size_t value_length = strlen(entry.value);
     header->from_static_table = true;
@@ -590,14 +589,12 @@ multimap_t * hpack_decode(const hpack_context_t * const context, const uint8_t *
   return headers;
 }
 
-
-static bool hpack_encode_string_literal(uint8_t * encoded, size_t * encoded_index, char * name, size_t name_length) {
-  encoded[*encoded_index] = 0x80; // set huffman encoded bit
+static bool hpack_encode_string_literal(binary_buffer_t * const encoded, char * name, size_t name_length) {
+  uint8_t first_byte = 0x80; // set huffman encoded bit
   huffman_result_t encoded_name;
   ASSERT_OR_RETURN_FALSE(huffman_encode(name, name_length, &encoded_name));
-  *encoded_index += hpack_encode_quantity(encoded, (*encoded_index * 8) + 1, encoded_name.length);
-  memcpy(encoded + *encoded_index, encoded_name.value, encoded_name.length);
-  *encoded_index += encoded_name.length;
+  ASSERT_OR_RETURN_FALSE(hpack_encode_quantity(encoded, first_byte, 1, encoded_name.length));
+  ASSERT_OR_RETURN_FALSE(binary_buffer_write(encoded, encoded_name.value, encoded_name.length));
   free(encoded_name.value);
 
   return true;
@@ -605,17 +602,10 @@ static bool hpack_encode_string_literal(uint8_t * encoded, size_t * encoded_inde
 
 // naive hpack encoding - never add to the header table
 bool hpack_encode(const hpack_context_t * const context, const multimap_t * const headers,
-    hpack_encode_result_t * const result) {
+    binary_buffer_t * result) {
   UNUSED(context);
 
-  uint8_t * encoded = malloc(4096); // TODO - we need to construct this dynamically
-  if (!encoded) {
-    if (LOG_ERROR) {
-      log_error("Could not allocate memory for hpack encoding\n");
-    }
-    return false;
-  }
-  size_t encoded_index = 0;
+  ASSERT_OR_RETURN_NULL(binary_buffer_init(result, 512));
 
   multimap_iter_t iter;
   multimap_iterator_init(&iter, (multimap_t *) headers);
@@ -625,14 +615,12 @@ bool hpack_encode(const hpack_context_t * const context, const multimap_t * cons
     char * value = iter.value;
     size_t value_length = strlen(value);
     if (LOG_TRACE) log_trace("Encoding Reponse Header: %s (%ld): %s (%ld)\n", name, name_length, value, value_length);
-    encoded[encoded_index++] = 0x40; // 4.3.1. Literal Header Field without Indexing
+    ASSERT_OR_RETURN_FALSE(binary_buffer_write_curr_index(result, 0x40));
 
-    hpack_encode_string_literal(encoded, &encoded_index, name, name_length);
-    hpack_encode_string_literal(encoded, &encoded_index, value, value_length);
+    ASSERT_OR_RETURN_FALSE(hpack_encode_string_literal(result, name, name_length));
+    ASSERT_OR_RETURN_FALSE(hpack_encode_string_literal(result, value, value_length));
   }
-  result->buf = encoded;
-  result->buf_length = encoded_index;
-  if (LOG_TRACE) log_trace("Encoded headers into %ld bytes\n", encoded_index);
-  return true;
+  if (LOG_TRACE) log_trace("Encoded headers into %ld bytes\n", binary_buffer_size(result));
+  return result;
 }
 

@@ -60,7 +60,7 @@ START_TEST(test_huffman_decode_two_chars_with_eos) {
 } END_TEST
 
 START_TEST(test_huffman_encode_single_8bit_char) {
-  uint8_t buf[] = { 'E' };
+  char buf[] = { 'E' };
   uint8_t encoded[] = { 0xef };
 
   huffman_result_t result;
@@ -69,7 +69,7 @@ START_TEST(test_huffman_encode_single_8bit_char) {
 } END_TEST
 
 START_TEST(test_huffman_encode_single_5bit_char) {
-  uint8_t buf[] = { 't' };
+  char buf[] = { 't' };
   uint8_t encoded[] = { 0x77 }; // padded with 1s
 
   huffman_result_t result;
@@ -78,7 +78,7 @@ START_TEST(test_huffman_encode_single_5bit_char) {
 } END_TEST
 
 START_TEST(test_huffman_encode_single_9bit_char) {
-  uint8_t buf[] = { 'Z' };
+  char buf[] = { 'Z' };
   uint8_t encoded[] = { 0xfd, 0xff }; // padded with 1s
 
   huffman_result_t result;
@@ -87,7 +87,7 @@ START_TEST(test_huffman_encode_single_9bit_char) {
 } END_TEST
 
 START_TEST(test_huffman_encode_12bit_out) {
-  uint8_t buf[] = { '5', '4' };
+  char buf[] = { '5', '4' };
   uint8_t encoded[] = { 0x86, 0x0f }; // padded with 1s
   huffman_result_t result;
   ck_assert(huffman_encode(buf, 2, &result));
@@ -100,7 +100,7 @@ START_TEST(test_huffman_encode_longer_string) {
     0xf9, 0x2e, 0xcb, 0x1a, 0x6f, 0xcb, 0x70, 0xb2, 0x9f, 0xfe, 0x7f
   }; // padded with 1s
   huffman_result_t result;
-  ck_assert(huffman_encode((uint8_t*)buf, 12, &result));
+  ck_assert(huffman_encode(buf, 12, &result));
   check_encoded_val(encoded, 11, result.value, result.length);
 } END_TEST
 
@@ -112,7 +112,7 @@ START_TEST(test_huffman_encode_date) {
     0xc8, 0x6d, 0x5a, 0xe8
   }; // padded with 1s
   huffman_result_t result;
-  ck_assert(huffman_encode((uint8_t*)buf, strlen(buf), &result));
+  ck_assert(huffman_encode(buf, strlen(buf), &result));
   check_encoded_val(encoded, 20, result.value, result.length);
 } END_TEST
 

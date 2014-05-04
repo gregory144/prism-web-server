@@ -108,12 +108,12 @@ static void http_emit_headers(const http_connection_t * const connection, const 
   size_t headers_length = 0;
   uint8_t * hpack_buf = NULL;
   if (headers != NULL) {
-    hpack_encode_result_t encoded;
+    binary_buffer_t encoded;
     if (!hpack_encode(connection->encoding_context, headers, &encoded)) {
       abort();
     }
     hpack_buf = encoded.buf;
-    headers_length = encoded.buf_length;
+    headers_length = binary_buffer_size(&encoded);
   }
   const size_t buf_length = FRAME_HEADER_SIZE + headers_length;
   uint8_t buf[buf_length];

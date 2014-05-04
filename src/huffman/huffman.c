@@ -52,7 +52,7 @@ bool huffman_encode(const char * const buf, const size_t len, huffman_result_t *
   size_t buf_index;
   for (buf_index = 0; buf_index < len; buf_index++) {
 
-    char to_encode = buf[buf_index];
+    size_t to_encode = (size_t) buf[buf_index];
     huffman_encoder_entry_t entry = huffman_encoder_table[to_encode];
 
     uint32_t entry_value = entry.value;

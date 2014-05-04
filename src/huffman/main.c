@@ -48,7 +48,7 @@ int main(int argc, char * argv[]) {
 
     if (encode) {
 
-      if (!huffman_encode(intermediate, intermediate_length, &result)) {
+      if (!huffman_encode((char *)intermediate, intermediate_length, &result)) {
         fprintf(stderr, "Encode failed\n");
         exit(EXIT_FAILURE);
       }
