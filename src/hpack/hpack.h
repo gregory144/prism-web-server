@@ -73,7 +73,8 @@ typedef struct hpack_context_t {
 void hpack_decode_quantity(const uint8_t * const buf, const size_t length, const uint8_t offset,
     hpack_decode_quantity_result_t * const result);
 
-bool hpack_encode_quantity(binary_buffer_t * const buf, const uint8_t first_byte, const size_t bit_offset, const size_t quantity);
+bool hpack_encode_quantity(binary_buffer_t * const buf, const uint8_t first_byte, const size_t bit_offset,
+    const size_t quantity);
 
 hpack_context_t * hpack_context_init(const size_t header_table_size);
 
@@ -83,6 +84,7 @@ void hpack_header_table_adjust_size(const hpack_context_t * const context, size_
 
 multimap_t* hpack_decode(const hpack_context_t * const context, const uint8_t * const buf, const size_t length);
 
-bool hpack_encode(const hpack_context_t * const context, const multimap_t * const headers, binary_buffer_t * result);
+binary_buffer_t * hpack_encode(const hpack_context_t * const context, const multimap_t * const headers,
+    binary_buffer_t * result);
 
 #endif

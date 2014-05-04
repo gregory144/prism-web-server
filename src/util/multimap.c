@@ -69,9 +69,7 @@ multimap_t * multimap_init(hash_func_t hash_func,
 multimap_t * multimap_init_with_size(hash_func_t hash_func,
     hash_cmp_key_func_t cmp_key_func, size_t initial_size) {
   multimap_t * table = malloc(sizeof(multimap_t));
-  if (table == NULL) {
-    return NULL;
-  }
+  ASSERT_OR_RETURN_FALSE(table);
   table->buckets = calloc(initial_size, sizeof(multimap_entry_t *));
   if (table->buckets == NULL) {
     free(table);
@@ -181,9 +179,7 @@ size_t multimap_size(multimap_t * const map) {
  */
 static bool multimap_values_add(multimap_values_t * values, void * key, void * value) {
   multimap_values_t * new_value = malloc(sizeof(multimap_values_t));
-  if (!new_value) {
-    return false;
-  }
+  ASSERT_OR_RETURN_FALSE(new_value);
   new_value->key = key;
   new_value->value = value;
   new_value->next = NULL;
@@ -213,9 +209,7 @@ bool multimap_put(multimap_t * const table, void * key, void * value) {
 
     // create a new entry and put it in the table
     entry = malloc(sizeof(multimap_entry_t));
-    if (entry == NULL) {
-      return false;
-    }
+    ASSERT_OR_RETURN_FALSE(entry);
     entry->values = &entry->first_value;
     entry->key = key;
 

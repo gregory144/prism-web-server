@@ -601,7 +601,7 @@ static bool hpack_encode_string_literal(binary_buffer_t * const encoded, char * 
 }
 
 // naive hpack encoding - never add to the header table
-bool hpack_encode(const hpack_context_t * const context, const multimap_t * const headers,
+binary_buffer_t * hpack_encode(const hpack_context_t * const context, const multimap_t * const headers,
     binary_buffer_t * result) {
   UNUSED(context);
 
