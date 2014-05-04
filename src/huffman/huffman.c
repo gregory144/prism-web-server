@@ -40,19 +40,20 @@ bool huffman_decode(const uint8_t * const input, const size_t input_length_in_oc
   return true;
 }
 
-bool huffman_encode(const uint8_t * const buf, const size_t len, huffman_result_t * const result) {
+bool huffman_encode(const char * const buf, const size_t len, huffman_result_t * const result) {
   size_t max_len = len;
-  uint8_t* encoded = malloc(sizeof(char) * (max_len + 1));
+  uint8_t * encoded = malloc(sizeof(char) * (max_len + 1));
   ASSERT_OR_RETURN_FALSE(encoded);
 
   size_t encoded_index = 0;
-  size_t buf_index;
   uint8_t bits_left_in_byte = 8;
   uint8_t current_byte = 0;
 
+  size_t buf_index;
   for (buf_index = 0; buf_index < len; buf_index++) {
 
-    huffman_encoder_entry_t entry = huffman_encoder_table[buf[buf_index]];
+    char to_encode = buf[buf_index];
+    huffman_encoder_entry_t entry = huffman_encoder_table[to_encode];
 
     uint32_t entry_value = entry.value;
     uint8_t pos_in_entry = entry.length;

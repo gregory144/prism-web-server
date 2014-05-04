@@ -57,6 +57,6 @@ bool huffman_decode(const uint8_t * const buf, const size_t len, huffman_result_
  *
  * See http://tools.ietf.org/html/draft-ietf-httpbis-header-compression-07
  */
-bool huffman_encode(const uint8_t * const buf, const size_t len, huffman_result_t * const result);
+bool huffman_encode(const char * const buf, const size_t len, huffman_result_t * const result);
 
 #endif

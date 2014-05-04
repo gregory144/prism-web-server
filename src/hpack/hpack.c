@@ -178,7 +178,12 @@ void hpack_context_free(const hpack_context_t * const context) {
   free((void *)context);
 }
 
-static hpack_header_table_entry_t * hpack_header_table_get(const hpack_context_t * const context, const size_t index);
+static hpack_header_table_entry_t * hpack_header_table_get(const hpack_context_t * const context, const size_t index) {
+  if (index > 0 && index + 1 <= context->header_table->entries->length) {
+    return circular_buffer_get(context->header_table->entries, index);
+  }
+  return NULL;
+}
 
 static void hpack_reference_set_add(const hpack_context_t * const context,
     hpack_header_table_entry_t * const header) {
@@ -320,13 +325,6 @@ static hpack_header_table_entry_t * hpack_static_table_get(const hpack_context_t
     // TODO - this will need to be free'd by caller, but the caller won't
     // know whether it can - because we also return non-freeable entries below
     return header;
-  }
-  return NULL;
-}
-
-static hpack_header_table_entry_t * hpack_header_table_get(const hpack_context_t * const context, const size_t index) {
-  if (index > 0 && index + 1 <= context->header_table->entries->length) {
-    return circular_buffer_get(context->header_table->entries, index);
   }
   return NULL;
 }
@@ -596,7 +594,7 @@ multimap_t * hpack_decode(const hpack_context_t * const context, const uint8_t *
 static bool hpack_encode_string_literal(uint8_t * encoded, size_t * encoded_index, char * name, size_t name_length) {
   encoded[*encoded_index] = 0x80; // set huffman encoded bit
   huffman_result_t encoded_name;
-  ASSERT_OR_RETURN_FALSE(huffman_encode((uint8_t *) name, name_length, &encoded_name));
+  ASSERT_OR_RETURN_FALSE(huffman_encode(name, name_length, &encoded_name));
   *encoded_index += hpack_encode_quantity(encoded, (*encoded_index * 8) + 1, encoded_name.length);
   memcpy(encoded + *encoded_index, encoded_name.value, encoded_name.length);
   *encoded_index += encoded_name.length;
@@ -605,12 +603,11 @@ static bool hpack_encode_string_literal(uint8_t * encoded, size_t * encoded_inde
   return true;
 }
 
-
+// naive hpack encoding - never add to the header table
 bool hpack_encode(const hpack_context_t * const context, const multimap_t * const headers,
     hpack_encode_result_t * const result) {
   UNUSED(context);
 
-  // naive hpack encoding - never add to the header table
   uint8_t * encoded = malloc(4096); // TODO - we need to construct this dynamically
   if (!encoded) {
     if (LOG_ERROR) {
