@@ -182,21 +182,24 @@ static void http_emit_rst_stream(const http_connection_t * const connection, uin
 
 static void emit_error_and_close(http_connection_t * const connection, uint32_t stream_id, enum h2_error_code_e error_code,
     char * format, ...) {
-  va_list ap;
-  va_start(ap, format);
+
   size_t buf_length = 1024;
   char buf[buf_length];
-  vsnprintf(buf, buf_length, format, ap);
-  va_end(ap);
+  if (format) {
+    va_list ap;
+    va_start(ap, format);
+    vsnprintf(buf, buf_length, format, ap);
+    va_end(ap);
 
-  if (error_code != HTTP_ERROR_NO_ERROR && buf) {
-    log_error(buf);
+    if (error_code != HTTP_ERROR_NO_ERROR) {
+      log_error(buf);
+    }
   }
 
   if (stream_id > 0) {
     http_emit_rst_stream(connection, stream_id, error_code);
   } else {
-    http_emit_goaway(connection, error_code, buf);
+    http_emit_goaway(connection, error_code, format ? buf : NULL);
   }
   // TODO gracefully shutdown connection
   http_connection_close(connection);
