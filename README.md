@@ -5,6 +5,7 @@
 ## TODO
 
 * API for processing requests/responses
+* Finite state machine for handling stream status
 * switch from heap based priority queue to linked list?
 * buffer writes instead of writing small packets
 * streams data structure
@@ -13,6 +14,7 @@
 * better goaway handling
 * goaway on bad hpack indexes
 * stream priority
+* fast huffman coding + decoding based - more than one bit at a time
 * ping
 * push promise
 * upgrade from 1.1
