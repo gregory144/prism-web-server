@@ -19,6 +19,9 @@
 const char * HTTP_CONNECTION_HEADER = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 const size_t HTTP_CONNECTION_HEADER_LENGTH = 24;
 
+static void emit_error_and_close(http_connection_t * const connection, uint32_t stream_id, enum h2_error_code_e error_code,
+    char * format, ...);
+
 http_connection_t * http_connection_init(void * const data, const request_cb request_handler,
     const write_cb writer, const close_cb closer) {
   http_connection_t * connection = malloc(sizeof(http_connection_t));
@@ -29,8 +32,10 @@ http_connection_t * http_connection_init(void * const data, const request_cb req
 
   connection->received_connection_header = false;
   connection->received_settings = false;
+  connection->last_stream_id = 0;
   connection->current_stream_id = 2;
   connection->window_size = DEFAULT_INITIAL_WINDOW_SIZE;
+  connection->closing = false;
 
   connection->buffer = NULL;
   connection->buffer_length = 0;
@@ -51,11 +56,12 @@ http_connection_t * http_connection_init(void * const data, const request_cb req
   return connection;
 }
 
-static http_stream_t * http_stream_get(const http_connection_t * const connection, const uint32_t stream_id) {
+static http_stream_t * http_stream_get(http_connection_t * const connection, const uint32_t stream_id) {
   // TODO - use a better data structure than an array
   if (stream_id >= 4096) {
-    if (LOG_ERROR) log_error("Unsupported stream identifier (too high): %d\n", stream_id);
-    abort();
+    emit_error_and_close(connection, stream_id, HTTP_ERROR_INTERNAL_ERROR,
+        "Unable to find stream with ID higher than 4096");
+    return NULL;
   }
 
   http_stream_t * stream = connection->streams[stream_id];
@@ -85,6 +91,12 @@ void http_connection_free(http_connection_t * const connection) {
   free(connection);
 }
 
+static void http_connection_close(http_connection_t * const connection) {
+  // TODO loop through streams + close them
+  connection->closer(connection->data);
+  connection->closing = true;
+}
+
 static void http_frame_header_write(uint8_t * const buf, const uint16_t length, const uint8_t type,
     const uint8_t flags, uint32_t stream_id) {
   size_t pos = 0;
@@ -102,7 +114,95 @@ static void http_frame_header_write(uint8_t * const buf, const uint16_t length, 
   buf[pos++] = (stream_id) & 0xFF;
 }
 
-static void http_emit_headers(const http_connection_t * const connection, const http_stream_t * const stream,
+static void http_emit_goaway(const http_connection_t * const connection, enum h2_error_code_e error_code, char * debug) {
+
+  size_t last_stream_id_length = 4; // 1 bit + 31 bits
+  size_t error_code_length = 4; // 32 bits
+
+  size_t debug_length = 0;
+  if (debug) {
+    debug_length = strlen(debug);
+  }
+
+  size_t payload_length = last_stream_id_length + error_code_length + debug_length;
+  size_t buf_length = FRAME_HEADER_SIZE + payload_length;
+
+  size_t pos = 0;
+  uint8_t buf[buf_length];
+
+  uint8_t flags = 0; // no flags
+
+  http_frame_header_write(buf, payload_length, FRAME_TYPE_GOAWAY, flags, 0);
+  pos += FRAME_HEADER_SIZE;
+
+  size_t stream_id = connection->last_stream_id;
+
+  buf[pos++] = (stream_id >> 24) & 0x7F; // only the first 7 bits (first bit is reserved)
+  buf[pos++] = (stream_id >> 16) & 0xFF;
+  buf[pos++] = (stream_id >> 8) & 0xFF;
+  buf[pos++] = (stream_id) & 0xFF;
+
+  buf[pos++] = (error_code >> 24) & 0xFF;
+  buf[pos++] = (error_code >> 16) & 0xFF;
+  buf[pos++] = (error_code >> 8) & 0xFF;
+  buf[pos++] = (error_code) & 0xFF;
+
+  if (debug) {
+    memcpy(buf + pos, debug, debug_length);
+  }
+
+  if (LOG_DEBUG) log_debug("Writing goaway frame");
+  connection->writer(connection->data, buf, buf_length);
+}
+
+static void http_emit_rst_stream(const http_connection_t * const connection, uint32_t stream_id,
+    enum h2_error_code_e error_code) {
+
+  size_t error_code_length = 4; // 32 bits
+
+  size_t payload_length = error_code_length;
+  size_t buf_length = FRAME_HEADER_SIZE + payload_length;
+
+  size_t pos = 0;
+  uint8_t buf[buf_length];
+
+  uint8_t flags = 0; // no flags
+
+  http_frame_header_write(buf, payload_length, FRAME_TYPE_RST_STREAM, flags, stream_id);
+  pos += FRAME_HEADER_SIZE;
+
+  buf[pos++] = (error_code >> 24) & 0xFF;
+  buf[pos++] = (error_code >> 16) & 0xFF;
+  buf[pos++] = (error_code >> 8) & 0xFF;
+  buf[pos++] = (error_code) & 0xFF;
+
+  if (LOG_DEBUG) log_debug("Writing reset stream frame");
+  connection->writer(connection->data, buf, buf_length);
+}
+
+static void emit_error_and_close(http_connection_t * const connection, uint32_t stream_id, enum h2_error_code_e error_code,
+    char * format, ...) {
+  va_list ap;
+  va_start(ap, format);
+  size_t buf_length = 1024;
+  char buf[buf_length];
+  vsnprintf(buf, buf_length, format, ap);
+  va_end(ap);
+
+  if (error_code != HTTP_ERROR_NO_ERROR && buf) {
+    log_error(buf);
+  }
+
+  if (stream_id > 0) {
+    http_emit_rst_stream(connection, stream_id, error_code);
+  } else {
+    http_emit_goaway(connection, error_code, buf);
+  }
+  // TODO gracefully shutdown connection
+  http_connection_close(connection);
+}
+
+static void http_emit_headers(http_connection_t * const connection, const http_stream_t * const stream,
     const multimap_t * const headers) {
   // TODO split large headers into multiple frames
   size_t headers_length = 0;
@@ -110,7 +210,9 @@ static void http_emit_headers(const http_connection_t * const connection, const 
   if (headers != NULL) {
     binary_buffer_t encoded;
     if (!hpack_encode(connection->encoding_context, headers, &encoded)) {
-      abort();
+      // don't send stream ID because we want to generate a goaway - the
+      // encoding context may have been corrupted
+      emit_error_and_close(connection, 0, HTTP_ERROR_INTERNAL_ERROR, "Error encoding headers");
     }
     hpack_buf = encoded.buf;
     headers_length = binary_buffer_size(&encoded);
@@ -133,7 +235,7 @@ static void http_emit_headers(const http_connection_t * const connection, const 
     free(hpack_buf);
   }
 
-  if (LOG_DEBUG) log_debug("Writing headers frame: stream %d, %ld octets\n", stream->id, buf_length);
+  if (LOG_DEBUG) log_debug("Writing headers frame: stream %d, %ld octets", stream->id, buf_length);
   connection->writer(connection->data, buf, buf_length);
 }
 
@@ -146,12 +248,13 @@ static void http_emit_data_frame(const http_connection_t * const connection, con
   http_frame_header_write(header_buf, frame->buf_length, FRAME_TYPE_DATA, flags, stream->id);
   connection->writer(connection->data, header_buf, header_length);
 
-  if (LOG_DEBUG) log_debug("Writing data frame: stream %d, %ld octets\n", stream->id, frame->buf_length);
+  if (LOG_DEBUG) log_debug("Writing data frame: stream %d, %ld octets", stream->id, frame->buf_length);
   connection->writer(connection->data, frame->buf, frame->buf_length);
 }
 
 static void http_trigger_send_data(http_connection_t * const connection, const http_stream_t * const stream) {
   uint32_t i;
+  // TODO improve looping through open streams
   for (i = 0; i < 4096; i++) {
     http_stream_t * stream = http_stream_get(connection, i);
     if (stream) {
@@ -173,7 +276,7 @@ static void http_trigger_send_data(http_connection_t * const connection, const h
           free(frame);
         } else {
           if (LOG_DEBUG) {
-            log_debug("Wanted to send %ld octets, but connection window is %ld and stream window is %ld\n",
+            log_debug("Wanted to send %ld octets, but connection window is %ld and stream window is %ld",
                 frame_payload_size, connection->window_size, stream->window_size);
           }
 
@@ -184,7 +287,7 @@ static void http_trigger_send_data(http_connection_t * const connection, const h
     }
   }
 
-  if (LOG_TRACE) log_trace("Connection window size: %ld, stream window: %ld\n", connection->window_size, stream->window_size);
+  if (LOG_TRACE) log_trace("Connection window size: %ld, stream window: %ld", connection->window_size, stream->window_size);
 }
 
 static void http_queue_data_frame(http_stream_t * const stream, uint8_t * buf,
@@ -243,7 +346,7 @@ static void http_emit_settings_ack(const http_connection_t * const connection) {
   bool ack = true;
   if (ack) flags |= SETTINGS_FLAG_ACK;
   http_frame_header_write(buf, 0, FRAME_TYPE_SETTINGS, flags, 0);
-  if (LOG_DEBUG) log_debug("Writing settings ack frame\n");
+  if (LOG_DEBUG) log_debug("Writing settings ack frame");
   connection->writer(connection->data, buf, buf_length);
 }
 
@@ -260,7 +363,7 @@ static bool http_connection_recognize_connection_header(http_connection_t * cons
   return false;
 }
 
-static void http_adjust_initial_window_size(const http_connection_t * const connection, const long difference) {
+static void http_adjust_initial_window_size(http_connection_t * const connection, const long difference) {
   http_stream_t * * streams = connection->streams;
   size_t i;
   for (i = 0; i < 4096; i++) {
@@ -268,50 +371,57 @@ static void http_adjust_initial_window_size(const http_connection_t * const conn
     if (stream) {
       stream->window_size += difference;
       if (stream->window_size > MAX_WINDOW_SIZE) {
-        // TODO connection error - FLOW_CONTROL_ERROR
-        abort();
+        emit_error_and_close(connection, stream->id, HTTP_ERROR_FLOW_CONTROL_ERROR, NULL);
       }
     }
   }
 }
 
-static void http_setting_set(http_connection_t * const connection, const enum settings_e id, const uint32_t value) {
-  if (LOG_TRACE) log_trace("Settings: %d: %d\n", id, value);
+static bool http_setting_set(http_connection_t * const connection, const enum settings_e id, const uint32_t value) {
+  if (LOG_TRACE) log_trace("Settings: %d: %d", id, value);
   switch (id) {
     case SETTINGS_HEADER_TABLE_SIZE:
-      if (LOG_TRACE) log_trace("Settings: Got table size: %d\n", value);
+      if (LOG_TRACE) log_trace("Settings: Got table size: %d", value);
       connection->header_table_size = value;
       hpack_header_table_adjust_size(connection->decoding_context, value);
       break;
     case SETTINGS_ENABLE_PUSH:
-      if (LOG_TRACE) log_trace("Settings: Enable push? %d\n", value);
+      if (LOG_TRACE) log_trace("Settings: Enable push? %d", value);
       connection->enable_push = value;
       break;
     case SETTINGS_MAX_CONCURRENT_STREAMS:
-      if (LOG_TRACE) log_trace("Settings: Max concurrent streams: %d\n", value);
+      if (LOG_TRACE) log_trace("Settings: Max concurrent streams: %d", value);
       connection->max_concurrent_streams = value;
       break;
     case SETTINGS_INITIAL_WINDOW_SIZE:
-      if (LOG_TRACE) log_trace("Settings: Initial window size: %d\n", value);
+      if (LOG_TRACE) log_trace("Settings: Initial window size: %d", value);
       http_adjust_initial_window_size(connection, value - connection->initial_window_size);
       connection->initial_window_size = value;
       break;
     default:
-      // TODO emit PROTOCOL_ERROR
-      if (LOG_ERROR) log_error("Invalid setting: %d\n", id);
-      abort();
+      emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR, "Invalid setting: %d", id);
+      return false;
   }
+  return true;
 }
 
-static http_stream_t * http_stream_init(const http_connection_t * const connection, const uint32_t stream_id) {
+static http_stream_t * http_stream_init(http_connection_t * const connection, const uint32_t stream_id) {
   http_stream_t * stream = http_stream_get(connection, stream_id);
   if (stream != NULL) {
-    // got a HEADERS frame for an existing stream
-    // TODO emit protocol error
-    if (LOG_ERROR) log_error("Got a headers frame for an existing stream\n");
-    abort();
+    emit_error_and_close(connection, stream_id, HTTP_ERROR_PROTOCOL_ERROR,
+        "Got a headers frame for an existing stream");
+    return NULL;
+  }
+  // TODO - we won't need this check once we support over 4096 streams
+  if (stream == NULL && stream_id > 4096) {
+    return NULL;
   }
   stream = malloc(sizeof(http_stream_t));
+  if (!stream) {
+    emit_error_and_close(connection, stream_id, HTTP_ERROR_INTERNAL_ERROR,
+        "Unable to initialize stream: %ld", stream_id);
+    return NULL;
+  }
   connection->streams[stream_id] = stream;
 
   stream->queued_data_frames = NULL;
@@ -326,9 +436,9 @@ static http_stream_t * http_stream_init(const http_connection_t * const connecti
   return stream;
 }
 
-void http_trigger_request(const http_connection_t * const connection, http_stream_t * const stream) {
+void http_trigger_request(http_connection_t * const connection, http_stream_t * const stream) {
   if (!connection->request_listener) {
-    if (LOG_ERROR) log_error("No request listener set up\n");
+    if (LOG_ERROR) log_error("No request listener set up");
     abort();
   }
 
@@ -342,12 +452,18 @@ void http_trigger_request(const http_connection_t * const connection, http_strea
 
   http_response_t * response = http_response_init(request);
 
+  if (stream->id > connection->last_stream_id) {
+    connection->last_stream_id = stream->id;
+  }
   connection->request_listener(request, response);
 }
 
 static void http_stream_add_header_fragment(http_stream_t * const stream, const uint8_t * const buffer, const size_t length) {
   http_header_fragment_t * fragment = malloc(sizeof(http_header_fragment_t));
   fragment->buffer = malloc(length);
+  if (!fragment->buffer) {
+    abort();
+  }
   memcpy(fragment->buffer, buffer, length);
   fragment->length = length;
   fragment->next = NULL;
@@ -361,18 +477,22 @@ static void http_stream_add_header_fragment(http_stream_t * const stream, const 
   }
 }
 
-static void http_parse_header_fragments(const http_connection_t * const connection, http_stream_t * const stream) {
+static bool http_parse_header_fragments(http_connection_t * const connection, http_stream_t * const stream) {
   size_t headers_length = 0;
   http_header_fragment_t * current = stream->header_fragments;
   for (; current; current = current->next) {
-    if (LOG_TRACE) log_trace("Counting header fragment lengths: %ld\n", current->length);
+    if (LOG_TRACE) log_trace("Counting header fragment lengths: %ld", current->length);
     headers_length += current->length;
   }
   uint8_t * headers = malloc(headers_length + 1);
+  if (!headers) {
+    emit_error_and_close(connection, stream->id, HTTP_ERROR_INTERNAL_ERROR, "Unable to allocate memory for headers");
+    return false;
+  }
   uint8_t * header_appender = headers;
   current = stream->header_fragments;
   while (current) {
-    if (LOG_TRACE) log_trace("Appending header fragment: %s (%ld)\n", current->buffer, current->length);
+    if (LOG_TRACE) log_trace("Appending header fragment: %s (%ld)", current->buffer, current->length);
     memcpy(header_appender, current->buffer, current->length);
     header_appender += current->length;
     http_header_fragment_t * prev = current;
@@ -381,25 +501,40 @@ static void http_parse_header_fragments(const http_connection_t * const connecti
     free(prev);
   }
   *header_appender = '\0';
-  if (LOG_TRACE) log_trace("Got headers: %s (%ld), decoding\n", headers, headers_length);
+  if (LOG_TRACE) log_trace("Got headers: %s (%ld), decoding", headers, headers_length);
   stream->headers = hpack_decode(connection->decoding_context, headers, headers_length);
+  if (!stream->headers) {
+    emit_error_and_close(connection, stream->id, HTTP_ERROR_INTERNAL_ERROR, "Unable to decode headers");
+    return false;
+  }
+  // TODO - check that the stream is in a valid state to be opened first
   stream->state = STREAM_STATE_OPEN;
 
   free(headers);
 
-  http_trigger_request(connection, stream);
+  // TODO - check that the stream is not closed?
+  if (!connection->closing) {
+    http_trigger_request(connection, stream);
+  }
+
+  return true;
 }
 
-static void http_parse_frame_headers(const http_connection_t * const connection,
+static bool http_parse_frame_headers(http_connection_t * const connection,
     const http_frame_headers_t * const frame) {
   if (frame->stream_id < 1) {
-    // protocol error, do we need to read the rest of the frame anyway so that the
+    // TODO do we need to read the rest of the frame anyway so that the
     // decoding context is still synced?
-    abort();
+    emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR,
+        "Invalid stream ID for headers frame: %ld", frame->stream_id);
+    return false;
   }
   uint8_t * pos = connection->buffer + connection->buffer_position;
   size_t header_block_fragment_size = frame->length;
   http_stream_t * stream = http_stream_init(connection, frame->stream_id);
+  if (!stream) {
+    return false;
+  }
   if (frame->priority) {
     stream->priority = get_bits32(pos, 4, 0x7FFFFFFF);
     pos += 4;
@@ -408,116 +543,132 @@ static void http_parse_frame_headers(const http_connection_t * const connection,
   http_stream_add_header_fragment(stream, pos, header_block_fragment_size);
   if (frame->end_headers) {
     // parse the headers
-    if (LOG_TRACE) log_trace("Parsing headers\n");
-    http_parse_header_fragments(connection, stream);
+    if (LOG_TRACE) log_trace("Parsing headers");
+    return http_parse_header_fragments(connection, stream);
+  } else {
+    // TODO mark stream as waiting for continuation frame
   }
+  return true;
 }
 
-static void http_parse_frame_continuation(const http_connection_t * const connection,
+static bool http_parse_frame_continuation(http_connection_t * const connection,
     const http_frame_continuation_t * const frame) {
   uint8_t * pos = connection->buffer + connection->buffer_position;
   size_t header_block_fragment_size = frame->length;
   http_stream_t * stream = http_stream_get(connection, frame->stream_id);
   http_stream_add_header_fragment(stream, pos, header_block_fragment_size);
   if (frame->end_headers) {
+    // TODO unmark stream as waiting for continuation frame
     // parse the headers
-    if (LOG_TRACE) log_trace("Parsing headers +continuations\n");
-    http_parse_header_fragments(connection, stream);
+    if (LOG_TRACE) log_trace("Parsing headers + continuations");
+    return http_parse_header_fragments(connection, stream);
   }
+  return true;
 }
 
-static void http_parse_frame_settings(http_connection_t * const connection, const http_frame_settings_t * const frame) {
+static bool http_parse_frame_settings(http_connection_t * const connection, const http_frame_settings_t * const frame) {
   if (frame->stream_id != 0) {
-    // TODO emit PROTOCOL_ERROR
-    if (LOG_ERROR) log_error("Invalid stream identifier for settings frame\n");
-    abort();
+    emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR,
+        "Invalid stream ID for ACK settings frame: %ld", frame->stream_id);
   }
   if (frame->ack && frame->length != 0) {
-    // TODO emit PROTOCOL_ERROR - FRAME_SIZE_ERROR
-    if (LOG_ERROR) log_error("Invalid frame size (non-zero) for ACK settings frame\n");
-    abort();
+    emit_error_and_close(connection, 0, HTTP_ERROR_FRAME_SIZE_ERROR,
+        "Non-zero frame size for ACK settings frame: %ld", frame->length);
   }
   if (frame->ack) {
     // TODO mark the settings frame we sent as acknowledged
-    if (LOG_TRACE) log_trace("Received settings ACK\n");
+    if (LOG_TRACE) log_trace("Received settings ACK");
     abort();
   } else {
     uint8_t * pos = connection->buffer + connection->buffer_position;
     size_t setting_size = 5;
     size_t num_settings = frame->length / setting_size;
-    if (LOG_TRACE) log_trace("Settings: Found #%ld settings\n", num_settings);
+    if (LOG_TRACE) log_trace("Settings: Found #%ld settings", num_settings);
     size_t i;
     for (i = 0; i < num_settings; i++) {
       uint8_t * curr_setting = pos + (i * setting_size);
       uint8_t setting_id = curr_setting[0];
       uint32_t setting_value = get_bits32(curr_setting, 1, 0xFFFFFFFF);
-      http_setting_set(connection, setting_id, setting_value);
+      if (!http_setting_set(connection, setting_id, setting_value)) {
+        return false;
+      }
     }
     connection->received_settings = true;
-    if (LOG_TRACE) log_trace("Settings: %ld, %d, %ld, %ld\n", connection->header_table_size, connection->enable_push,
+    if (LOG_TRACE) log_trace("Settings: %ld, %d, %ld, %ld", connection->header_table_size, connection->enable_push,
         connection->max_concurrent_streams, connection->initial_window_size);
 
     http_emit_settings_ack(connection);
   }
+  return true;
 }
 
-static void http_increment_connection_window_size(http_connection_t * const connection, const uint32_t increment) {
+static bool http_increment_connection_window_size(http_connection_t * const connection, const uint32_t increment) {
   connection->window_size += increment;
-  if (LOG_TRACE) log_trace("Connection window size incremented to: %ld\n", connection->window_size);
+  if (LOG_TRACE) log_trace("Connection window size incremented to: %ld", connection->window_size);
 
   http_trigger_send_data(connection, NULL);
+
+  return true;
 }
 
-static void http_increment_stream_window_size(http_connection_t * const connection, const uint32_t stream_id,
+static bool http_increment_stream_window_size(http_connection_t * const connection, const uint32_t stream_id,
     const uint32_t increment) {
   http_stream_t * stream = http_stream_get(connection, stream_id);
   if (stream) {
     stream->window_size += increment;
-    if (LOG_TRACE) log_trace("Stream window size incremented to: %ld\n", stream->window_size);
+    if (LOG_TRACE) log_trace("Stream window size incremented to: %ld", stream->window_size);
 
     http_trigger_send_data(connection, stream);
   } else {
     // TODO connection error if the stream was closed over x seconds ago
     abort();
   }
+  return true;
 }
 
-static void http_parse_frame_window_update(http_connection_t * const connection, http_frame_window_update_t * const frame) {
+static bool http_parse_frame_window_update(http_connection_t * const connection, http_frame_window_update_t * const frame) {
   uint8_t * buf = connection->buffer + connection->buffer_position;
   frame->increment = get_bits32(buf, 0, 0x7FFFFFFF);
 
+  bool success = false;
+
   if (frame->stream_id > 0) {
-    http_increment_stream_window_size(connection, frame->stream_id, frame->increment);
+    success = http_increment_stream_window_size(connection, frame->stream_id, frame->increment);
   } else {
-    http_increment_connection_window_size(connection, frame->increment);
+    success = http_increment_connection_window_size(connection, frame->increment);
   }
 
-  if (LOG_TRACE) log_trace("Received window update, stream: %d, increment: %ld\n",
+  if (LOG_TRACE) log_trace("Received window update, stream: %d, increment: %ld",
       frame->stream_id, frame->increment);
+
+  return success;
 }
 
-static void http_parse_frame_goaway(http_connection_t * const connection, http_frame_goaway_t * const frame) {
+static bool http_parse_frame_goaway(http_connection_t * const connection, http_frame_goaway_t * const frame) {
   if (frame->stream_id != 0) {
-    // TODO emit PROTOCOL_ERROR
-    if (LOG_ERROR) log_error("Invalid stream identifier for goaway frame\n");
-    abort();
+    emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR, "Invalid stream ID for goaway frame: %ld", frame->stream_id);
+    return false;
   }
   uint8_t * buf = connection->buffer + connection->buffer_position;
   frame->last_stream_id = get_bits32(buf, 0, 0x7FFFFFFF);
   frame->error_code = get_bits32(buf, 4, 0xFFFFFFFF);
   size_t debug_data_length = (frame->length - 8);
-  frame->debug_data = malloc(sizeof(char) * (debug_data_length + 1));
-  memcpy(frame->debug_data, buf + 8, debug_data_length);
-  frame->debug_data[debug_data_length] = '\0';
 
-  if (LOG_TRACE) log_trace("Received goaway, last stream: %d, error code: %d, debug_data: %s\n",
+  uint8_t debug_data[debug_data_length + 1];
+  memcpy(debug_data, buf + 8, debug_data_length);
+  debug_data[debug_data_length] = '\0';
+  frame->debug_data = debug_data;
+
+  if (LOG_TRACE) log_trace("Received goaway, last stream: %d, error code: %d, debug_data: %s",
       frame->last_stream_id, frame->error_code, frame->debug_data);
 
-  free(frame->debug_data);
+  frame->debug_data = NULL;
+
+  return true;
 }
 
-static http_frame_t * http_frame_init(const uint16_t length, const uint8_t type, const uint8_t flags,
-    const uint32_t stream_id) {
+static http_frame_t * http_frame_init(http_connection_t * const connection, const uint16_t length, const uint8_t type,
+    const uint8_t flags, const uint32_t stream_id) {
   http_frame_t * frame;
   switch(type) {
     case FRAME_TYPE_DATA:
@@ -578,8 +729,8 @@ static http_frame_t * http_frame_init(const uint16_t length, const uint8_t type,
       break;
     }
     default:
-      if (LOG_ERROR) log_error("Invalid frame type: %d\n", type);
-      abort();
+      emit_error_and_close(connection, stream_id, HTTP_ERROR_INTERNAL_ERROR, "Unhandled frame type");
+      return NULL;
   }
   frame->type = type;
   frame->length = length;
@@ -587,21 +738,55 @@ static http_frame_t * http_frame_init(const uint16_t length, const uint8_t type,
   return frame;
 }
 
+static bool is_valid_frame_type(enum frame_type_e frame_type) {
+
+  // TODO is there a faster way to do this - will the compiler automatically optimize the loop out?
+  enum frame_type_e valid[] = {
+    FRAME_TYPE_DATA,
+    FRAME_TYPE_HEADERS,
+    FRAME_TYPE_PRIORITY,
+    FRAME_TYPE_RST_STREAM,
+    FRAME_TYPE_SETTINGS,
+    FRAME_TYPE_PUSH_PROMISE,
+    FRAME_TYPE_PING,
+    FRAME_TYPE_GOAWAY,
+    FRAME_TYPE_WINDOW_UPDATE,
+    FRAME_TYPE_CONTINUATION
+  };
+
+  size_t index;
+  size_t len = sizeof(valid) / sizeof(enum frame_type_e);
+  for (index = 0; index < len; index++) {
+    if (frame_type == valid[index]) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Processes the next frame in the buffer.
+ *
+ * Returns true a frame was processed.
+ * Returns false if there was no frame to process.
+ */
 static bool http_connection_add_from_buffer(http_connection_t * const connection) {
-  if (LOG_TRACE) log_trace("Reading %ld bytes\n", connection->buffer_length);
+  if (LOG_TRACE) log_trace("Reading %ld bytes", connection->buffer_length);
   if (connection->buffer_position == connection->buffer_length) {
-    if (LOG_TRACE) log_trace("Finished with current buffer\n");
+    if (LOG_TRACE) log_trace("Finished with current buffer");
     return false;
   }
   // is there enough in the buffer to read a frame header?
   if (connection->buffer_position + FRAME_HEADER_SIZE > connection->buffer_length) {
     // TODO off-by-one?
-    if (LOG_TRACE) log_trace("Not enough in buffer to read frame header\n");
+    if (LOG_TRACE) log_trace("Not enough in buffer to read frame header");
     return false;
   }
 
   uint8_t * pos = connection->buffer + connection->buffer_position;
 
+  // Read the frame header
   // get 14 bits of first 2 bytes
   uint16_t frame_length = get_bits16(pos, 0, 0x3FFF);
 
@@ -613,17 +798,26 @@ static bool http_connection_add_from_buffer(http_connection_t * const connection
     // get 31 bits
     uint32_t stream_id = get_bits32(pos, 4, 0x7FFFFFFF);
 
+    // is this a valid frame type?
+    if (!is_valid_frame_type(frame_type)) {
+      // invalid frame type is always a connection error
+      emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR, "Invalid Frame Type: %d", frame_type);
+      return false;
+    }
+
     // TODO - if the previous frame type was headers, and headers haven't been completed,
     // this frame must be a continuation frame, or else this is a protocol error
 
-    http_frame_t * frame = http_frame_init(frame_length, frame_type, frame_flags, stream_id);
+    http_frame_t * frame = http_frame_init(connection, frame_length, frame_type, frame_flags, stream_id);
+    if (frame == NULL) {
+      return false;
+    }
 
     connection->buffer_position += FRAME_HEADER_SIZE;
     // TODO off-by-one?
+    bool success = false;
     if (!connection->received_settings && frame->type != FRAME_TYPE_SETTINGS) {
-      // TODO emit protocol error?
-      if (LOG_ERROR) log_error("Expected settings frame as first frame type\n");
-      abort();
+      emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR, "Expected Settings frame as first frame");
     } else {
       switch(frame->type) {
         /*
@@ -631,7 +825,7 @@ static bool http_connection_add_from_buffer(http_connection_t * const connection
           parse_frame_data(connection);
         */
         case FRAME_TYPE_HEADERS:
-          http_parse_frame_headers(connection, (http_frame_headers_t *) frame);
+          success = http_parse_frame_headers(connection, (http_frame_headers_t *) frame);
           break;
         /*
         case FRAME_TYPE_PRIORITY:
@@ -640,7 +834,7 @@ static bool http_connection_add_from_buffer(http_connection_t * const connection
           parse_frame_reset_stream(connection);
         */
         case FRAME_TYPE_SETTINGS:
-          http_parse_frame_settings(connection, (http_frame_settings_t *) frame);
+          success = http_parse_frame_settings(connection, (http_frame_settings_t *) frame);
           break;
         /*
         case FRAME_TYPE_PUSH_PROMISE:
@@ -649,25 +843,25 @@ static bool http_connection_add_from_buffer(http_connection_t * const connection
           parse_frame_ping(connection);
         */
         case FRAME_TYPE_GOAWAY:
-          http_parse_frame_goaway(connection, (http_frame_goaway_t *) frame);
+          success = http_parse_frame_goaway(connection, (http_frame_goaway_t *) frame);
           break;
         case FRAME_TYPE_WINDOW_UPDATE:
-          http_parse_frame_window_update(connection, (http_frame_window_update_t *) frame);
+          success = http_parse_frame_window_update(connection, (http_frame_window_update_t *) frame);
           break;
         case FRAME_TYPE_CONTINUATION:
-          http_parse_frame_continuation(connection, (http_frame_continuation_t *) frame);
+          success = http_parse_frame_continuation(connection, (http_frame_continuation_t *) frame);
           break;
         default:
-          if (LOG_ERROR) log_error("Invalid frame type: %d\n", frame->type);
-          abort();
+          emit_error_and_close(connection, 0, HTTP_ERROR_INTERNAL_ERROR, "Unhandled frame type: %d", frame->type);
+          return false;
       }
     }
 
     connection->buffer_position += frame->length;
     free(frame);
-    return true;
+    return success;
   } else {
-    if (LOG_TRACE) log_trace("Not enough in buffer to read %ld byte frame payload\n", frame_length);
+    if (LOG_TRACE) log_trace("Not enough in buffer to read %ld byte frame payload", frame_length);
   }
   return false;
 }
@@ -677,11 +871,15 @@ static bool http_connection_add_from_buffer(http_connection_t * const connection
  * buffer.
  */
 void http_connection_read(http_connection_t * const connection, uint8_t * const buffer, const size_t len) {
-  if (LOG_TRACE) log_trace("Reading from buffer: %ld\n", len);
+  if (LOG_TRACE) log_trace("Reading from buffer: %ld", len);
   size_t unprocessed_bytes = connection->buffer_length;
   if (unprocessed_bytes > 0) {
     // there are still unprocessed bytes
     connection->buffer = realloc(connection->buffer, unprocessed_bytes + len);
+    if (!connection->buffer) {
+      emit_error_and_close(connection, 0, HTTP_ERROR_INTERNAL_ERROR, "Unable to allocate memory for reading full frame");
+      return;
+    }
     memcpy(connection->buffer + unprocessed_bytes, buffer, len);
     connection->buffer_length = unprocessed_bytes + len;
     free(buffer);
@@ -694,13 +892,14 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
   if (!connection->received_connection_header) {
     if (http_connection_recognize_connection_header(connection)) {
       connection->received_connection_header = true;
-      if (LOG_TRACE) log_trace("Found HTTP2 connection\n");
+      if (LOG_TRACE) log_trace("Found HTTP2 connection");
     } else {
-      if (LOG_WARN) log_warning("Found non-HTTP2 connection, closing connection\n");
-      connection->closer(connection->data);
+      if (LOG_WARN) log_warning("Found non-HTTP2 connection, closing connection");
+      http_connection_close(connection);
       return;
     }
   }
+
   while (http_connection_add_from_buffer(connection));
 
   if (connection->buffer_position > connection->buffer_length) {
@@ -711,7 +910,7 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
   // if there is still unprocessed data in the buffer, save it for when we
   // get the rest of the frame
   unprocessed_bytes = connection->buffer_length - connection->buffer_position;
-  if (unprocessed_bytes > 0) {
+  if (!connection->closing && unprocessed_bytes > 0) {
     // use memmove because it might overlap
     memmove(connection->buffer, connection->buffer + connection->buffer_position, unprocessed_bytes);
     connection->buffer = realloc(connection->buffer, unprocessed_bytes);

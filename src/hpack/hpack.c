@@ -229,7 +229,7 @@ void hpack_header_table_adjust_size(const hpack_context_t * const context, const
 static void hpack_emit_header(const multimap_t * const headers, char * name,
     size_t name_length, char * value, size_t value_length) {
 
-  if (LOG_TRACE) log_trace("Emitting header: '%s' (%ld): '%s' (%ld)\n", name, name_length, value, value_length);
+  if (LOG_TRACE) log_trace("Emitting header: '%s' (%ld): '%s' (%ld)", name, name_length, value, value_length);
 
   char * name_copy, * value_copy;
   size_t value_start = 0;
@@ -272,7 +272,7 @@ static hpack_header_table_entry_t * hpack_header_table_add_existing_entry(
 
     header->added_on_current_request = true;
 
-    if (LOG_TRACE) log_trace("Adding to header table: '%s' (%ld): '%s' (%ld)\n",
+    if (LOG_TRACE) log_trace("Adding to header table: '%s' (%ld): '%s' (%ld)",
         header->name, header->name_length, header->value, header->value_length);
 
     context->header_table->current_size += header->size_in_table;
@@ -338,7 +338,7 @@ static bool hpack_decode_string_literal(
   hpack_decode_quantity(buf + (*current), length - (*current), 1, &key_name_result);
   *current += key_name_result.num_bytes;
   size_t key_name_length = key_name_result.value;
-  if (LOG_TRACE) log_trace("Decoding string literal length: %ld\n", key_name_length);
+  if (LOG_TRACE) log_trace("Decoding string literal length: %ld", key_name_length);
   char * key_name;
   if (first_bit) {
     huffman_result_t huffman_result;
@@ -364,7 +364,7 @@ static void hpack_decode_literal_header(
   hpack_decode_quantity(buf + (*current), length - (*current), bit_offset, &index_result);
   size_t header_table_index = index_result.value;
   *current += index_result.num_bytes;
-  if (LOG_TRACE) log_trace("Adding literal header field: %ld, %ld\n", index_result.value, index_result.num_bytes);
+  if (LOG_TRACE) log_trace("Adding literal header field: %ld, %ld", index_result.value, index_result.num_bytes);
 
   char * key_name = NULL;
   size_t key_name_length = 0;
@@ -376,15 +376,15 @@ static void hpack_decode_literal_header(
       key_name = ret.value;
       key_name_length = ret.length;
     }
-    if (LOG_TRACE) log_trace("Literal name: '%s' (%ld)\n", key_name, key_name_length);
+    if (LOG_TRACE) log_trace("Literal name: '%s' (%ld)", key_name, key_name_length);
 
   } else {
 
     // indexed name
-    if (LOG_TRACE) log_trace("getting from header table %ld\n", header_table_index);
+    if (LOG_TRACE) log_trace("getting from header table %ld", header_table_index);
     hpack_header_table_entry_t * entry = hpack_header_table_get(context, header_table_index);
     if (!entry) {
-      if (LOG_TRACE) log_trace("getting from static table %ld\n", header_table_index);
+      if (LOG_TRACE) log_trace("getting from static table %ld", header_table_index);
       entry = hpack_static_table_get(context, header_table_index);
     }
     if (!entry) {
@@ -393,7 +393,7 @@ static void hpack_decode_literal_header(
     }
     COPY_STRING(key_name, entry->name, entry->name_length);
     key_name_length = entry->name_length;
-    if (LOG_TRACE) log_trace("Indexed name: '%s' (%ld)\n", key_name, key_name_length);
+    if (LOG_TRACE) log_trace("Indexed name: '%s' (%ld)", key_name, key_name_length);
     if (entry->from_static_table) {
       free(entry);
     }
@@ -406,7 +406,7 @@ static void hpack_decode_literal_header(
   }
   char * value = ret.value;
   size_t value_length = ret.length;
-  if (LOG_TRACE) log_trace("Emitting header literal value: %s (%ld), %s (%ld)\n", key_name, key_name_length, value, value_length);
+  if (LOG_TRACE) log_trace("Emitting header literal value: %s (%ld), %s (%ld)", key_name, key_name_length, value, value_length);
 
   if (add_to_header_table) {
     hpack_header_table_entry_t * header = hpack_header_table_add(context,
@@ -430,9 +430,9 @@ static void hpack_decode_indexed_header(
   hpack_decode_quantity(buf + (*current), length - (*current), 1, &result);
   *current += result.num_bytes;
   size_t index = result.value;
-  if (LOG_TRACE) log_trace("Adding indexed header field: %ld\n", index);
+  if (LOG_TRACE) log_trace("Adding indexed header field: %ld", index);
 
-  if (LOG_TRACE) log_trace("Header table size: %ld\n", context->header_table->entries->length);
+  if (LOG_TRACE) log_trace("Header table size: %ld", context->header_table->entries->length);
 
   if (index == 0) {
 
@@ -456,7 +456,7 @@ static void hpack_decode_indexed_header(
       hpack_header_table_add_existing_entry(context, entry);
       hpack_emit_header(headers, entry->name,
           entry->name_length, entry->value, entry->value_length);
-      if (LOG_TRACE) log_trace("From index: %s: %s\n", entry->name, entry->value);
+      if (LOG_TRACE) log_trace("From index: %s: %s", entry->name, entry->value);
     }
 
   }
@@ -542,12 +542,12 @@ multimap_t * hpack_decode(const hpack_context_t * const context, const uint8_t *
   multimap_t * headers = multimap_init_with_string_keys();
   if (!headers) {
     if (LOG_ERROR) {
-      log_error("Could not allocate memory for headers\n");
+      log_error("Could not allocate memory for headers");
     }
     return NULL;
   }
 
-  if (LOG_TRACE) log_trace("Decompressing headers: %ld, %ld\n", current, length);
+  if (LOG_TRACE) log_trace("Decompressing headers: %ld, %ld", current, length);
   while (current < length) {
     uint8_t first_bit = get_bits8(buf, current, 0x80);
     uint8_t second_bit = get_bits8(buf, current, 0x40);
@@ -574,7 +574,7 @@ multimap_t * hpack_decode(const hpack_context_t * const context, const uint8_t *
   concatenate_cookie_fields(headers);
 
   // emit reference set headers
-  if (LOG_TRACE) log_trace("Emitting from ref set\n");
+  if (LOG_TRACE) log_trace("Emitting from ref set");
   circular_buffer_iter_t iter;
   circular_buffer_iterator_init(&iter, context->header_table->entries);
   while (circular_buffer_iterate(&iter)) {
@@ -614,13 +614,13 @@ binary_buffer_t * hpack_encode(const hpack_context_t * const context, const mult
     size_t name_length = strlen(name);
     char * value = iter.value;
     size_t value_length = strlen(value);
-    if (LOG_TRACE) log_trace("Encoding Reponse Header: %s (%ld): %s (%ld)\n", name, name_length, value, value_length);
+    if (LOG_TRACE) log_trace("Encoding Reponse Header: %s (%ld): %s (%ld)", name, name_length, value, value_length);
     ASSERT_OR_RETURN_FALSE(binary_buffer_write_curr_index(result, 0x40));
 
     ASSERT_OR_RETURN_FALSE(hpack_encode_string_literal(result, name, name_length));
     ASSERT_OR_RETURN_FALSE(hpack_encode_string_literal(result, value, value_length));
   }
-  if (LOG_TRACE) log_trace("Encoded headers into %ld bytes\n", binary_buffer_size(result));
+  if (LOG_TRACE) log_trace("Encoded headers into %ld bytes", binary_buffer_size(result));
   return result;
 }
 

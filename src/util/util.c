@@ -7,6 +7,8 @@
 
 #include "util.h"
 
+#define LOG_FILE stdout
+
 /**
  *
  * Round this value to the next highest power of 2
@@ -90,7 +92,7 @@ static const size_t RFC1123_TIME_LEN = 29;
     tm = gmtime(&t);
 
     if (strftime(date_buf, buf_len, "---, %d --- %Y %H:%M:%S GMT", tm) < 1) {
-      log_fatal("Unable to get date as string\n");
+      log_fatal("Unable to get date as string");
       free(date_buf);
       return NULL;
     }
@@ -102,9 +104,14 @@ static const size_t RFC1123_TIME_LEN = 29;
 
 #define LOG_WITH_LEVEL(level) \
   va_list ap; \
-  fprintf(stdout, "%s\t", level); \
+  if (fprintf(LOG_FILE, "%s\t", level) < 0) { \
+    abort(); \
+  } \
   va_start(ap, format); \
-  if (vfprintf(stdout, format, ap) < 0) { \
+  if (vfprintf(LOG_FILE, format, ap) < 0) { \
+    abort(); \
+  } \
+  if (fprintf(LOG_FILE, "\n") < 0) { \
     abort(); \
   } \
   va_end(ap);

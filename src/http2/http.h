@@ -84,81 +84,83 @@ enum settings_e {
 /**
  * HTTP errors
  */
+enum h2_error_code_e {
 
-/**
- * The associated condition is not as a result of an error. For example, a
- * GOAWAY might include this code to indicate graceful shutdown of a connection.
- */
-#define HTTP_ERROR_NO_ERROR 0
+  /**
+   * The associated condition is not as a result of an error. For example, a
+   * GOAWAY might include this code to indicate graceful shutdown of a connection.
+   */
+  HTTP_ERROR_NO_ERROR,
 
-/**
- * The endpoint detected an unspecific protocol error. This error is for use
- * when a more specific error code is not available.
- */
-#define HTTP_ERROR_PROTOCOL_ERROR 1
+  /**
+   * The endpoint detected an unspecific protocol error. This error is for use
+   * when a more specific error code is not available.
+   */
+  HTTP_ERROR_PROTOCOL_ERROR,
 
-/**
- * The endpoint encountered an unexpected internal error.
- */
-#define HTTP_ERROR_INTERNAL_ERROR 2
+  /**
+   * The endpoint encountered an unexpected internal error.
+   */
+  HTTP_ERROR_INTERNAL_ERROR,
 
+  /**
+   * The endpoint detected that its peer violated the flow control protocol.
+   */
+  HTTP_ERROR_FLOW_CONTROL_ERROR,
 
-/**
- * The endpoint detected that its peer violated the flow control protocol.
- */
-#define HTTP_ERROR_FLOW_CONTROL_ERROR 3
+  /**
+   * The endpoint sent a SETTINGS frame, but did not receive a response in a
+   * timely manner. See Settings Synchronization (Section 6.5.3).
+   */
+  HTTP_ERROR_SETTINGS_TIMEOUT,
 
-/**
- * The endpoint sent a SETTINGS frame, but did not receive a response in a
- * timely manner. See Settings Synchronization (Section 6.5.3).
- */
-#define HTTP_ERROR_SETTINGS_TIMEOUT 4
+  /**
+   * The endpoint received a frame after a stream was half closed.
+   */
+  HTTP_ERROR_STREAM_CLOSED,
 
-/**
- * The endpoint received a frame after a stream was half closed.
- */
-#define HTTP_ERROR_STREAM_CLOSED 5
+  /**
+   * The endpoint received a frame that was larger than the maximum size
+   * that it supports.
+   */
+  HTTP_ERROR_FRAME_SIZE_ERROR,
 
-/**
- * The endpoint received a frame that was larger than the maximum size
- * that it supports.
- */
-#define HTTP_ERROR_FRAME_SIZE_ERROR 6
+  /**
+   * The endpoint refuses the stream prior to performing any application
+   * processing, see Section 8.1.4 for details.
+   */
+  HTTP_ERROR_REFUSED_STREAM,
 
-/**
- * The endpoint refuses the stream prior to performing any application
- * processing, see Section 8.1.4 for details.
- */
-#define HTTP_ERROR_REFUSED_STREAM 7
+  /**
+   * Used by the endpoint to indicate that the stream is no longer needed.
+   */
+  HTTP_ERROR_CANCEL,
 
-/**
- * Used by the endpoint to indicate that the stream is no longer needed.
- */
-#define HTTP_ERROR_CANCEL 8
+  /**
+   * The endpoint is unable to maintain the compression context for the
+   * connection.
+   */
+  HTTP_ERROR_COMPRESSION_ERROR,
 
-/**
- * The endpoint is unable to maintain the compression context for the
- * connection.
- */
-#define HTTP_ERROR_COMPRESSION_ERROR 9
+  /**
+   * The connection established in response to a CONNECT request (Section 8.3)
+   * was reset or abnormally closed.
+   */
+  HTTP_ERROR_CONNECT_ERROR,
 
-/**
- * The connection established in response to a CONNECT request (Section 8.3)
- * was reset or abnormally closed.
- */
-#define HTTP_ERROR_CONNECT_ERROR 10
+  /**
+   * The endpoint detected that its peer is exhibiting a behavior over a given
+   * amount of time that has caused it to refuse to process further frames.
+   */
+  HTTP_ERROR_ENHANCE_YOUR_CALM,
 
-/**
- * The endpoint detected that its peer is exhibiting a behavior over a given
- * amount of time that has caused it to refuse to process further frames.
- */
-#define HTTP_ERROR_ENHANCE_YOUR_CALM 11
+  /**
+   * The underlying transport has properties that do not meet the minimum
+   * requirements imposed by this document (see Section 9.2) or the endpoint.
+   */
+  HTTP_ERROR_INADEQUATE_SECURITY
 
-/**
- * The underlying transport has properties that do not meet the minimum
- * requirements imposed by this document (see Section 9.2) or the endpoint.
- */
-#define HTTP_ERROR_INADEQUATE_SECURITY 12
+};
 
 #define HTTP_FRAME_FIELDS               \
   /* Length in octets of the frame */   \
@@ -323,8 +325,13 @@ typedef struct {
    */
   bool received_connection_header;
   bool received_settings;
+  // the next stream id that can be used to start a pushed stream
   size_t current_stream_id;
+  // the last stream id that has started processing
+  size_t last_stream_id;
   long window_size;
+  // is the connection waiting to be gracefully closed?
+  bool closing;
 
   /**
    * what's currently being read

@@ -34,7 +34,7 @@ static void parse_authority(http_request_t * const request) {
 static bool parse_path(http_request_t * const request) {
   char * path = http_request_header_get(request, ":path");
   if (!path) {
-    log_error("No :path header provided\n");
+    log_error("No :path header provided");
     return false;
   }
   char * query = strchr(path, '?');
@@ -174,14 +174,14 @@ http_request_t * http_request_init_internal(const _http_connection_t connection,
 
   char * method = http_request_header_get(request, ":method");
   if (!method) {
-    log_error("Missing :method header\n");
+    log_error("Missing :method header");
     return NULL;
   }
   request->method = strdup(method);
 
   char * scheme = http_request_header_get(request, ":scheme");
   if (!scheme) {
-    log_error("Missing :scheme header\n");
+    log_error("Missing :scheme header");
     return NULL;
   }
   request->scheme = strdup(scheme);

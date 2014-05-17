@@ -6,7 +6,7 @@
 #include "server.h"
 
 void catcher(int sig) {
-  if (LOG_ERROR) log_error("caught signal %d\n", sig);
+  if (LOG_ERROR) log_error("caught signal %d", sig);
   exit(EXIT_SUCCESS);
 }
 
