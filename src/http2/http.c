@@ -504,7 +504,7 @@ static bool http_parse_header_fragments(http_connection_t * const connection, ht
   if (LOG_TRACE) log_trace("Got headers: %s (%ld), decoding", headers, headers_length);
   stream->headers = hpack_decode(connection->decoding_context, headers, headers_length);
   if (!stream->headers) {
-    emit_error_and_close(connection, stream->id, HTTP_ERROR_INTERNAL_ERROR, "Unable to decode headers");
+    emit_error_and_close(connection, stream->id, HTTP_ERROR_COMPRESSION_ERROR, "Unable to decode headers");
     return false;
   }
   // TODO - check that the stream is in a valid state to be opened first

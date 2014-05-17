@@ -356,7 +356,7 @@ static bool hpack_decode_string_literal(
   return true;
 }
 
-static void hpack_decode_literal_header(
+static bool hpack_decode_literal_header(
     const hpack_context_t * const context, const multimap_t * const headers, const uint8_t * const buf,
     const size_t length, size_t * const current, const size_t bit_offset, const bool add_to_header_table) {
 
@@ -375,6 +375,9 @@ static void hpack_decode_literal_header(
     if (hpack_decode_string_literal(context, buf, length, current, &ret)) {
       key_name = ret.value;
       key_name_length = ret.length;
+    } else {
+      log_error("Error decoding literal header: unable to decode literal name");
+      return false;
     }
     if (LOG_TRACE) log_trace("Literal name: '%s' (%ld)", key_name, key_name_length);
 
@@ -389,7 +392,8 @@ static void hpack_decode_literal_header(
     }
     if (!entry) {
       // TODO protocol error - invalid index
-      abort();
+      log_error("Error decoding literal header with indexed name: invalid index (%d)", header_table_index);
+      return false;
     }
     COPY_STRING(key_name, entry->name, entry->name_length);
     key_name_length = entry->name_length;
@@ -402,7 +406,8 @@ static void hpack_decode_literal_header(
   // literal value
   string_and_length_t ret;
   if (!hpack_decode_string_literal(context, buf, length, current, &ret)) {
-    abort();
+    log_error("Error decoding literal header: unable to decode literal value");
+    return false;
   }
   char * value = ret.value;
   size_t value_length = ret.length;
@@ -420,9 +425,10 @@ static void hpack_decode_literal_header(
     free(value);
   }
 
+  return true;
 }
 
-static void hpack_decode_indexed_header(
+static bool hpack_decode_indexed_header(
     const hpack_context_t * const context, const multimap_t * const headers, const uint8_t * const buf,
     const size_t length, size_t * const current) {
 
@@ -437,7 +443,8 @@ static void hpack_decode_indexed_header(
   if (index == 0) {
 
     // decoding error (see 4.2)
-    abort();
+    log_error("Error decoding indexed header: invalid index (0)");
+    return false;
 
   } else {
 
@@ -450,8 +457,8 @@ static void hpack_decode_indexed_header(
         entry = hpack_static_table_get(context, index);
       }
       if (!entry) {
-        // TODO protocol error - invalid index
-        abort();
+        log_error("Error decoding indexed header: invalid index (%d)", index);
+        return false;
       }
       hpack_header_table_add_existing_entry(context, entry);
       hpack_emit_header(headers, entry->name,
@@ -461,9 +468,10 @@ static void hpack_decode_indexed_header(
 
   }
 
+  return true;
 }
 
-static void hpack_decode_context_update(
+static bool hpack_decode_context_update(
     const hpack_context_t * const context, const uint8_t * const buf,
     const size_t length, size_t * const current, const bool fourth_bit) {
 
@@ -479,7 +487,8 @@ static void hpack_decode_context_update(
     // low 4 bits must be 0
     if (new_size != 0) {
       // error!
-      abort();
+      log_error("Unable to decode context update: low bits must be set to 0");
+      return false;
     }
 
     hpack_reference_set_clear(context);
@@ -490,6 +499,8 @@ static void hpack_decode_context_update(
     hpack_header_table_adjust_size(context, new_size);
 
   }
+
+  return true;
 
 }
 
@@ -553,21 +564,29 @@ multimap_t * hpack_decode(const hpack_context_t * const context, const uint8_t *
     uint8_t second_bit = get_bits8(buf, current, 0x40);
     uint8_t third_bit = get_bits8(buf, current, 0x20);
     uint8_t fourth_bit = get_bits8(buf, current, 0x10);
+
+    bool success = false;
+
     if (first_bit) {
       // indexed header field (4.2)
-      hpack_decode_indexed_header(context, headers, buf, length, &current);
+      success = hpack_decode_indexed_header(context, headers, buf, length, &current);
     } else if (second_bit) {
       // literal header field with incremental indexing (4.3.1)
-      hpack_decode_literal_header(context, headers, buf, length, &current, 2, true);
+      success = hpack_decode_literal_header(context, headers, buf, length, &current, 2, true);
     } else if (third_bit) {
-      hpack_decode_context_update(context, buf, length, &current, fourth_bit);
+      success = hpack_decode_context_update(context, buf, length, &current, fourth_bit);
     } else if (fourth_bit) {
       // literal header field never indexed 4.3.3
-      hpack_decode_literal_header(context, headers, buf, length, &current, 4, false);
+      success = hpack_decode_literal_header(context, headers, buf, length, &current, 4, false);
     } else {
       // literal header field without indexing (4.3.2)
-      hpack_decode_literal_header(context, headers, buf, length, &current, 4, false);
+      success = hpack_decode_literal_header(context, headers, buf, length, &current, 4, false);
     }
+
+    if (!success) {
+      return NULL;
+    }
+
   }
 
   // does this need to go below the emissionof reference set headers?
