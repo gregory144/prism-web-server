@@ -17,6 +17,9 @@
  *
  */
 size_t roundup_to_power_of_2(size_t v) {
+
+  // TODO - does this work for values greater than 2^32?
+
   v--;
   v |= v >> 1;
   v |= v >> 2;

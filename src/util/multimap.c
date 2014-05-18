@@ -142,9 +142,8 @@ multimap_values_t * multimap_get(const multimap_t * const table, void * key) {
 static bool multimap_grow(multimap_t * const table) {
   size_t new_capacity = table->capacity * 2;
   multimap_entry_t * * new_buckets = calloc(new_capacity, sizeof(multimap_entry_t *));
-  if (new_buckets == NULL) {
-    return false;
-  }
+  ASSERT_OR_RETURN_FALSE(new_buckets);
+
   // iterate through all entries in table and re-insert into
   // new table
   size_t i;

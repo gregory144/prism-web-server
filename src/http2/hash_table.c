@@ -1,0 +1,248 @@
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+
+#include "hash_table.h"
+#include "../util/util.h"
+
+#define DEFAULT_HASH_TABLE_INITIAL_SIZE 128
+
+/**
+ * From http://www.cse.yorku.ca/~oz/hash.html
+ */
+static size_t string_hash(void * key) {
+  unsigned char * string_key = key;
+  size_t hash = 5381;
+  int c;
+
+  while ((c = *string_key++))
+    hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+
+  return hash;
+}
+
+static size_t int_hash(void * key) {
+  size_t i = * (long *) key;
+  return i * 2654435761;
+}
+
+static int string_cmp_key(void * key1, void * key2) {
+  return strcmp(key1, key2);
+}
+
+static int int_cmp_key(void * key1, void * key2) {
+  long k1 = * (long *) key1;
+  long k2 = * (long *) key2;
+  return k1 - k2;
+}
+
+hash_table_t * hash_table_init_with_string_keys() {
+  return hash_table_init_with_string_keys_and_size(
+      DEFAULT_HASH_TABLE_INITIAL_SIZE);
+}
+
+hash_table_t * hash_table_init_with_string_keys_and_size(
+  size_t initial_size) {
+  return hash_table_init_with_size(string_hash, string_cmp_key,
+      initial_size, free, free);
+}
+
+hash_table_t * hash_table_init_with_int_keys() {
+  return hash_table_init_with_int_keys_and_size(
+      DEFAULT_HASH_TABLE_INITIAL_SIZE);
+}
+
+hash_table_t * hash_table_init_with_int_keys_and_size(
+  size_t initial_size) {
+  return hash_table_init_with_size(int_hash, int_cmp_key,
+      initial_size, free, free);
+}
+
+hash_table_t * hash_table_init(hash_func_t hash_func,
+    hash_cmp_key_func_t cmp_key_func, free_func_t free_key, free_func_t free_value) {
+  return hash_table_init_with_size(hash_func, cmp_key_func,
+      DEFAULT_HASH_TABLE_INITIAL_SIZE, free_key, free_value);
+}
+
+hash_table_t * hash_table_init_with_size(hash_func_t hash_func,
+    hash_cmp_key_func_t cmp_key_func, size_t initial_size,
+    free_func_t free_key, free_func_t free_value) {
+
+  hash_table_t * table = malloc(sizeof(hash_table_t));
+  ASSERT_OR_RETURN_NULL(table);
+
+  table->buckets = calloc(initial_size, sizeof(hash_table_entry_t));
+  ASSERT_OR_RETURN_NULL(table->buckets);
+
+  table->hash_func = hash_func;
+  table->cmp_key_func = cmp_key_func;
+  table->size = 0;
+  table->capacity = initial_size;
+  table->free_key = free_key;
+  table->free_value = free_value;
+  return table;
+}
+
+static size_t hash_key(const hash_table_t * const table, size_t capacity, void * key) {
+  size_t hash_value = table->hash_func(key);
+  return hash_value % capacity;
+}
+
+size_t hash_table_size(hash_table_t * table) {
+  return table->size;
+}
+
+static hash_table_entry_t * hash_table_get_entry(hash_table_t * table, void * key) {
+  size_t hash_value = hash_key(table, table->capacity, key);
+  hash_table_entry_t * current;
+  for (current = table->buckets[hash_value]; current != NULL;
+      current = current->next) {
+    if (table->cmp_key_func(key, current->key) == 0) {
+      // found
+      return current;
+    }
+  }
+  // not found
+  return NULL;
+}
+
+void * hash_table_get(hash_table_t * table, void * key) {
+  hash_table_entry_t * entry = hash_table_get_entry(table, key);
+  if (entry) {
+    return entry->value;
+  }
+  // not found
+  return NULL;
+}
+
+static bool hash_table_grow(hash_table_t * table) {
+  size_t new_capacity = table->capacity * 2;
+  hash_table_entry_t * * new_buckets = calloc(new_capacity, sizeof(hash_table_entry_t *));
+  ASSERT_OR_RETURN_FALSE(new_buckets);
+  // iterate through all buckets in table and re-insert into
+  // new table
+  size_t i;
+  for (i = 0; i < table->capacity; i++) {
+    hash_table_entry_t * current = table->buckets[i];
+    while (current) {
+      hash_table_entry_t * next = current->next;
+
+      // find which bucket to place the entry in in the new array of buckets
+      size_t hash_value = hash_key(table, new_capacity, current->key);
+      current->next = new_buckets[hash_value];
+      new_buckets[hash_value] = current;
+
+      current = next;
+    }
+  }
+
+  free(table->buckets);
+  table->buckets = new_buckets;
+  table->capacity = new_capacity;
+
+  return true;
+}
+
+bool hash_table_put(hash_table_t * table, void * key, void * value) {
+
+  hash_table_entry_t * entry;
+
+  if ((entry = hash_table_get_entry(table, key)) == NULL) {
+    // not found
+
+    // grow the table if necessary
+    if ((table->size + 1.0) / table->capacity > 0.75) {
+      if (!hash_table_grow(table)) {
+        return false;
+      }
+    }
+
+    // create a new entry and put it in the table
+    entry = malloc(sizeof(hash_table_entry_t));
+    ASSERT_OR_RETURN_FALSE(entry);
+    entry->key = key;
+
+    size_t hash_value = hash_key(table, table->capacity, key);
+    entry->next = table->buckets[hash_value];
+    table->buckets[hash_value] = entry;
+    table->size++;
+
+  } else {
+    // the key already exists in the table
+
+    // free previous key
+    table->free_key(entry->key);
+    // free previous value
+    table->free_value(entry->value);
+
+    entry->key = key;
+  }
+
+  entry->value = value;
+
+  return true;
+}
+
+void * hash_table_remove(hash_table_t * table, void * key) {
+  size_t hash_value = hash_key(table, table->capacity, key);
+  hash_table_entry_t * current;
+  hash_table_entry_t * prev = NULL;
+  for (current = table->buckets[hash_value]; current != NULL;
+      current = current->next) {
+    if (table->cmp_key_func(key, current->key) == 0) {
+      if (prev) {
+        prev->next = current->next;
+      } else {
+        table->buckets[hash_value] = current->next;
+      }
+      void * value = current->value;
+      free(current);
+      table->size--;
+      return value;
+    }
+  }
+  return NULL;
+}
+
+void hash_table_iterator_init(hash_table_iter_t * iter, hash_table_t * table) {
+  iter->entry = NULL;
+  iter->next = NULL;
+  iter->index = 0;
+  iter->table = table;
+}
+
+bool hash_table_iterate(hash_table_iter_t * iter) {
+  hash_table_t * table = iter->table;
+  hash_table_entry_t * entry = iter->entry;
+  if (entry && entry->next) {
+    entry = entry->next;
+  } else {
+    do {
+      entry = table->buckets[iter->index];
+      iter->index++;
+    } while (!entry && iter->index < table->capacity);
+  }
+  if (entry) {
+    iter->key = entry->key;
+    iter->value = entry->value;
+  }
+  iter->entry = entry;
+  return iter->entry != NULL;
+}
+
+void hash_table_free(hash_table_t * table) {
+  size_t i;
+  for (i = 0; i < table->capacity; i++) {
+    hash_table_entry_t * entry = table->buckets[i];
+    hash_table_entry_t * current;
+    while (entry) {
+      current = entry;
+      entry = entry->next;
+      table->free_key(current->key);
+      table->free_value(current->value);
+      free(current);
+    }
+  }
+  free(table->buckets);
+  free(table);
+}
