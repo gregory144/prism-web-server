@@ -5,7 +5,8 @@
 ## TODO
 
 * API for processing requests/responses
-* Finite state machine for handling stream status
+* finite state machine for handling stream status
+* data driven frame header parsing - with validation
 * switch from heap based priority queue to linked list?
 * buffer writes instead of writing small packets
 * streams data structure
