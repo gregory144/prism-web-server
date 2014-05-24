@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "../util/util.h"
+#include "../util/binary_buffer.h"
 
 #include "http.h"
 #include "request.h"
@@ -16,6 +17,7 @@
 
 #define MAX_FRAME_SIZE 0x3FFF // 16,383
 #define MAX_WINDOW_SIZE 0x7FFFFFFF // 2^31 - 1
+#define MAX_CONNECTION_BUFFER_SIZE 0x1000000 // 2^24
 
 const char * HTTP_CONNECTION_HEADER = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 const size_t HTTP_CONNECTION_HEADER_LENGTH = 24;
@@ -51,6 +53,8 @@ http_connection_t * http_connection_init(void * const data, const request_cb req
   connection->buffer_length = 0;
   connection->buffer_position = 0;
 
+  connection->write_buffer = binary_buffer_init(NULL, 0);
+
   connection->header_table_size = DEFAULT_HEADER_TABLE_SIZE;
   connection->enable_push = DEFAULT_ENABLE_PUSH;
   connection->max_concurrent_streams = DEFAULT_MAX_CONNCURRENT_STREAMS;
@@ -74,6 +78,9 @@ static http_stream_t * http_stream_get(http_connection_t * const connection, con
 static void http_stream_close(http_connection_t * const connection, http_stream_t * const stream) {
 
   if (!stream->queued_data_frames) {
+
+    log_trace("Closing stream #%d", stream->id);
+
     stream->state = STREAM_STATE_CLOSED;
     if (!hash_table_remove(connection->streams, &(stream->id))) {
       log_error("Could not close stream: %d", stream->id);
@@ -83,6 +90,7 @@ static void http_stream_close(http_connection_t * const connection, http_stream_
 }
 
 static void http_stream_mark_closing(http_connection_t * const connection, http_stream_t * const stream) {
+  UNUSED(connection);
 
   if (stream->state != STREAM_STATE_CLOSED && !stream->queued_data_frames) {
     stream->closing = true;
@@ -101,6 +109,55 @@ static void http_connection_close(http_connection_t * const connection) {
   // TODO loop through streams + close them
   connection->closer(connection->data);
   connection->closing = true;
+}
+
+static bool http_connection_flush(const http_connection_t * const connection, size_t new_length) {
+
+  size_t buf_length = binary_buffer_size(connection->write_buffer);
+  if (buf_length > 0) {
+
+    uint8_t * buf = binary_buffer_start(connection->write_buffer);
+    connection->writer(connection->data, buf, buf_length);
+
+    ASSERT_OR_RETURN_FALSE(binary_buffer_reset(connection->write_buffer, new_length));
+
+  }
+
+  return true;
+}
+
+static bool http_connection_write(const http_connection_t * const connection, uint8_t * const buf, size_t buf_length) {
+
+  size_t existing_length = binary_buffer_size(connection->write_buffer);
+  if (existing_length + buf_length >= MAX_CONNECTION_BUFFER_SIZE) {
+    // if the write buffer doesn't have enough space to accomadate the new buffer then
+    // flush the buffer
+    ASSERT_OR_RETURN_FALSE(
+        http_connection_flush(connection,
+          buf_length < MAX_CONNECTION_BUFFER_SIZE ? buf_length : 0)
+    );
+  }
+
+  // if the given buffer's size is greater than MAX_CONNECTION_BUFFER_SIZE
+  // then just write it directly - don't add it to the write buffer
+  if (buf_length > MAX_CONNECTION_BUFFER_SIZE) {
+    connection->writer(connection->data, buf, buf_length);
+
+    return true;
+  }
+
+  ASSERT_OR_RETURN_FALSE(
+      binary_buffer_write(connection->write_buffer, buf, buf_length)
+  );
+
+  size_t new_length = binary_buffer_size(connection->write_buffer);
+  if (new_length + buf_length >= MAX_CONNECTION_BUFFER_SIZE) {
+    ASSERT_OR_RETURN_FALSE(
+        http_connection_flush(connection, 0)
+    );
+  }
+
+  return true;
 }
 
 static void http_frame_header_write(uint8_t * const buf, const uint16_t length, const uint8_t type,
@@ -158,7 +215,7 @@ static void http_emit_goaway(const http_connection_t * const connection, enum h2
   }
 
   if (LOG_DEBUG) log_debug("Writing goaway frame");
-  connection->writer(connection->data, buf, buf_length);
+  http_connection_write(connection, buf, buf_length);
 }
 
 static void http_emit_rst_stream(const http_connection_t * const connection, uint32_t stream_id,
@@ -183,7 +240,7 @@ static void http_emit_rst_stream(const http_connection_t * const connection, uin
   buf[pos++] = (error_code) & 0xFF;
 
   if (LOG_DEBUG) log_debug("Writing reset stream frame");
-  connection->writer(connection->data, buf, buf_length);
+  http_connection_write(connection, buf, buf_length);
 }
 
 static void emit_error_and_close(http_connection_t * const connection, uint32_t stream_id, enum h2_error_code_e error_code,
@@ -245,20 +302,23 @@ static void http_emit_headers(http_connection_t * const connection, const http_s
   }
 
   if (LOG_DEBUG) log_debug("Writing headers frame: stream %d, %ld octets", stream->id, buf_length);
-  connection->writer(connection->data, buf, buf_length);
+  http_connection_write(connection, buf, buf_length);
 }
 
 static void http_emit_data_frame(const http_connection_t * const connection, const http_stream_t * const stream,
     const http_queued_frame_t * const frame) {
+  // buffer data frames per connection? - only trigger connection->writer after all emit_data_frames have been written
+  // or size threshold has been reached
+
   size_t header_length = FRAME_HEADER_SIZE;
   uint8_t header_buf[header_length];
   uint8_t flags = 0;
   if (frame->end_stream) flags |= DATA_FLAG_END_STREAM;
   http_frame_header_write(header_buf, frame->buf_length, FRAME_TYPE_DATA, flags, stream->id);
-  connection->writer(connection->data, header_buf, header_length);
+  http_connection_write(connection, header_buf, header_length);
 
   if (LOG_DEBUG) log_debug("Writing data frame: stream %d, %ld octets", stream->id, frame->buf_length);
-  connection->writer(connection->data, frame->buf, frame->buf_length);
+  http_connection_write(connection, frame->buf, frame->buf_length);
 }
 
 static void http_stream_trigger_send_data(http_connection_t * const connection, http_stream_t * const stream) {
@@ -403,7 +463,7 @@ static void http_emit_settings_ack(const http_connection_t * const connection) {
   if (ack) flags |= SETTINGS_FLAG_ACK;
   http_frame_header_write(buf, 0, FRAME_TYPE_SETTINGS, flags, 0);
   if (LOG_DEBUG) log_debug("Writing settings ack frame");
-  connection->writer(connection->data, buf, buf_length);
+  http_connection_write(connection, buf, buf_length);
 }
 
 /**
@@ -461,6 +521,9 @@ static bool http_setting_set(http_connection_t * const connection, const enum se
 }
 
 static http_stream_t * http_stream_init(http_connection_t * const connection, const uint32_t stream_id) {
+
+  log_trace("Opening stream #%d", stream_id);
+
   http_stream_t * stream = http_stream_get(connection, stream_id);
   if (stream != NULL) {
     emit_error_and_close(connection, stream_id, HTTP_ERROR_PROTOCOL_ERROR,
@@ -680,7 +743,8 @@ static bool http_increment_stream_window_size(http_connection_t * const connecti
     http_trigger_send_data(connection, stream);
   } else {
     // TODO connection error if the stream was closed over x seconds ago
-    abort();
+    // until then, ignore it for now
+    log_fatal("Could not find stream #%d to update it's window size", stream_id);
   }
   return true;
 }
@@ -961,6 +1025,10 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
 
   while (http_connection_add_from_buffer(connection));
 
+  if (!http_connection_flush(connection, 0)) {
+    log_warning("Could not flush write buffer");
+  }
+
   if (connection->buffer_position > connection->buffer_length) {
     // buffer overflow
     abort();
@@ -979,6 +1047,7 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
     connection->buffer = NULL;
     connection->buffer_length = 0;
   }
+
 }
 
 void http_response_write(http_response_t * const response, char * text, const size_t text_length) {

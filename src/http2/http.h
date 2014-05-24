@@ -343,6 +343,8 @@ typedef struct {
   size_t buffer_length;
   size_t buffer_position;
 
+  binary_buffer_t * write_buffer;
+
   /**
    * Connection settings
    */

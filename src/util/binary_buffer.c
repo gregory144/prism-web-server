@@ -11,15 +11,26 @@ binary_buffer_t * binary_buffer_init(binary_buffer_t * buffer, size_t capacity) 
     buffer = malloc(sizeof(binary_buffer_t));
     ASSERT_OR_RETURN_NULL(buffer);
   }
+
+  buffer->buf = NULL;
+  ASSERT_OR_RETURN_NULL(binary_buffer_reset(buffer, capacity));
+
+  return buffer;
+}
+
+bool binary_buffer_reset(binary_buffer_t * const buffer, size_t capacity) {
   buffer->index = 0;
   buffer->capacity = capacity;
   if (capacity > 0) {
-    buffer->buf = malloc(capacity * sizeof(uint8_t));
-    ASSERT_OR_RETURN_NULL(buffer->buf);
+    buffer->buf = realloc(buffer->buf, capacity * sizeof(uint8_t));
+    ASSERT_OR_RETURN_FALSE(buffer->buf);
   } else {
+    if (buffer->buf) {
+      free(buffer->buf);
+    }
     buffer->buf = NULL;
   }
-  return buffer;
+  return true;
 }
 
 uint8_t binary_buffer_read_index(const binary_buffer_t * const buffer, size_t index) {
@@ -27,6 +38,10 @@ uint8_t binary_buffer_read_index(const binary_buffer_t * const buffer, size_t in
     return buffer->buf[index];
   }
   return 0;
+}
+
+uint8_t * binary_buffer_start(const binary_buffer_t * const buffer) {
+  return buffer->buf;
 }
 
 size_t binary_buffer_size(const binary_buffer_t * const buffer) {

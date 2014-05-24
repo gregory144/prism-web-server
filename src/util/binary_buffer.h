@@ -12,7 +12,11 @@ typedef struct {
 
 binary_buffer_t * binary_buffer_init(binary_buffer_t * result, size_t capacity);
 
+bool binary_buffer_reset(binary_buffer_t * const buffer, size_t capacity);
+
 uint8_t binary_buffer_read_index(const binary_buffer_t * const buffer, size_t index);
+
+uint8_t * binary_buffer_start(const binary_buffer_t * const buffer);
 
 size_t binary_buffer_size(const binary_buffer_t * const buffer);
 

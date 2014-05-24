@@ -207,13 +207,13 @@ void server_http_write(void * stream, uint8_t * buf, size_t len) {
 
   // copy bytes to write to new buffer
   uv_buf_t * write_buf = malloc(sizeof(uv_buf_t));
-  write_buf->base = malloc(len);
+  write_buf->base = malloc(sizeof(uint8_t) * len);
   memcpy(write_buf->base, buf, len);
   write_buf->len = len;
   // keep track of the buffer so we can free it later
   write_req_data->buf = write_buf;
 
-  if (LOG_TRACE) {
+  if (LOG_DATA) {
     log_trace("uv_write: %s, %ld", buf, len);
     size_t i;
     for (i = 0; i < len; i++) {
