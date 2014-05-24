@@ -9,6 +9,7 @@
 #include "http.h"
 #include "request.h"
 #include "response.h"
+#include "hash_table.h"
 
 #define FRAME_HEADER_SIZE 8 // octets
 #define DEFAULT_STREAM_PRIORITY 0x40000000 // 2^30
@@ -21,6 +22,15 @@ const size_t HTTP_CONNECTION_HEADER_LENGTH = 24;
 
 static void emit_error_and_close(http_connection_t * const connection, uint32_t stream_id, enum h2_error_code_e error_code,
     char * format, ...);
+
+static void http_stream_free(void * value) {
+  http_stream_t * stream = value;
+  if (stream->headers) {
+    multimap_free(stream->headers, free, free);
+  }
+
+  free(stream);
+}
 
 http_connection_t * http_connection_init(void * const data, const request_cb request_handler,
     const write_cb writer, const close_cb closer) {
@@ -46,7 +56,8 @@ http_connection_t * http_connection_init(void * const data, const request_cb req
   connection->max_concurrent_streams = DEFAULT_MAX_CONNCURRENT_STREAMS;
   connection->initial_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
 
-  connection->streams = calloc(sizeof(http_stream_t *), 4096);
+  connection->streams = hash_table_init_with_int_keys(http_stream_free);
+  ASSERT_OR_RETURN_NULL(connection->streams);
 
   connection->request_listener = request_handler;
 
@@ -57,35 +68,30 @@ http_connection_t * http_connection_init(void * const data, const request_cb req
 }
 
 static http_stream_t * http_stream_get(http_connection_t * const connection, const uint32_t stream_id) {
-  // TODO - use a better data structure than an array
-  if (stream_id >= 4096) {
-    emit_error_and_close(connection, stream_id, HTTP_ERROR_INTERNAL_ERROR,
-        "Unable to find stream with ID higher than 4096");
-    return NULL;
-  }
-
-  http_stream_t * stream = connection->streams[stream_id];
-
-  return stream;
+  return hash_table_get(connection->streams, &stream_id);
 }
 
-static void http_stream_close(const http_connection_t * const connection, http_stream_t * const stream) {
-  if (stream->headers) {
-    multimap_free(stream->headers, free, free);
+static void http_stream_close(http_connection_t * const connection, http_stream_t * const stream) {
+
+  if (!stream->queued_data_frames) {
+    stream->state = STREAM_STATE_CLOSED;
+    if (!hash_table_remove(connection->streams, &(stream->id))) {
+      log_error("Could not close stream: %d", stream->id);
+    }
   }
-  connection->streams[stream->id] = NULL;
-  free(stream);
+
+}
+
+static void http_stream_mark_closing(http_connection_t * const connection, http_stream_t * const stream) {
+
+  if (stream->state != STREAM_STATE_CLOSED && !stream->queued_data_frames) {
+    stream->closing = true;
+  }
+
 }
 
 void http_connection_free(http_connection_t * const connection) {
-  int i;
-  for (i = 0; i < 4096; i++) {
-    http_stream_t * stream = connection->streams[i];
-    if (stream) {
-      http_stream_close(connection, stream);
-    }
-  }
-  free(connection->streams);
+  hash_table_free(connection->streams);
   hpack_context_free(connection->encoding_context);
   hpack_context_free(connection->decoding_context);
   free(connection);
@@ -255,42 +261,89 @@ static void http_emit_data_frame(const http_connection_t * const connection, con
   connection->writer(connection->data, frame->buf, frame->buf_length);
 }
 
-static void http_trigger_send_data(http_connection_t * const connection, const http_stream_t * const stream) {
-  uint32_t i;
-  // TODO improve looping through open streams
-  for (i = 0; i < 4096; i++) {
-    http_stream_t * stream = http_stream_get(connection, i);
-    if (stream) {
-      while (stream->queued_data_frames) {
-        http_queued_frame_t * frame = stream->queued_data_frames;
-        size_t frame_payload_size = frame->buf_length;
-        if ((long)frame_payload_size <= connection->window_size &&
-            (long)frame_payload_size <= stream->window_size) {
-          http_emit_data_frame(connection, stream, frame);
+static void http_stream_trigger_send_data(http_connection_t * const connection, http_stream_t * const stream) {
 
-          connection->window_size -= frame_payload_size;
-          stream->window_size -= frame_payload_size;
+  bool sent_all_frames = true;
 
-          stream->queued_data_frames = frame->next;
+  while (stream->queued_data_frames) {
+    log_trace("Sending queued data for stream: %d", stream->id);
 
-          if (frame->buf_begin) {
-            free(frame->buf_begin);
-          }
-          free(frame);
-        } else {
-          if (LOG_DEBUG) {
-            log_debug("Wanted to send %ld octets, but connection window is %ld and stream window is %ld",
-                frame_payload_size, connection->window_size, stream->window_size);
-          }
+    http_queued_frame_t * frame = stream->queued_data_frames;
+    size_t frame_payload_size = frame->buf_length;
+    if ((long)frame_payload_size <= connection->window_size &&
+        (long)frame_payload_size <= stream->window_size) {
+      http_emit_data_frame(connection, stream, frame);
 
-          // wait until the window size has been increased
-          break;
-        }
+      connection->window_size -= frame_payload_size;
+      stream->window_size -= frame_payload_size;
+
+      stream->queued_data_frames = frame->next;
+
+      if (frame->buf_begin) {
+        free(frame->buf_begin);
       }
+      free(frame);
+
+    } else {
+      if (LOG_DEBUG) {
+        log_debug("Wanted to send %ld octets, but connection window is %ld and stream window is %ld",
+            frame_payload_size, connection->window_size, stream->window_size);
+      }
+
+      sent_all_frames = false;
+
+      // wait until the window size has been increased
+      break;
     }
   }
 
+  if (sent_all_frames) {
+    /* we can't close it outright, because we can't free the
+     * stream yet. It might be needed to continue iterating through
+     * the streams hash_table */
+    http_stream_mark_closing(connection, stream);
+  }
+
   if (LOG_TRACE) log_trace("Connection window size: %ld, stream window: %ld", connection->window_size, stream->window_size);
+}
+
+static void http_trigger_send_data(http_connection_t * const connection, http_stream_t * stream) {
+
+  if (stream) {
+    http_stream_trigger_send_data(connection, stream);
+
+    if (LOG_TRACE) log_trace("Connection window size: %ld, stream window: %ld", connection->window_size, stream->window_size);
+  } else {
+
+    log_trace("Sending queued data for open frames");
+
+    // loop through open streams
+    hash_table_iter_t iter;
+    http_stream_t * prev = NULL;
+    hash_table_iterator_init(&iter, connection->streams);
+
+    while (hash_table_iterate(&iter)) {
+
+      if (prev) {
+        http_stream_close(connection, prev);
+        prev = NULL;
+      }
+
+      stream = iter.value;
+
+      http_stream_trigger_send_data(connection, stream);
+
+      prev = stream;
+    }
+
+    if (prev) {
+      http_stream_close(connection, prev);
+      prev = NULL;
+    }
+
+    if (LOG_TRACE) log_trace("Connection window size: %ld", connection->window_size);
+  }
+
 }
 
 static void http_queue_data_frame(http_stream_t * const stream, uint8_t * buf,
@@ -367,15 +420,14 @@ static bool http_connection_recognize_connection_header(http_connection_t * cons
 }
 
 static void http_adjust_initial_window_size(http_connection_t * const connection, const long difference) {
-  http_stream_t * * streams = connection->streams;
-  size_t i;
-  for (i = 0; i < 4096; i++) {
-    http_stream_t * stream = streams[i];
-    if (stream) {
-      stream->window_size += difference;
-      if (stream->window_size > MAX_WINDOW_SIZE) {
-        emit_error_and_close(connection, stream->id, HTTP_ERROR_FLOW_CONTROL_ERROR, NULL);
-      }
+  hash_table_iter_t iter;
+  hash_table_iterator_init(&iter, connection->streams);
+  while (hash_table_iterate(&iter)) {
+    http_stream_t * stream = iter.value;
+
+    stream->window_size += difference;
+    if (stream->window_size > MAX_WINDOW_SIZE) {
+      emit_error_and_close(connection, stream->id, HTTP_ERROR_FLOW_CONTROL_ERROR, NULL);
     }
   }
 }
@@ -415,22 +467,26 @@ static http_stream_t * http_stream_init(http_connection_t * const connection, co
         "Got a headers frame for an existing stream");
     return NULL;
   }
-  // TODO - we won't need this check once we support over 4096 streams
-  if (stream == NULL && stream_id > 4096) {
-    return NULL;
-  }
   stream = malloc(sizeof(http_stream_t));
   if (!stream) {
     emit_error_and_close(connection, stream_id, HTTP_ERROR_INTERNAL_ERROR,
         "Unable to initialize stream: %ld", stream_id);
     return NULL;
   }
-  connection->streams[stream_id] = stream;
+  long * stream_id_key = malloc(sizeof(long));
+  if (!stream_id_key) {
+    emit_error_and_close(connection, stream_id, HTTP_ERROR_INTERNAL_ERROR,
+        "Unable to initialize stream (stream identifier): %ld", stream_id);
+    return NULL;
+  }
+  * stream_id_key = stream_id;
+  hash_table_put(connection->streams, stream_id_key, stream);
 
   stream->queued_data_frames = NULL;
 
   stream->id = stream_id;
   stream->state = STREAM_STATE_IDLE;
+  stream->closing = false;
   stream->header_fragments = NULL;
   stream->headers = NULL;
   stream->priority = DEFAULT_STREAM_PRIORITY;
@@ -941,5 +997,7 @@ void http_response_write(http_response_t * const response, char * text, const si
   http_emit_data(connection, stream, (uint8_t *)text, text_length);
 
   http_response_free(response);
+
+  http_stream_close(connection, stream);
 }
 

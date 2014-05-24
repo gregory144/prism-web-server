@@ -7,6 +7,7 @@
 
 #include "request.h"
 #include "response.h"
+#include "hash_table.h"
 
 /**
  * Frame types
@@ -294,6 +295,8 @@ typedef struct {
    */
   enum stream_state_e state;
 
+  bool closing;
+
   uint32_t priority;
 
   long window_size;
@@ -348,8 +351,7 @@ typedef struct {
   size_t max_concurrent_streams;
   size_t initial_window_size;
 
-  // TODO - use a better data structure to get a stream
-  http_stream_t * * streams;
+  hash_table_t * streams;
 
   hpack_context_t * encoding_context;
   hpack_context_t * decoding_context;

@@ -9,7 +9,6 @@
 * data driven frame header parsing - with validation
 * switch from heap based priority queue to linked list?
 * buffer writes instead of writing small packets
-* streams data structure
 * max concurrent streams
 * POST/PUT/PATCH requests (parse data frame)
 * better goaway handling

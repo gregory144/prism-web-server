@@ -5,13 +5,13 @@
 #include "hash_table.h"
 #include "../util/util.h"
 
-#define DEFAULT_HASH_TABLE_INITIAL_SIZE 128
+#define DEFAULT_HASH_TABLE_INITIAL_CAPACITY 128
 
 /**
  * From http://www.cse.yorku.ca/~oz/hash.html
  */
-static size_t string_hash(void * key) {
-  unsigned char * string_key = key;
+static size_t string_hash(const void * const key) {
+  const unsigned char * string_key = key;
   size_t hash = 5381;
   int c;
 
@@ -21,69 +21,95 @@ static size_t string_hash(void * key) {
   return hash;
 }
 
-static size_t int_hash(void * key) {
+static size_t int_hash(const void * const key) {
   size_t i = * (long *) key;
   return i * 2654435761;
 }
 
-static int string_cmp_key(void * key1, void * key2) {
+static int string_cmp_key(const void * const key1, const void * const key2) {
   return strcmp(key1, key2);
 }
 
-static int int_cmp_key(void * key1, void * key2) {
-  long k1 = * (long *) key1;
-  long k2 = * (long *) key2;
+static int int_cmp_key(const void * const key1, const void * const key2) {
+  const long k1 = * (const long * const) key1;
+  const long k2 = * (const long * const) key2;
   return k1 - k2;
 }
 
-hash_table_t * hash_table_init_with_string_keys() {
-  return hash_table_init_with_string_keys_and_size(
-      DEFAULT_HASH_TABLE_INITIAL_SIZE);
+hash_table_t * hash_table_init_with_string_keys(
+    hash_table_free_func_t free_value
+) {
+
+  return hash_table_init_with_string_keys_and_capacity(
+      DEFAULT_HASH_TABLE_INITIAL_CAPACITY, free_value);
+
 }
 
-hash_table_t * hash_table_init_with_string_keys_and_size(
-  size_t initial_size) {
-  return hash_table_init_with_size(string_hash, string_cmp_key,
-      initial_size, free, free);
+hash_table_t * hash_table_init_with_string_keys_and_capacity(
+  size_t initial_capacity,
+  hash_table_free_func_t free_value
+) {
+
+  return hash_table_init_with_capacity(string_hash, string_cmp_key,
+      initial_capacity, free, free_value);
+
 }
 
-hash_table_t * hash_table_init_with_int_keys() {
-  return hash_table_init_with_int_keys_and_size(
-      DEFAULT_HASH_TABLE_INITIAL_SIZE);
+hash_table_t * hash_table_init_with_int_keys(
+    hash_table_free_func_t free_value
+) {
+
+  return hash_table_init_with_int_keys_and_capacity(
+      DEFAULT_HASH_TABLE_INITIAL_CAPACITY, free_value);
+
 }
 
-hash_table_t * hash_table_init_with_int_keys_and_size(
-  size_t initial_size) {
-  return hash_table_init_with_size(int_hash, int_cmp_key,
-      initial_size, free, free);
+hash_table_t * hash_table_init_with_int_keys_and_capacity(
+  size_t initial_capacity,
+    hash_table_free_func_t free_value
+) {
+
+  return hash_table_init_with_capacity(int_hash, int_cmp_key,
+      initial_capacity, free, free_value);
+
 }
 
-hash_table_t * hash_table_init(hash_func_t hash_func,
-    hash_cmp_key_func_t cmp_key_func, free_func_t free_key, free_func_t free_value) {
-  return hash_table_init_with_size(hash_func, cmp_key_func,
-      DEFAULT_HASH_TABLE_INITIAL_SIZE, free_key, free_value);
+hash_table_t * hash_table_init(
+    hash_table_hash_func_t hash_func,
+    hash_table_cmp_key_func_t cmp_key_func,
+    hash_table_free_func_t free_key,
+    hash_table_free_func_t free_value
+) {
+
+  return hash_table_init_with_capacity(hash_func, cmp_key_func,
+      DEFAULT_HASH_TABLE_INITIAL_CAPACITY, free_key, free_value);
+
 }
 
-hash_table_t * hash_table_init_with_size(hash_func_t hash_func,
-    hash_cmp_key_func_t cmp_key_func, size_t initial_size,
-    free_func_t free_key, free_func_t free_value) {
+hash_table_t * hash_table_init_with_capacity(
+    hash_table_hash_func_t hash_func,
+    hash_table_cmp_key_func_t cmp_key_func,
+    size_t initial_capacity,
+    hash_table_free_func_t free_key,
+    hash_table_free_func_t free_value
+) {
 
   hash_table_t * table = malloc(sizeof(hash_table_t));
   ASSERT_OR_RETURN_NULL(table);
 
-  table->buckets = calloc(initial_size, sizeof(hash_table_entry_t));
+  table->buckets = calloc(initial_capacity, sizeof(hash_table_entry_t *));
   ASSERT_OR_RETURN_NULL(table->buckets);
 
   table->hash_func = hash_func;
   table->cmp_key_func = cmp_key_func;
   table->size = 0;
-  table->capacity = initial_size;
+  table->capacity = initial_capacity;
   table->free_key = free_key;
   table->free_value = free_value;
   return table;
 }
 
-static size_t hash_key(const hash_table_t * const table, size_t capacity, void * key) {
+static size_t hash_key(const hash_table_t * const table, size_t capacity, const void * const key) {
   size_t hash_value = table->hash_func(key);
   return hash_value % capacity;
 }
@@ -92,7 +118,7 @@ size_t hash_table_size(hash_table_t * table) {
   return table->size;
 }
 
-static hash_table_entry_t * hash_table_get_entry(hash_table_t * table, void * key) {
+static hash_table_entry_t * hash_table_get_entry(hash_table_t * table, const void * const key) {
   size_t hash_value = hash_key(table, table->capacity, key);
   hash_table_entry_t * current;
   for (current = table->buckets[hash_value]; current != NULL;
@@ -106,7 +132,7 @@ static hash_table_entry_t * hash_table_get_entry(hash_table_t * table, void * ke
   return NULL;
 }
 
-void * hash_table_get(hash_table_t * table, void * key) {
+void * hash_table_get(hash_table_t * table, const void * const key) {
   hash_table_entry_t * entry = hash_table_get_entry(table, key);
   if (entry) {
     return entry->value;
@@ -196,6 +222,8 @@ void * hash_table_remove(hash_table_t * table, void * key) {
         table->buckets[hash_value] = current->next;
       }
       void * value = current->value;
+      table->free_key(current->key);
+      table->free_value(current->value);
       free(current);
       table->size--;
       return value;
@@ -206,7 +234,6 @@ void * hash_table_remove(hash_table_t * table, void * key) {
 
 void hash_table_iterator_init(hash_table_iter_t * iter, hash_table_t * table) {
   iter->entry = NULL;
-  iter->next = NULL;
   iter->index = 0;
   iter->table = table;
 }
@@ -216,11 +243,13 @@ bool hash_table_iterate(hash_table_iter_t * iter) {
   hash_table_entry_t * entry = iter->entry;
   if (entry && entry->next) {
     entry = entry->next;
-  } else {
+  } else if (iter->index < table->capacity) {
     do {
       entry = table->buckets[iter->index];
       iter->index++;
     } while (!entry && iter->index < table->capacity);
+  } else {
+    entry = NULL;
   }
   if (entry) {
     iter->key = entry->key;
