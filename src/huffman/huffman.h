@@ -16,7 +16,7 @@
  * structure. The tree is navigated from the last entry until a value is found. When you see
  * a 0 in the huffman code, navigate left in the tree, otherwise, navigate right.
  */
-typedef struct huffman_decoder_entry_t {
+typedef struct {
   uint16_t index;
   int16_t value; // can be -1
   int16_t left; // can be -1
@@ -28,7 +28,7 @@ typedef struct huffman_decoder_entry_t {
  * lookup each ASCII value. The index corresponds to the ASCII code of the character
  * to encode.
  */
-typedef struct huffman_encoder_entry_t {
+typedef struct {
   uint16_t index;
   // the binary data used to represent the ASCII code
   uint32_t value;
