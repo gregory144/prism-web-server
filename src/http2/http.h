@@ -22,8 +22,12 @@ enum frame_type_e {
   FRAME_TYPE_PING,
   FRAME_TYPE_GOAWAY,
   FRAME_TYPE_WINDOW_UPDATE,
-  FRAME_TYPE_CONTINUATION
+  FRAME_TYPE_CONTINUATION,
+  FRAME_TYPE_ALTSVC
 };
+
+#define FRAME_TYPE_MIN FRAME_TYPE_DATA
+#define FRAME_TYPE_MAX FRAME_TYPE_ALTSVC
 
 /**
  * Stream states
@@ -61,26 +65,13 @@ enum settings_e {
  */
 
 // headers
-#define HEADERS_FLAG_END_STREAM 0x1
-#define HEADERS_FLAG_END_SEGMENT 0x2
-#define HEADERS_FLAG_END_HEADERS 0x4
-#define HEADERS_FLAG_PRIORITY 0x8
-#define HEADERS_FLAG_PAD_LOW 0x10
-#define HEADERS_FLAG_PAD_HIGH 0x20
-
-// continuation
-#define CONTINUATION_FLAG_END_HEADERS 0x4
-#define CONTINUATION_FLAG_PAD_LOW 0x10
-#define CONTINUATION_FLAG_PAD_HIGH 0x20
-
-// data
-#define DATA_FLAG_END_STREAM 0x1
-#define DATA_FLAG_END_SEGMENT 0x2
-#define DATA_FLAG_PAD_LOW 0x10
-#define DATA_FLAG_PAD_HIGH 0x20
-
-//settings
-#define SETTINGS_FLAG_ACK 0x1
+#define FLAG_ACK 0x1
+#define FLAG_END_STREAM 0x1
+#define FLAG_END_SEGMENT 0x2
+#define FLAG_END_HEADERS 0x4
+#define FLAG_PRIORITY 0x8
+#define FLAG_PAD_LOW 0x10
+#define FLAG_PAD_HIGH 0x20
 
 /**
  * HTTP errors
@@ -172,6 +163,9 @@ enum h2_error_code_e {
   /* 8 bits                        */   \
   enum frame_type_e type;               \
                                         \
+  /* Frame flags                   */   \
+  uint8_t flags;                        \
+                                        \
   /* Stream identifier             */   \
   /* 31 bits                       */   \
   uint32_t stream_id;
@@ -187,11 +181,31 @@ typedef struct {
 
   HTTP_FRAME_FIELDS
 
-  // is this the response to our own settings
-  // frame
-  bool ack;
-
 } http_frame_settings_t;
+
+typedef struct {
+
+  HTTP_FRAME_FIELDS
+
+} http_frame_priority_t;
+
+typedef struct {
+
+  HTTP_FRAME_FIELDS
+
+} http_frame_rst_stream_t;
+
+typedef struct {
+
+  HTTP_FRAME_FIELDS
+
+} http_frame_push_promise_t;
+
+typedef struct {
+
+  HTTP_FRAME_FIELDS
+
+} http_frame_ping_t;
 
 typedef struct {
 
@@ -213,21 +227,16 @@ typedef struct {
 } http_frame_window_update_t;
 
 typedef struct http_header_fragment_s {
+
   uint8_t * buffer;
   size_t length;
   struct http_header_fragment_s * next;
+
 } http_header_fragment_t;
 
 typedef struct {
 
   HTTP_FRAME_FIELDS
-
-  // is this the last frame in the stream?
-  bool end_stream;
-  // is this the last headers frame for this stream?
-  bool end_headers;
-  // is the priority provided in the frame payload?
-  bool priority;
 
   size_t header_block_fragment_size;
   uint8_t * header_block_fragment;
@@ -238,20 +247,11 @@ typedef struct {
 
   HTTP_FRAME_FIELDS
 
-  // is this the last headers frame for this stream?
-  bool end_headers;
-
-  bool pad_low;
-  bool pad_high;
-
 } http_frame_continuation_t;
 
 typedef struct {
 
   HTTP_FRAME_FIELDS
-
-  // is this the last frame in the stream?
-  bool end_stream;
 
 } http_frame_data_t;
 

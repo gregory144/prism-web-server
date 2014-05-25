@@ -22,6 +22,221 @@
 const char * HTTP_CONNECTION_HEADER = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 const size_t HTTP_CONNECTION_HEADER_LENGTH = 24;
 
+typedef struct {
+  uint16_t length_min;
+  uint16_t length_max;
+
+  uint8_t frame_type;
+
+  // which flags can be set to true?
+  bool flags[8];
+
+  bool must_have_stream_id;
+  bool must_not_have_stream_id;
+} frame_parser_definition_t;
+
+frame_parser_definition_t frame_parser_definitions[] = {
+
+  { // DATA frame
+    0, // length min
+    0x4000, // length max 2^14
+    0x0, // type
+    {
+      true, // END_STREAM 0x1
+      true, // END_SEGMENT 0x2
+      false,
+      true, // PAD_LOW 0x8
+      true, // PAD_HIGH 0x10
+      true, // COMPRESSED 0x20
+      false,
+      false
+    },
+    true,
+    false
+  },
+
+  { // HEADERS frame
+    0, // length min
+    0x4000, // length max 2^14
+    0x1, // type
+    {
+      true, // END_STREAM 0x1
+      true, // END_SEGMENT 0x2
+      true, // END_HEADERS 0x4
+      true, // PAD_LOW 0x8
+      true, // PAD_HIGH 0x10
+      true, // PRIORITY 0x20
+      false,
+      false
+    },
+    true,
+    false
+  },
+
+  { // PRIORITY frame
+    0x5, // length min
+    0x5, // length max
+    0x2, // type
+    {
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    },
+    true,
+    false
+  },
+
+  { // RST_STREAM frame
+    0x4, // length min
+    0x4, // length max
+    0x3, // type
+    {
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    },
+    true,
+    false
+  },
+
+  { // SETTINGS frame
+    0, // length min
+    0x4000, // length max 2^14
+    0x4, // type
+    {
+      true, // ACK 0x1
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    },
+    false,
+    true
+  },
+
+  { // PUSH_PROMISE frame
+    0, // length min
+    0x4000, // length max 2^14
+    0x5, // type
+    {
+      false,
+      false,
+      true, // END_HEADERS 0x4
+      true, // PAD_LOW 0x8
+      true, // PAD_HIGH 0x10
+      false,
+      false,
+      false
+    },
+    false,
+    true
+  },
+
+  { // PING frame
+    0x8, // length min
+    0x8, // length max
+    0x6, // type
+    {
+      true, // ACK 0x1
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    },
+    false,
+    true
+  },
+
+  { // GOAWAY frame
+    0x8, // length min
+    0x4000, // length max // 2^14
+    0x7, // type
+    {
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    },
+    false,
+    true
+  },
+
+  { // WINDOW_UPDATE frame
+    0x4, // length min
+    0x4, // length max
+    0x8, // type
+    {
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    },
+    false,
+    false
+  },
+
+  { // CONTINUATION frame
+    0, // length min
+    0x4000, // length max 2^14
+    0x9, // type
+    {
+      false,
+      false,
+      true, // END_HEADERS 0x4
+      true, // PAD_LOW 0x8
+      true, // PAD_HIGH 0x10
+      false,
+      false,
+      false
+    },
+    true,
+    false
+  },
+
+  { // ALTSVC frame
+    0x9, // length min
+    0x4000, // length max 2^14
+    0xa, // type
+    {
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    },
+    false,
+    false
+  }
+
+};
+
 static void emit_error_and_close(http_connection_t * const connection, uint32_t stream_id, enum h2_error_code_e error_code,
     char * format, ...);
 
@@ -290,9 +505,9 @@ static void http_emit_headers(http_connection_t * const connection, const http_s
   const bool end_stream = false;
   const bool end_headers = true;
   const bool priority = false;
-  if (end_stream) flags |= HEADERS_FLAG_END_STREAM;
-  if (end_headers) flags |= HEADERS_FLAG_END_HEADERS;
-  if (priority) flags |= HEADERS_FLAG_PRIORITY;
+  if (end_stream) flags |= FLAG_END_STREAM;
+  if (end_headers) flags |= FLAG_END_HEADERS;
+  if (priority) flags |= FLAG_PRIORITY;
   http_frame_header_write(buf, headers_length, FRAME_TYPE_HEADERS, flags, stream->id);
 
   if (hpack_buf) {
@@ -313,7 +528,7 @@ static void http_emit_data_frame(const http_connection_t * const connection, con
   size_t header_length = FRAME_HEADER_SIZE;
   uint8_t header_buf[header_length];
   uint8_t flags = 0;
-  if (frame->end_stream) flags |= DATA_FLAG_END_STREAM;
+  if (frame->end_stream) flags |= FLAG_END_STREAM;
   http_frame_header_write(header_buf, frame->buf_length, FRAME_TYPE_DATA, flags, stream->id);
   http_connection_write(connection, header_buf, header_length);
 
@@ -460,10 +675,17 @@ static void http_emit_settings_ack(const http_connection_t * const connection) {
   uint8_t buf[buf_length];
   uint8_t flags = 0;
   bool ack = true;
-  if (ack) flags |= SETTINGS_FLAG_ACK;
+  if (ack) flags |= FLAG_ACK;
   http_frame_header_write(buf, 0, FRAME_TYPE_SETTINGS, flags, 0);
   if (LOG_DEBUG) log_debug("Writing settings ack frame");
   http_connection_write(connection, buf, buf_length);
+}
+
+#define FRAME_FLAG(frame, mask) \
+  http_frame_flag_get((http_frame_t *) frame, mask)
+
+static bool http_frame_flag_get(const http_frame_t * const frame, int mask) {
+  return frame->flags & mask;
 }
 
 /**
@@ -644,26 +866,19 @@ static bool http_parse_header_fragments(http_connection_t * const connection, ht
 
 static bool http_parse_frame_headers(http_connection_t * const connection,
     const http_frame_headers_t * const frame) {
-  if (frame->stream_id < 1) {
-    // TODO do we need to read the rest of the frame anyway so that the
-    // decoding context is still synced?
-    emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR,
-        "Invalid stream ID for headers frame: %ld", frame->stream_id);
-    return false;
-  }
   uint8_t * pos = connection->buffer + connection->buffer_position;
   size_t header_block_fragment_size = frame->length;
   http_stream_t * stream = http_stream_init(connection, frame->stream_id);
   if (!stream) {
     return false;
   }
-  if (frame->priority) {
+  if (FRAME_FLAG(frame, FLAG_PRIORITY)) {
     stream->priority = get_bits32(pos, 4, 0x7FFFFFFF);
     pos += 4;
     header_block_fragment_size -= 4;
   }
   http_stream_add_header_fragment(stream, pos, header_block_fragment_size);
-  if (frame->end_headers) {
+  if (FRAME_FLAG(frame, FLAG_END_HEADERS)) {
     // parse the headers
     if (LOG_TRACE) log_trace("Parsing headers");
     return http_parse_header_fragments(connection, stream);
@@ -679,7 +894,7 @@ static bool http_parse_frame_continuation(http_connection_t * const connection,
   size_t header_block_fragment_size = frame->length;
   http_stream_t * stream = http_stream_get(connection, frame->stream_id);
   http_stream_add_header_fragment(stream, pos, header_block_fragment_size);
-  if (frame->end_headers) {
+  if (FRAME_FLAG(frame, FLAG_END_HEADERS)) {
     // TODO unmark stream as waiting for continuation frame
     // parse the headers
     if (LOG_TRACE) log_trace("Parsing headers + continuations");
@@ -689,15 +904,12 @@ static bool http_parse_frame_continuation(http_connection_t * const connection,
 }
 
 static bool http_parse_frame_settings(http_connection_t * const connection, const http_frame_settings_t * const frame) {
-  if (frame->stream_id != 0) {
-    emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR,
-        "Invalid stream ID for ACK settings frame: %ld", frame->stream_id);
-  }
-  if (frame->ack && frame->length != 0) {
+  bool ack = FRAME_FLAG(frame, FLAG_ACK);
+  if (ack && frame->length != 0) {
     emit_error_and_close(connection, 0, HTTP_ERROR_FRAME_SIZE_ERROR,
         "Non-zero frame size for ACK settings frame: %ld", frame->length);
   }
-  if (frame->ack) {
+  if (ack) {
     // TODO mark the settings frame we sent as acknowledged
     if (LOG_TRACE) log_trace("Received settings ACK");
     abort();
@@ -768,10 +980,6 @@ static bool http_parse_frame_window_update(http_connection_t * const connection,
 }
 
 static bool http_parse_frame_goaway(http_connection_t * const connection, http_frame_goaway_t * const frame) {
-  if (frame->stream_id != 0) {
-    emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR, "Invalid stream ID for goaway frame: %ld", frame->stream_id);
-    return false;
-  }
   uint8_t * buf = connection->buffer + connection->buffer_position;
   frame->last_stream_id = get_bits32(buf, 0, 0x7FFFFFFF);
   frame->error_code = get_bits32(buf, 4, 0xFFFFFFFF);
@@ -795,67 +1003,41 @@ static http_frame_t * http_frame_init(http_connection_t * const connection, cons
   http_frame_t * frame;
   switch(type) {
     case FRAME_TYPE_DATA:
-    {
-      http_frame_data_t *data_frame = malloc(sizeof(http_frame_data_t));
-      data_frame->end_stream = flags & DATA_FLAG_END_STREAM;
-      // TODO padding flags
-      frame = (http_frame_t *) data_frame;
+      frame = malloc(sizeof(http_frame_data_t));
       break;
-    }
     case FRAME_TYPE_HEADERS:
-    {
-      http_frame_headers_t *headers_frame = malloc(sizeof(http_frame_headers_t));
-      headers_frame->end_stream = flags & HEADERS_FLAG_END_STREAM;
-      headers_frame->end_headers = flags & HEADERS_FLAG_END_HEADERS;
-      headers_frame->priority = flags & HEADERS_FLAG_PRIORITY;
-      // TODO padding flags
-      frame = (http_frame_t *) headers_frame;
+      frame = malloc(sizeof(http_frame_headers_t));
       break;
-    }
-    /*
     case FRAME_TYPE_PRIORITY:
-      parse_frame_priority(connection);
+      frame = malloc(sizeof(http_frame_priority_t));
+      break;
     case FRAME_TYPE_RST_STREAM:
-      parse_frame_reset_stream(connection);
-    */
+      frame = malloc(sizeof(http_frame_rst_stream_t));
+      break;
     case FRAME_TYPE_SETTINGS:
-    {
-      http_frame_settings_t *settings_frame = malloc(sizeof(http_frame_settings_t));
-      settings_frame->ack = flags & SETTINGS_FLAG_ACK;
-      frame = (http_frame_t *) settings_frame;
+      frame = malloc(sizeof(http_frame_settings_t));
       break;
-    }
-    /*
     case FRAME_TYPE_PUSH_PROMISE:
-      parse_frame_push_promise(connection);
+      frame = malloc(sizeof(http_frame_push_promise_t));
+      break;
     case FRAME_TYPE_PING:
-      parse_frame_ping(connection);
-    */
+      frame = malloc(sizeof(http_frame_ping_t));
+      break;
     case FRAME_TYPE_GOAWAY:
-    {
-      http_frame_goaway_t *goaway_frame = malloc(sizeof(http_frame_goaway_t));
-      frame = (http_frame_t *) goaway_frame;
+      frame = malloc(sizeof(http_frame_goaway_t));
       break;
-    }
     case FRAME_TYPE_WINDOW_UPDATE:
-    {
-      http_frame_window_update_t *window_update_frame = malloc(sizeof(http_frame_window_update_t));
-      frame = (http_frame_t *) window_update_frame;
+      frame = malloc(sizeof(http_frame_window_update_t));
       break;
-    }
     case FRAME_TYPE_CONTINUATION:
-    {
-      http_frame_continuation_t *continuation_frame = malloc(sizeof(http_frame_continuation_t));
-      continuation_frame->end_headers = flags & CONTINUATION_FLAG_END_HEADERS;
-      // TODO padding flags
-      frame = (http_frame_t *) continuation_frame;
+      frame = malloc(sizeof(http_frame_continuation_t));
       break;
-    }
     default:
       emit_error_and_close(connection, stream_id, HTTP_ERROR_INTERNAL_ERROR, "Unhandled frame type");
       return NULL;
   }
   frame->type = type;
+  frame->flags = flags;
   frame->length = length;
   frame->stream_id = stream_id;
   return frame;
@@ -863,29 +1045,41 @@ static http_frame_t * http_frame_init(http_connection_t * const connection, cons
 
 static bool is_valid_frame_type(enum frame_type_e frame_type) {
 
-  // TODO is there a faster way to do this - will the compiler automatically optimize the loop out?
-  enum frame_type_e valid[] = {
-    FRAME_TYPE_DATA,
-    FRAME_TYPE_HEADERS,
-    FRAME_TYPE_PRIORITY,
-    FRAME_TYPE_RST_STREAM,
-    FRAME_TYPE_SETTINGS,
-    FRAME_TYPE_PUSH_PROMISE,
-    FRAME_TYPE_PING,
-    FRAME_TYPE_GOAWAY,
-    FRAME_TYPE_WINDOW_UPDATE,
-    FRAME_TYPE_CONTINUATION
-  };
+  return frame_type >= FRAME_TYPE_MIN && frame_type <= FRAME_TYPE_MAX;
 
-  size_t index;
-  size_t len = sizeof(valid) / sizeof(enum frame_type_e);
-  for (index = 0; index < len; index++) {
-    if (frame_type == valid[index]) {
-      return true;
+}
+
+static bool is_valid_frame(http_connection_t * const connection, http_frame_t * frame) {
+  enum frame_type_e frame_type = frame->type;
+  frame_parser_definition_t def = frame_parser_definitions[frame_type];
+  if (frame->length < def.length_min) {
+    emit_error_and_close(connection, frame->stream_id, HTTP_ERROR_FRAME_SIZE_ERROR, "Invalid frame length");
+    return false;
+  }
+  if (frame->length > def.length_max) {
+    emit_error_and_close(connection, frame->stream_id, HTTP_ERROR_FRAME_SIZE_ERROR, "Invalid frame length");
+    return false;
+  }
+  size_t i;
+  for (i = 0; i < 8; i++) {
+    bool can_be_set = def.flags[i];
+    if (!can_be_set) {
+      uint8_t mask = 1 << i;
+      if (frame->flags & mask) {
+        emit_error_and_close(connection, frame->stream_id, HTTP_ERROR_PROTOCOL_ERROR, "Invalid flag set");
+        return false;
+      }
     }
   }
-
-  return false;
+  if (frame->stream_id == 0 && def.must_have_stream_id) {
+    emit_error_and_close(connection, frame->stream_id, HTTP_ERROR_FRAME_SIZE_ERROR, "Stream ID must be set");
+    return false;
+  }
+  if (frame->stream_id > 0 && def.must_not_have_stream_id) {
+    emit_error_and_close(connection, frame->stream_id, HTTP_ERROR_FRAME_SIZE_ERROR, "Stream ID must not be set");
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -932,7 +1126,7 @@ static bool http_connection_add_from_buffer(http_connection_t * const connection
     // this frame must be a continuation frame, or else this is a protocol error
 
     http_frame_t * frame = http_frame_init(connection, frame_length, frame_type, frame_flags, stream_id);
-    if (frame == NULL) {
+    if (frame == NULL || !is_valid_frame(connection, frame)) {
       return false;
     }
 
@@ -974,6 +1168,9 @@ static bool http_connection_add_from_buffer(http_connection_t * const connection
         case FRAME_TYPE_CONTINUATION:
           success = http_parse_frame_continuation(connection, (http_frame_continuation_t *) frame);
           break;
+        case FRAME_TYPE_ALTSVC:
+          emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR, "Server does not accept ALTSVC frames");
+          return false;
         default:
           emit_error_and_close(connection, 0, HTTP_ERROR_INTERNAL_ERROR, "Unhandled frame type: %d", frame->type);
           return false;
