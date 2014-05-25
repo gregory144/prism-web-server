@@ -19,6 +19,8 @@
 #define MAX_WINDOW_SIZE 0x7FFFFFFF // 2^31 - 1
 #define MAX_CONNECTION_BUFFER_SIZE 0x1000000 // 2^24
 
+#define PING_OPAQUE_DATA_LENGTH 8
+
 const char * HTTP_CONNECTION_HEADER = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 const size_t HTTP_CONNECTION_HEADER_LENGTH = 24;
 
@@ -681,6 +683,18 @@ static void http_emit_settings_ack(const http_connection_t * const connection) {
   http_connection_write(connection, buf, buf_length);
 }
 
+static void http_emit_ping_ack(const http_connection_t * const connection, uint8_t * opaque_data) {
+  size_t buf_length = FRAME_HEADER_SIZE;
+  uint8_t buf[buf_length];
+  uint8_t flags = 0;
+  bool ack = true;
+  if (ack) flags |= FLAG_ACK;
+  http_frame_header_write(buf, PING_OPAQUE_DATA_LENGTH, FRAME_TYPE_PING, flags, 0);
+  if (LOG_DEBUG) log_debug("Writing ping ack frame");
+  http_connection_write(connection, buf, buf_length);
+  http_connection_write(connection, opaque_data, PING_OPAQUE_DATA_LENGTH);
+}
+
 #define FRAME_FLAG(frame, mask) \
   http_frame_flag_get((http_frame_t *) frame, mask)
 
@@ -936,6 +950,15 @@ static bool http_parse_frame_settings(http_connection_t * const connection, cons
   return true;
 }
 
+static bool http_parse_frame_ping(http_connection_t * const connection, const http_frame_ping_t * const frame) {
+  UNUSED(frame);
+
+  uint8_t * opaque_data = connection->buffer + connection->buffer_position;
+  http_emit_ping_ack(connection, opaque_data);
+
+  return true;
+}
+
 static bool http_increment_connection_window_size(http_connection_t * const connection, const uint32_t increment) {
   connection->window_size += increment;
   if (LOG_TRACE) log_trace("Connection window size incremented to: %ld", connection->window_size);
@@ -1156,9 +1179,10 @@ static bool http_connection_add_from_buffer(http_connection_t * const connection
         /*
         case FRAME_TYPE_PUSH_PROMISE:
           parse_frame_push_promise(connection);
-        case FRAME_TYPE_PING:
-          parse_frame_ping(connection);
         */
+        case FRAME_TYPE_PING:
+          success = http_parse_frame_ping(connection, (http_frame_ping_t *) frame);
+          break;
         case FRAME_TYPE_GOAWAY:
           success = http_parse_frame_goaway(connection, (http_frame_goaway_t *) frame);
           break;

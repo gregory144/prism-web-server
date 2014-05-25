@@ -13,7 +13,6 @@
 * goaway on bad hpack indexes
 * stream priority
 * fast huffman coding + decoding based - more than one bit at a time
-* ping
 * push promise
 * upgrade from 1.1
 * API for processing streams and frames
