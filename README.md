@@ -6,7 +6,6 @@
 
 * API for processing requests/responses
 * finite state machine for handling stream status
-* data driven frame header parsing - with validation
 * switch from heap based priority queue to linked list?
 * max concurrent streams
 * POST/PUT/PATCH requests (parse data frame)
