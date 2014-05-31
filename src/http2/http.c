@@ -1015,6 +1015,20 @@ static bool http_parse_frame_window_update(http_connection_t * const connection,
   return success;
 }
 
+static bool http_parse_frame_rst_stream(http_connection_t * const connection, http_frame_rst_stream_t * const frame) {
+  uint8_t * buf = connection->buffer + connection->buffer_position;
+  frame->error_code = get_bits32(buf, 0, 0xFFFFFFFF);
+
+  if (LOG_WARN) log_warning("Received reset stream: stream #%d, error code: %d",
+      frame->stream_id, frame->error_code);
+
+  http_stream_t * stream = http_stream_get(connection, frame->stream_id);
+
+  http_stream_close(connection, stream);
+
+  return true;
+}
+
 static bool http_parse_frame_goaway(http_connection_t * const connection, http_frame_goaway_t * const frame) {
   uint8_t * buf = connection->buffer + connection->buffer_position;
   frame->last_stream_id = get_bits32(buf, 0, 0x7FFFFFFF);
@@ -1183,9 +1197,10 @@ static bool http_connection_add_from_buffer(http_connection_t * const connection
         /*
         case FRAME_TYPE_PRIORITY:
           parse_frame_priority(connection);
-        case FRAME_TYPE_RST_STREAM:
-          parse_frame_reset_stream(connection);
         */
+        case FRAME_TYPE_RST_STREAM:
+          success = http_parse_frame_rst_stream(connection, (http_frame_rst_stream_t *) frame);
+          break;
         case FRAME_TYPE_SETTINGS:
           success = http_parse_frame_settings(connection, (http_frame_settings_t *) frame);
           break;
@@ -1285,6 +1300,7 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
 }
 
 void http_response_write(http_response_t * const response, uint8_t * data, const size_t data_length) {
+
   char status_buf[10];
   snprintf(status_buf, 10, "%d", response->status);
   // add the status header
@@ -1293,11 +1309,13 @@ void http_response_write(http_response_t * const response, uint8_t * data, const
   http_connection_t * connection = (http_connection_t *)response->request->connection;
   http_stream_t * stream = (http_stream_t *)response->request->stream;
 
-  // emit headers frame
-  http_emit_headers(connection, stream, response->headers);
+  if (stream->state != STREAM_STATE_CLOSED) {
+    // emit headers frame
+    http_emit_headers(connection, stream, response->headers);
 
-  // emit data frame
-  http_emit_data(connection, stream, data, data_length);
+    // emit data frame
+    http_emit_data(connection, stream, data, data_length);
+  }
 
   http_response_free(response);
 

@@ -193,6 +193,8 @@ typedef struct {
 
   HTTP_FRAME_FIELDS
 
+  uint32_t error_code;
+
 } http_frame_rst_stream_t;
 
 typedef struct {
