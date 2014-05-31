@@ -634,7 +634,9 @@ binary_buffer_t * hpack_encode(const hpack_context_t * const context, const mult
     char * value = iter.value;
     size_t value_length = strlen(value);
     if (LOG_TRACE) log_trace("Encoding Reponse Header: %s (%ld): %s (%ld)", name, name_length, value, value_length);
-    ASSERT_OR_RETURN_FALSE(binary_buffer_write_curr_index(result, 0x40));
+    // 4.3.2 Literal Header Field without Indexing - New Name
+    // First byte = all zeros
+    ASSERT_OR_RETURN_FALSE(binary_buffer_write_curr_index(result, 0x00));
 
     ASSERT_OR_RETURN_FALSE(hpack_encode_string_literal(result, name, name_length));
     ASSERT_OR_RETURN_FALSE(hpack_encode_string_literal(result, value, value_length));
