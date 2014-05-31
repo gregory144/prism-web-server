@@ -319,6 +319,7 @@ void http_connection_free(http_connection_t * const connection) {
   hash_table_free(connection->streams);
   hpack_context_free(connection->encoding_context);
   hpack_context_free(connection->decoding_context);
+  binary_buffer_free(connection->write_buffer);
   free(connection);
 }
 
