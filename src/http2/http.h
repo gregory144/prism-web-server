@@ -301,16 +301,23 @@ typedef struct {
 
   uint32_t priority;
 
-  long window_size;
+  long outgoing_window_size;
+  long incoming_window_size;
 
   http_header_fragment_t * header_fragments;
 
   http_queued_frame_t * queued_data_frames;
 
   multimap_t * headers;
+
+  http_request_t * request;
+  http_response_t * response;
+
 } http_stream_t;
 
 typedef void (*request_cb)(http_request_t * request, http_response_t * response);
+
+typedef void (*data_cb)(http_request_t * request, http_response_t * response, uint8_t * buf, size_t len, bool last);
 
 typedef void (*write_cb)(void * data, uint8_t * buf, size_t len);
 
@@ -323,7 +330,8 @@ typedef struct {
   void * data;
   write_cb writer;
   close_cb closer;
-  request_cb request_listener;
+  request_cb request_handler;
+  data_cb data_handler;
 
   /**
    * connection state
@@ -334,7 +342,8 @@ typedef struct {
   size_t current_stream_id;
   // the last stream id that has started processing
   size_t last_stream_id;
-  long window_size;
+  long outgoing_window_size;
+  long incoming_window_size;
   // is the connection waiting to be gracefully closed?
   bool closing;
 
@@ -362,12 +371,14 @@ typedef struct {
 } http_connection_t;
 
 http_connection_t * http_connection_init(void * const data, const request_cb request_handler,
-    const write_cb writer, const close_cb closer);
+    const data_cb data_handler, const write_cb writer, const close_cb closer);
 
 void http_connection_free(http_connection_t * const connection);
 
 void http_connection_read(http_connection_t * const connection, uint8_t * const buffer, const size_t len);
 
-void http_response_write(http_response_t * const response, uint8_t * data, const size_t data_length);
+void http_response_write(http_response_t * const response, uint8_t * data, const size_t data_length, bool last);
+
+void http_response_write_data(http_response_t * const response, uint8_t * data, const size_t data_length, bool last);
 
 #endif

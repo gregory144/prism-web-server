@@ -40,6 +40,29 @@ static void handle_request(http_request_t * request, http_response_t * response)
     }
   }
 
+  char * method = http_request_method(request);
+  if (strncmp(method, "POST", 4) == 0) {
+
+    http_response_status_set(response, 200);
+
+    char * content_length = http_request_header_get(request, "content-length");
+    if (content_length) {
+      http_response_header_add(response, "content-length", strdup(content_length));
+    }
+
+    http_response_header_add(response, "server", PACKAGE_STRING);
+    size_t date_buf_length = RFC1123_TIME_LEN + 1;
+    char date_buf[date_buf_length];
+    char * date = date_rfc1123(date_buf, date_buf_length);
+    if (date) {
+      http_response_header_add(response, "date", date);
+    }
+
+    http_response_write(response, NULL, 0, false);
+
+    return;
+  }
+
   char * resp_text;
 
   char * resp_len_s = http_request_param_get(request, "resp_len");
@@ -89,6 +112,7 @@ static void handle_request(http_request_t * request, http_response_t * response)
   http_response_status_set(response, 200);
 
   size_t content_length = strlen(resp_text);
+
   char content_length_s[256];
   snprintf(content_length_s, 255, "%ld", content_length);
   http_response_header_add(response, "content-length", content_length_s);
@@ -101,7 +125,7 @@ static void handle_request(http_request_t * request, http_response_t * response)
     http_response_header_add(response, "date", date);
   }
 
-  http_response_write(response, (uint8_t *)resp_text, content_length);
+  http_response_write(response, (uint8_t *)resp_text, content_length, true);
 
   if (LOG_INFO) {
     requests++;
@@ -109,6 +133,29 @@ static void handle_request(http_request_t * request, http_response_t * response)
       log_info("Request #%ld", requests);
     }
   }
+}
+
+static void handle_data(
+    http_request_t * request,
+    http_response_t * response,
+    uint8_t * buf,
+    size_t length,
+    bool last) {
+  UNUSED(request);
+
+  if (LOG_TRACE) {
+    log_trace("Received %ld bytes of data from client (last? %s)", length, last ? "yes" : "no");
+  }
+
+  uint8_t * out = malloc(sizeof(uint8_t) * length);
+  // convert all bytes to lowercase
+  size_t i;
+  for (i = 0; i < length; i++) {
+    out[i] = *(buf + i) | 0x20;
+  }
+
+  http_response_write_data(response, out, length, last);
+
 }
 
 void server_alloc_buffer(uv_handle_t * handle, size_t suggested_size, uv_buf_t * buf) {
@@ -243,7 +290,7 @@ void server_connection_start(uv_stream_t * server, int status) {
   client_data->bytes_written = 0;
   client_data->uv_read_count = 0;
   client_data->stream = (uv_stream_t *) client;
-  client_data->connection = http_connection_init(client, handle_request, server_http_write, server_http_close);
+  client_data->connection = http_connection_init(client, handle_request, handle_data, server_http_write, server_http_close);
   client->data = client_data;
   uv_tcp_init(server_data->loop, client);
   if (uv_accept(server, (uv_stream_t *) client) == 0) {

@@ -248,14 +248,35 @@ static void http_stream_free(void * value) {
     multimap_free(stream->headers, free, free);
   }
 
+  // Free any remaining data frames. This may need to happen
+  // for streams that have been reset
+  while (stream->queued_data_frames) {
+
+    http_queued_frame_t * frame = stream->queued_data_frames;
+
+    stream->queued_data_frames = frame->next;
+    if (frame->buf_begin) {
+      free(frame->buf_begin);
+    }
+    free(frame);
+
+  }
+
   free(stream);
 }
 
-http_connection_t * http_connection_init(void * const data, const request_cb request_handler,
-    const write_cb writer, const close_cb closer) {
+http_connection_t * http_connection_init(
+    void * const data,
+    const request_cb request_handler,
+    const data_cb data_handler,
+    const write_cb writer,
+    const close_cb closer) {
   http_connection_t * connection = malloc(sizeof(http_connection_t));
 
   connection->data = data;
+  connection->request_handler = request_handler;
+  connection->data_handler = data_handler;
+
   connection->writer = writer;
   connection->closer = closer;
 
@@ -263,7 +284,8 @@ http_connection_t * http_connection_init(void * const data, const request_cb req
   connection->received_settings = false;
   connection->last_stream_id = 0;
   connection->current_stream_id = 2;
-  connection->window_size = DEFAULT_INITIAL_WINDOW_SIZE;
+  connection->outgoing_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
+  connection->incoming_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
   connection->closing = false;
 
   connection->buffer = NULL;
@@ -280,8 +302,6 @@ http_connection_t * http_connection_init(void * const data, const request_cb req
   connection->streams = hash_table_init_with_int_keys(http_stream_free);
   ASSERT_OR_RETURN_NULL(connection->streams);
 
-  connection->request_listener = request_handler;
-
   connection->encoding_context = hpack_context_init(DEFAULT_HEADER_TABLE_SIZE);
   connection->decoding_context = hpack_context_init(connection->header_table_size);
 
@@ -294,10 +314,13 @@ static http_stream_t * http_stream_get(http_connection_t * const connection, con
 
 }
 
-static void http_stream_close(http_connection_t * const connection, http_stream_t * const stream) {
+static void http_stream_close(http_connection_t * const connection, http_stream_t * const stream, bool force) {
   UNUSED(connection);
+  if (stream->state == STREAM_STATE_CLOSED) {
+    return;
+  }
 
-  if (!stream->queued_data_frames) {
+  if (force || (stream->closing && !stream->queued_data_frames)) {
 
     log_trace("Closing stream #%d", stream->id);
 
@@ -552,19 +575,17 @@ static void http_emit_data_frame(const http_connection_t * const connection, con
 
 static void http_stream_trigger_send_data(http_connection_t * const connection, http_stream_t * const stream) {
 
-  bool sent_all_frames = true;
-
   while (stream->queued_data_frames) {
     log_trace("Sending queued data for stream: %d", stream->id);
 
     http_queued_frame_t * frame = stream->queued_data_frames;
     size_t frame_payload_size = frame->buf_length;
-    if ((long)frame_payload_size <= connection->window_size &&
-        (long)frame_payload_size <= stream->window_size) {
+    if ((long)frame_payload_size <= connection->outgoing_window_size &&
+        (long)frame_payload_size <= stream->outgoing_window_size) {
       http_emit_data_frame(connection, stream, frame);
 
-      connection->window_size -= frame_payload_size;
-      stream->window_size -= frame_payload_size;
+      connection->outgoing_window_size -= frame_payload_size;
+      stream->outgoing_window_size -= frame_payload_size;
 
       stream->queued_data_frames = frame->next;
 
@@ -576,32 +597,26 @@ static void http_stream_trigger_send_data(http_connection_t * const connection, 
     } else {
       if (LOG_DEBUG) {
         log_debug("Wanted to send %ld octets, but connection window is %ld and stream window is %ld",
-            frame_payload_size, connection->window_size, stream->window_size);
+            frame_payload_size, connection->outgoing_window_size, stream->outgoing_window_size);
       }
-
-      sent_all_frames = false;
 
       // wait until the window size has been increased
       break;
     }
   }
 
-  if (sent_all_frames) {
-    /* we can't close it outright, because we can't free the
-     * stream yet. It might be needed to continue iterating through
-     * the streams hash_table */
-    http_stream_mark_closing(connection, stream);
-  }
-
-  if (LOG_TRACE) log_trace("Connection window size: %ld, stream window: %ld", connection->window_size, stream->window_size);
+  if (LOG_TRACE) log_trace("Connection window size: %ld, stream window: %ld",
+      connection->outgoing_window_size, stream->outgoing_window_size);
 }
 
 static void http_trigger_send_data(http_connection_t * const connection, http_stream_t * stream) {
 
   if (stream) {
-    http_stream_trigger_send_data(connection, stream);
 
-    if (LOG_TRACE) log_trace("Connection window size: %ld, stream window: %ld", connection->window_size, stream->window_size);
+    http_stream_trigger_send_data(connection, stream);
+    if (LOG_TRACE) log_trace("Connection window size: %ld, stream window: %ld",
+        connection->outgoing_window_size, stream->outgoing_window_size);
+
   } else {
 
     log_trace("Sending queued data for open frames");
@@ -614,23 +629,27 @@ static void http_trigger_send_data(http_connection_t * const connection, http_st
     while (hash_table_iterate(&iter)) {
 
       if (prev) {
-        http_stream_close(connection, prev);
+        http_stream_close(connection, prev, false);
         prev = NULL;
       }
 
       stream = iter.value;
 
-      http_stream_trigger_send_data(connection, stream);
+      if (stream->state != STREAM_STATE_CLOSED) {
 
-      prev = stream;
+        http_stream_trigger_send_data(connection, stream);
+
+        prev = stream;
+
+      }
     }
 
     if (prev) {
-      http_stream_close(connection, prev);
+      http_stream_close(connection, prev, false);
       prev = NULL;
     }
 
-    if (LOG_TRACE) log_trace("Connection window size: %ld", connection->window_size);
+    if (LOG_TRACE) log_trace("Connection window size: %ld", connection->outgoing_window_size);
   }
 
 }
@@ -641,7 +660,6 @@ static void http_queue_data_frame(http_stream_t * const stream, uint8_t * buf,
   new_frame->buf = buf;
   new_frame->buf_length = buf_length;
   new_frame->end_stream = end_stream;
-  new_frame->buf_begin = buf_begin;
   new_frame->buf_begin = buf_begin;
   new_frame->next = NULL;
 
@@ -657,7 +675,7 @@ static void http_queue_data_frame(http_stream_t * const stream, uint8_t * buf,
 }
 
 static void http_emit_data(http_connection_t * const connection, http_stream_t * const stream,
-    uint8_t * text, const size_t text_length) {
+    uint8_t * text, const size_t text_length, bool last) {
   // TODO support padding?
 
   size_t frame_payload_size = text_length;
@@ -665,21 +683,21 @@ static void http_emit_data(http_connection_t * const connection, http_stream_t *
     size_t remaining_length = text_length;
     size_t per_frame_length;
     uint8_t * per_frame_text = text;
-    bool last = false;
+    bool last_per_call = false;
     while (remaining_length > 0) {
       if (remaining_length > MAX_FRAME_SIZE) {
         per_frame_length = MAX_FRAME_SIZE;
-        last = false;
+        last_per_call = false;
       } else {
         per_frame_length = remaining_length;
-        last = true;
+        last_per_call = true;
       }
-      http_queue_data_frame(stream, per_frame_text, per_frame_length, last, last ? text : NULL);
+      http_queue_data_frame(stream, per_frame_text, per_frame_length, last && last_per_call, last_per_call ? text : NULL);
       remaining_length -= per_frame_length;
       per_frame_text += per_frame_length;
     }
   } else {
-    http_queue_data_frame(stream, text, text_length, true, text);
+    http_queue_data_frame(stream, text, text_length, last, text);
   }
   http_trigger_send_data(connection, stream);
 }
@@ -705,6 +723,31 @@ static void http_emit_ping_ack(const http_connection_t * const connection, uint8
   if (LOG_DEBUG) log_debug("Writing ping ack frame");
   http_connection_write(connection, buf, buf_length);
   http_connection_write(connection, opaque_data, PING_OPAQUE_DATA_LENGTH);
+}
+
+static void http_emit_window_update(
+    const http_connection_t * const connection,
+    const uint32_t stream_id,
+    const size_t increment) {
+
+  size_t payload_length = 4;
+  size_t buf_length = FRAME_HEADER_SIZE + payload_length;
+
+  size_t pos = 0;
+  uint8_t buf[buf_length];
+
+  uint8_t flags = 0; // no flags
+
+  http_frame_header_write(buf, payload_length, FRAME_TYPE_WINDOW_UPDATE, flags, stream_id);
+  pos += FRAME_HEADER_SIZE;
+
+  buf[pos++] = (increment >> 24) & 0xFF;
+  buf[pos++] = (increment >> 16) & 0xFF;
+  buf[pos++] = (increment >> 8) & 0xFF;
+  buf[pos++] = (increment) & 0xFF;
+
+  if (LOG_DEBUG) log_debug("Writing window update frame");
+  http_connection_write(connection, buf, buf_length);
 }
 
 #define FRAME_FLAG(frame, mask) \
@@ -733,8 +776,8 @@ static void http_adjust_initial_window_size(http_connection_t * const connection
   while (hash_table_iterate(&iter)) {
     http_stream_t * stream = iter.value;
 
-    stream->window_size += difference;
-    if (stream->window_size > MAX_WINDOW_SIZE) {
+    stream->outgoing_window_size += difference;
+    if (stream->outgoing_window_size > MAX_WINDOW_SIZE) {
       emit_error_and_close(connection, stream->id, HTTP_ERROR_FLOW_CONTROL_ERROR, NULL);
     }
   }
@@ -801,14 +844,15 @@ static http_stream_t * http_stream_init(http_connection_t * const connection, co
   stream->header_fragments = NULL;
   stream->headers = NULL;
   stream->priority = DEFAULT_STREAM_PRIORITY;
-  stream->window_size = connection->initial_window_size;
+  stream->outgoing_window_size = connection->initial_window_size;
+  stream->incoming_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
 
   return stream;
 }
 
 void http_trigger_request(http_connection_t * const connection, http_stream_t * const stream) {
-  if (!connection->request_listener) {
-    if (LOG_ERROR) log_error("No request listener set up");
+  if (!connection->request_handler) {
+    if (LOG_FATAL) log_fatal("No request handler set up");
     abort();
   }
 
@@ -816,16 +860,73 @@ void http_trigger_request(http_connection_t * const connection, http_stream_t * 
   if (!request) {
     abort();
   }
+  stream->request = request;
 
   // transfer ownership of headers to the request
   stream->headers = NULL;
 
   http_response_t * response = http_response_init(request);
+  stream->response = response;
 
   if (stream->id > connection->last_stream_id) {
     connection->last_stream_id = stream->id;
   }
-  connection->request_listener(request, response);
+  connection->request_handler(request, response);
+}
+
+static bool http_parse_frame_data(
+    http_connection_t * const connection,
+    const http_frame_data_t * const frame) {
+  if (!connection->data_handler) {
+    if (LOG_FATAL) log_fatal("No data handler set up");
+    abort();
+  }
+
+  uint8_t * pos = connection->buffer + connection->buffer_position;
+
+  http_stream_t * stream = http_stream_get(connection, frame->stream_id);
+  if (!stream) {
+    return false;
+  }
+
+  // TODO handle padding
+
+  // pass on to application
+  bool last_data_frame = FRAME_FLAG(frame, FLAG_END_STREAM);
+
+  connection->data_handler(stream->request, stream->response,
+      pos, frame->length, last_data_frame);
+
+  // adjust window sizes
+  connection->incoming_window_size -= frame->length;
+  if (connection->incoming_window_size < 0) {
+
+    emit_error_and_close(connection, 0, HTTP_ERROR_FLOW_CONTROL_ERROR,
+        "Connection window size is less than 0: %ld", connection->incoming_window_size);
+
+  } else if (connection->incoming_window_size < 0.75 * DEFAULT_INITIAL_WINDOW_SIZE) {
+
+    size_t increment = DEFAULT_INITIAL_WINDOW_SIZE - connection->incoming_window_size;
+    http_emit_window_update(connection, 0, increment);
+    connection->incoming_window_size += increment;
+
+  }
+
+  stream->incoming_window_size -= frame->length;
+  if (stream->incoming_window_size < 0) {
+
+    emit_error_and_close(connection, stream->id, HTTP_ERROR_FLOW_CONTROL_ERROR,
+        "Stream #%d: window size is less than 0: %ld", stream->incoming_window_size);
+
+  } else if (!last_data_frame && (stream->incoming_window_size < 0.75 * DEFAULT_INITIAL_WINDOW_SIZE)) {
+
+    size_t increment = DEFAULT_INITIAL_WINDOW_SIZE - stream->incoming_window_size;
+    http_emit_window_update(connection, stream->id, increment);
+    stream->incoming_window_size += increment;
+
+  }
+
+  return true;
 }
 
 static void http_stream_add_header_fragment(http_stream_t * const stream, const uint8_t * const buffer, const size_t length) {
@@ -972,8 +1073,8 @@ static bool http_parse_frame_ping(http_connection_t * const connection, const ht
 }
 
 static bool http_increment_connection_window_size(http_connection_t * const connection, const uint32_t increment) {
-  connection->window_size += increment;
-  if (LOG_TRACE) log_trace("Connection window size incremented to: %ld", connection->window_size);
+  connection->outgoing_window_size += increment;
+  if (LOG_TRACE) log_trace("Connection window size incremented to: %ld", connection->outgoing_window_size);
 
   http_trigger_send_data(connection, NULL);
 
@@ -984,8 +1085,8 @@ static bool http_increment_stream_window_size(http_connection_t * const connecti
     const uint32_t increment) {
   http_stream_t * stream = http_stream_get(connection, stream_id);
   if (stream) {
-    stream->window_size += increment;
-    if (LOG_TRACE) log_trace("Stream window size incremented to: %ld", stream->window_size);
+    stream->outgoing_window_size += increment;
+    if (LOG_TRACE) log_trace("Stream window size incremented to: %ld", stream->outgoing_window_size);
 
     http_trigger_send_data(connection, stream);
   } else {
@@ -1024,7 +1125,7 @@ static bool http_parse_frame_rst_stream(http_connection_t * const connection, ht
 
   http_stream_t * stream = http_stream_get(connection, frame->stream_id);
 
-  http_stream_close(connection, stream);
+  http_stream_close(connection, stream, true);
 
   return true;
 }
@@ -1187,10 +1288,9 @@ static bool http_connection_add_from_buffer(http_connection_t * const connection
       emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR, "Expected Settings frame as first frame");
     } else {
       switch(frame->type) {
-        /*
         case FRAME_TYPE_DATA:
-          parse_frame_data(connection);
-        */
+          success = http_parse_frame_data(connection, (http_frame_data_t *) frame);
+          break;
         case FRAME_TYPE_HEADERS:
           success = http_parse_frame_headers(connection, (http_frame_headers_t *) frame);
           break;
@@ -1299,8 +1399,7 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
 
 }
 
-void http_response_write(http_response_t * const response, uint8_t * data, const size_t data_length) {
-
+void http_response_write(http_response_t * const response, uint8_t * data, const size_t data_length, bool last) {
   char status_buf[10];
   snprintf(status_buf, 10, "%d", response->status);
   // add the status header
@@ -1310,15 +1409,34 @@ void http_response_write(http_response_t * const response, uint8_t * data, const
   http_stream_t * stream = (http_stream_t *)response->request->stream;
 
   if (stream->state != STREAM_STATE_CLOSED) {
-    // emit headers frame
     http_emit_headers(connection, stream, response->headers);
 
-    // emit data frame
-    http_emit_data(connection, stream, data, data_length);
+    if (data || last) {
+      http_emit_data(connection, stream, data, data_length, last);
+    }
   }
 
-  http_response_free(response);
+  if (last) {
+    http_response_free(response);
 
-  http_stream_close(connection, stream);
+    http_stream_mark_closing(connection, stream);
+  }
+}
+
+void http_response_write_data(http_response_t * const response, uint8_t * data, const size_t data_length, bool last) {
+
+  http_connection_t * connection = (http_connection_t *)response->request->connection;
+  http_stream_t * stream = (http_stream_t *)response->request->stream;
+
+  if (data || last) {
+    http_emit_data(connection, stream, data, data_length, last);
+  }
+
+  if (last) {
+    http_response_free(response);
+
+    http_stream_mark_closing(connection, stream);
+  }
+
 }
 
