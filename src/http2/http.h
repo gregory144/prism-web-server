@@ -366,6 +366,6 @@ void http_connection_free(http_connection_t * const connection);
 
 void http_connection_read(http_connection_t * const connection, uint8_t * const buffer, const size_t len);
 
-void http_response_write(http_response_t * const response, char * text, const size_t text_length);
+void http_response_write(http_response_t * const response, uint8_t * data, const size_t data_length);
 
 #endif

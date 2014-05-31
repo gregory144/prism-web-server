@@ -101,7 +101,7 @@ static void handle_request(http_request_t * request, http_response_t * response)
     http_response_header_add(response, "date", date);
   }
 
-  http_response_write(response, resp_text, content_length);
+  http_response_write(response, (uint8_t *)resp_text, content_length);
 
   if (LOG_INFO) {
     requests++;

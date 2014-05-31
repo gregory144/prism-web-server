@@ -1284,7 +1284,7 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
 
 }
 
-void http_response_write(http_response_t * const response, char * text, const size_t text_length) {
+void http_response_write(http_response_t * const response, uint8_t * data, const size_t data_length) {
   char status_buf[10];
   snprintf(status_buf, 10, "%d", response->status);
   // add the status header
@@ -1297,7 +1297,7 @@ void http_response_write(http_response_t * const response, char * text, const si
   http_emit_headers(connection, stream, response->headers);
 
   // emit data frame
-  http_emit_data(connection, stream, (uint8_t *)text, text_length);
+  http_emit_data(connection, stream, data, data_length);
 
   http_response_free(response);
 
