@@ -289,20 +289,31 @@ http_connection_t * http_connection_init(void * const data, const request_cb req
 }
 
 static http_stream_t * http_stream_get(http_connection_t * const connection, const uint32_t stream_id) {
+
   return hash_table_get(connection->streams, &stream_id);
+
 }
 
 static void http_stream_close(http_connection_t * const connection, http_stream_t * const stream) {
+  UNUSED(connection);
 
   if (!stream->queued_data_frames) {
 
     log_trace("Closing stream #%d", stream->id);
 
     stream->state = STREAM_STATE_CLOSED;
-    if (!hash_table_remove(connection->streams, &(stream->id))) {
-      log_error("Could not close stream: %d", stream->id);
-    }
+
   }
+
+}
+
+static bool http_stream_closed(http_connection_t * const connection, const uint32_t stream_id) {
+
+  http_stream_t * stream = http_stream_get(connection, stream_id);
+  if (stream) {
+    return stream->state == STREAM_STATE_CLOSED;
+  }
+  return false;
 
 }
 
@@ -978,9 +989,10 @@ static bool http_increment_stream_window_size(http_connection_t * const connecti
 
     http_trigger_send_data(connection, stream);
   } else {
-    // TODO connection error if the stream was closed over x seconds ago
-    // until then, ignore it for now
-    log_fatal("Could not find stream #%d to update it's window size", stream_id);
+    if (!http_stream_closed(connection, stream_id)) {
+      emit_error_and_close(connection, stream_id, HTTP_ERROR_PROTOCOL_ERROR,
+          "Could not find stream #%d to update it's window size", stream_id);
+    }
   }
   return true;
 }
