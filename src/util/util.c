@@ -71,12 +71,11 @@ uint32_t get_bits32(const uint8_t * const buf, const size_t offset, const uint32
   return val & mask;
 }
 
-static const char *DAY_NAMES[] =
+static const char * DAY_NAMES[] =
   { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
-static const char *MONTH_NAMES[] =
+static const char * MONTH_NAMES[] =
   { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
-static const size_t RFC1123_TIME_LEN = 29;
 
 /**
  * Returns the current date + time as a string as specified
@@ -84,11 +83,13 @@ static const size_t RFC1123_TIME_LEN = 29;
  *
  * Returns NULL if malloc or strftime fail.
  */
-/*@null@*/ char* date_rfc1123() {
+/*@null@*/ char * date_rfc1123(char * date_buf, size_t buf_len) {
     time_t t;
-    struct tm* tm;
-    size_t buf_len = RFC1123_TIME_LEN + 1;
-    char* date_buf = malloc(sizeof(char) * buf_len);
+    struct tm * tm;
+    if (date_buf == NULL) {
+      date_buf = malloc(sizeof(char) * buf_len);
+      buf_len = RFC1123_TIME_LEN + 1;
+    }
     ASSERT_OR_RETURN_NULL(date_buf);
 
     t = time(NULL);

@@ -50,8 +50,6 @@ static void handle_request(http_request_t * request, http_response_t * response)
   if (resp_len > 0) {
     resp_text = malloc(resp_len + 1);
     memset(resp_text, 'a', resp_len);
-    if (resp_len > 0) {
-    }
     resp_text[resp_len - 1] = '\n';
     resp_text[resp_len] = '\0';
   } else {
@@ -96,9 +94,12 @@ static void handle_request(http_request_t * request, http_response_t * response)
   http_response_header_add(response, "content-length", content_length_s);
 
   http_response_header_add(response, "server", PACKAGE_STRING);
-  char * date = date_rfc1123();
-  http_response_header_add(response, "date", date);
-  free(date);
+  size_t date_buf_length = RFC1123_TIME_LEN + 1;
+  char date_buf[date_buf_length];
+  char * date = date_rfc1123(date_buf, date_buf_length);
+  if (date) {
+    http_response_header_add(response, "date", date);
+  }
 
   http_response_write(response, resp_text, content_length);
 

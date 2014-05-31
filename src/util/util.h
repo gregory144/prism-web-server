@@ -108,6 +108,8 @@ uint16_t get_bits16(const uint8_t * const buf, const size_t offset, const uint16
 
 uint32_t get_bits32(const uint8_t * const buf, const size_t offset, const uint32_t mask);
 
+#define RFC1123_TIME_LEN 29
+
 /*@null@*/ char * date_rfc1123();
 
 void log_fatal(char * format, ...);
