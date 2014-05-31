@@ -5,6 +5,7 @@
 Makefile.in
 Makefile
 cscope*
+tags
 test-suite.log
 check_*.log
 check_*.trs
