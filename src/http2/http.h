@@ -49,7 +49,8 @@ enum settings_e {
   SETTINGS_HEADER_TABLE_SIZE = 1,
   SETTINGS_ENABLE_PUSH,
   SETTINGS_MAX_CONCURRENT_STREAMS,
-  SETTINGS_INITIAL_WINDOW_SIZE
+  SETTINGS_INITIAL_WINDOW_SIZE,
+  SETTINGS_COMPRESS_DATA
 };
 
 /**
@@ -59,6 +60,7 @@ enum settings_e {
 #define DEFAULT_ENABLE_PUSH 1
 #define DEFAULT_MAX_CONNCURRENT_STREAMS 100
 #define DEFAULT_INITIAL_WINDOW_SIZE 65535
+#define DEFAULT_COMPRESS_DATA 0
 
 /**
  * Frame flags
@@ -363,6 +365,7 @@ typedef struct {
   bool enable_push;
   size_t max_concurrent_streams;
   size_t initial_window_size;
+  bool enable_compress_data;
 
   hash_table_t * streams;
 

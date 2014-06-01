@@ -298,6 +298,7 @@ http_connection_t * http_connection_init(
   connection->enable_push = DEFAULT_ENABLE_PUSH;
   connection->max_concurrent_streams = DEFAULT_MAX_CONNCURRENT_STREAMS;
   connection->initial_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
+  connection->enable_compress_data = DEFAULT_ENABLE_COMPRESS_DATA;
 
   connection->streams = hash_table_init_with_int_keys(http_stream_free);
   ASSERT_OR_RETURN_NULL(connection->streams);
@@ -792,7 +793,7 @@ static bool http_setting_set(http_connection_t * const connection, const enum se
       hpack_header_table_adjust_size(connection->decoding_context, value);
       break;
     case SETTINGS_ENABLE_PUSH:
-      if (LOG_TRACE) log_trace("Settings: Enable push? %d", value);
+      if (LOG_TRACE) log_trace("Settings: Enable push? %s", value ? "yes" : "no");
       connection->enable_push = value;
       break;
     case SETTINGS_MAX_CONCURRENT_STREAMS:
@@ -803,6 +804,10 @@ static bool http_setting_set(http_connection_t * const connection, const enum se
       if (LOG_TRACE) log_trace("Settings: Initial window size: %d", value);
       http_adjust_initial_window_size(connection, value - connection->initial_window_size);
       connection->initial_window_size = value;
+      break;
+    case SETTINGS_COMPRESS_DATA:
+      if (LOG_TRACE) log_trace("Settings: Enable compressed data? %s", value ? "yes" : "no");
+      connection->enable_compress_data = value;
       break;
     default:
       emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR, "Invalid setting: %d", id);
