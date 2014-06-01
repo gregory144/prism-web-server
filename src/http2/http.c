@@ -298,7 +298,7 @@ http_connection_t * http_connection_init(
   connection->enable_push = DEFAULT_ENABLE_PUSH;
   connection->max_concurrent_streams = DEFAULT_MAX_CONNCURRENT_STREAMS;
   connection->initial_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
-  connection->enable_compress_data = DEFAULT_ENABLE_COMPRESS_DATA;
+  connection->enable_compress_data = DEFAULT_COMPRESS_DATA;
 
   connection->streams = hash_table_init_with_int_keys(http_stream_free);
   ASSERT_OR_RETURN_NULL(connection->streams);
