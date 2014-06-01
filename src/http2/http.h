@@ -23,11 +23,12 @@ enum frame_type_e {
   FRAME_TYPE_GOAWAY,
   FRAME_TYPE_WINDOW_UPDATE,
   FRAME_TYPE_CONTINUATION,
-  FRAME_TYPE_ALTSVC
+  FRAME_TYPE_ALTSVC,
+  FRAME_TYPE_BLOCKED
 };
 
 #define FRAME_TYPE_MIN FRAME_TYPE_DATA
-#define FRAME_TYPE_MAX FRAME_TYPE_ALTSVC
+#define FRAME_TYPE_MAX FRAME_TYPE_BLOCKED
 
 /**
  * Stream states
@@ -190,6 +191,12 @@ typedef struct {
   HTTP_FRAME_FIELDS
 
 } http_frame_priority_t;
+
+typedef struct {
+
+  HTTP_FRAME_FIELDS
+
+} http_frame_blocked_t;
 
 typedef struct {
 

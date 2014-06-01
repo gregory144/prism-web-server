@@ -47,7 +47,7 @@ static void handle_request(http_request_t * request, http_response_t * response)
 
     char * content_length = http_request_header_get(request, "content-length");
     if (content_length) {
-      http_response_header_add(response, "content-length", strdup(content_length));
+      http_response_header_add(response, "content-length", content_length);
     }
 
     http_response_header_add(response, "server", PACKAGE_STRING);

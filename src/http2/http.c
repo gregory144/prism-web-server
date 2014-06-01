@@ -235,6 +235,24 @@ frame_parser_definition_t frame_parser_definitions[] = {
     },
     false,
     false
+  },
+
+  { // BLOCKED frame
+    0x0, // length min
+    0x0, // length max
+    0xb, // type
+    {
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    },
+    false,
+    false
   }
 
 };
@@ -1077,6 +1095,14 @@ static bool http_parse_frame_ping(http_connection_t * const connection, const ht
   return true;
 }
 
+static bool http_parse_frame_blocked(http_connection_t * const connection, const http_frame_blocked_t * const frame) {
+  UNUSED(connection);
+
+  log_debug("Received BLOCKED frame: stream #%d", frame->stream_id);
+
+  return true;
+}
+
 static bool http_increment_connection_window_size(http_connection_t * const connection, const uint32_t increment) {
   connection->outgoing_window_size += increment;
   if (LOG_TRACE) log_trace("Connection window size incremented to: %ld", connection->outgoing_window_size);
@@ -1187,6 +1213,12 @@ static http_frame_t * http_frame_init(http_connection_t * const connection, cons
       break;
     case FRAME_TYPE_CONTINUATION:
       frame = malloc(sizeof(http_frame_continuation_t));
+      break;
+    case FRAME_TYPE_ALTSVC:
+      frame = malloc(sizeof(http_frame_t));
+      break;
+    case FRAME_TYPE_BLOCKED:
+      frame = malloc(sizeof(http_frame_blocked_t));
       break;
     default:
       emit_error_and_close(connection, stream_id, HTTP_ERROR_INTERNAL_ERROR, "Unhandled frame type");
@@ -1327,6 +1359,9 @@ static bool http_connection_add_from_buffer(http_connection_t * const connection
         case FRAME_TYPE_ALTSVC:
           emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR, "Server does not accept ALTSVC frames");
           return false;
+        case FRAME_TYPE_BLOCKED:
+          success = http_parse_frame_blocked(connection, (http_frame_blocked_t *) frame);
+          break;
         default:
           emit_error_and_close(connection, 0, HTTP_ERROR_INTERNAL_ERROR, "Unhandled frame type: %d", frame->type);
           return false;
