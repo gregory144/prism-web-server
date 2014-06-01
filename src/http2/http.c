@@ -1304,10 +1304,9 @@ static bool http_connection_add_from_buffer(http_connection_t * const connection
         case FRAME_TYPE_SETTINGS:
           success = http_parse_frame_settings(connection, (http_frame_settings_t *) frame);
           break;
-        /*
         case FRAME_TYPE_PUSH_PROMISE:
-          parse_frame_push_promise(connection);
-        */
+          emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR, "Server does not accept PUSH_PROMISE frames");
+          return false;
         case FRAME_TYPE_PING:
           success = http_parse_frame_ping(connection, (http_frame_ping_t *) frame);
           break;
