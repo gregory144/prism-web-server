@@ -8,7 +8,6 @@
 * finite state machine for handling stream status
 * switch from heap based priority queue to linked list?
 * max concurrent streams
-* POST/PUT/PATCH requests (parse data frame)
 * better goaway handling
 * goaway on bad hpack indexes
 * stream priority
