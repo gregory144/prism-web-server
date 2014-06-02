@@ -9,6 +9,8 @@
 #include "response.h"
 #include "hash_table.h"
 
+#define PUSH_ENABLED false
+
 /**
  * Frame types
  */
@@ -285,7 +287,7 @@ typedef struct http_queued_frame_s {
 
 } http_queued_frame_t;
 
-typedef struct {
+typedef struct http_stream_t {
 
   /**
    * Stream identifier
@@ -322,6 +324,12 @@ typedef struct {
   http_request_t * request;
   http_response_t * response;
 
+  /*
+   * If this is a pushed stream, what stream originally
+   * opened this
+   */
+  uint32_t associated_stream_id;
+
 } http_stream_t;
 
 typedef void (*request_cb)(http_request_t * request, http_response_t * response);
@@ -355,6 +363,13 @@ typedef struct {
   long incoming_window_size;
   // is the connection waiting to be gracefully closed?
   bool closing;
+
+  // the number of streams that are currently opened
+  // that the server has initiated
+  size_t outgoing_concurrent_streams;
+  // the number of streams that are currently opened
+  // that the client has initiated
+  size_t incoming_concurrent_streams;
 
   /**
    * what's currently being read
@@ -390,5 +405,11 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
 void http_response_write(http_response_t * const response, uint8_t * data, const size_t data_length, bool last);
 
 void http_response_write_data(http_response_t * const response, uint8_t * data, const size_t data_length, bool last);
+
+http_request_t * http_push_init(http_request_t * const request);
+
+void http_push_promise(http_request_t * const request);
+
+http_response_t * http_push_response_get(http_request_t * const request);
 
 #endif

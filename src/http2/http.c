@@ -306,6 +306,9 @@ http_connection_t * http_connection_init(
   connection->incoming_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
   connection->closing = false;
 
+  connection->outgoing_concurrent_streams = 0;
+  connection->incoming_concurrent_streams = 0;
+
   connection->buffer = NULL;
   connection->buffer_length = 0;
   connection->buffer_position = 0;
@@ -364,6 +367,13 @@ static void http_stream_mark_closing(http_connection_t * const connection, http_
 
   if (stream->state != STREAM_STATE_CLOSED && !stream->queued_data_frames) {
     stream->closing = true;
+
+    if (stream->id % 2 == 0) {
+      connection->outgoing_concurrent_streams--;
+    } else {
+      connection->incoming_concurrent_streams--;
+    }
+
   }
 
 }
@@ -573,6 +583,58 @@ static void http_emit_headers(http_connection_t * const connection, const http_s
   }
 
   if (LOG_DEBUG) log_debug("Writing headers frame: stream %d, %ld octets", stream->id, buf_length);
+  http_connection_write(connection, buf, buf_length);
+}
+
+static void http_emit_push_promise(http_connection_t * const connection, const http_stream_t * const stream,
+    const multimap_t * const headers, const uint32_t associated_stream_id) {
+
+  // TODO split large headers into multiple frames
+  size_t headers_length = 0;
+  uint8_t * hpack_buf = NULL;
+  if (headers != NULL) {
+    binary_buffer_t encoded;
+    if (!hpack_encode(connection->encoding_context, headers, &encoded)) {
+      // don't send stream ID because we want to generate a goaway - the
+      // encoding context may have been corrupted
+      emit_error_and_close(connection, 0, HTTP_ERROR_INTERNAL_ERROR, "Error encoding headers");
+      return;
+    }
+    hpack_buf = encoded.buf;
+    headers_length = binary_buffer_size(&encoded);
+  }
+
+  const size_t stream_id_length = 4;
+  const size_t payload_length = stream_id_length + headers_length;
+  const size_t buf_length = FRAME_HEADER_SIZE + payload_length;
+  uint8_t buf[buf_length];
+
+  uint8_t flags = 0;
+  // TODO - these should be dynamic
+  const bool end_stream = false;
+  const bool end_headers = true;
+  const bool priority = false;
+  if (end_stream) flags |= FLAG_END_STREAM;
+  if (end_headers) flags |= FLAG_END_HEADERS;
+  if (priority) flags |= FLAG_PRIORITY;
+
+  http_frame_header_write(buf, payload_length, FRAME_TYPE_PUSH_PROMISE, flags, stream->id);
+
+  size_t pos = FRAME_HEADER_SIZE;
+
+  buf[pos++] = (associated_stream_id >> 24) & 0x7F; // only the first 7 bits (first bit is reserved)
+  buf[pos++] = (associated_stream_id >> 16) & 0xFF;
+  buf[pos++] = (associated_stream_id >> 8) & 0xFF;
+  buf[pos++] = (associated_stream_id) & 0xFF;
+
+  if (hpack_buf) {
+    memcpy(buf + pos, hpack_buf, headers_length);
+    free(hpack_buf);
+  }
+
+  if (LOG_DEBUG) log_debug("Writing push promise frame: associated stream %d, new stream %d, %ld octets",
+      stream->id, associated_stream_id, buf_length);
+
   http_connection_write(connection, buf, buf_length);
 }
 
@@ -870,6 +932,8 @@ static http_stream_t * http_stream_init(http_connection_t * const connection, co
   stream->outgoing_window_size = connection->initial_window_size;
   stream->incoming_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
 
+  stream->associated_stream_id = 0;
+
   return stream;
 }
 
@@ -1003,6 +1067,7 @@ static bool http_parse_header_fragments(http_connection_t * const connection, ht
   }
   // TODO - check that the stream is in a valid state to be opened first
   stream->state = STREAM_STATE_OPEN;
+  connection->incoming_concurrent_streams++;
 
   free(headers);
 
@@ -1476,6 +1541,72 @@ void http_response_write_data(http_response_t * const response, uint8_t * data, 
 
     http_stream_mark_closing(connection, stream);
   }
+
+}
+
+http_request_t * http_push_init(
+    http_request_t * const original_request
+) {
+
+  if (!PUSH_ENABLED) {
+    return NULL;
+  }
+
+  http_connection_t * connection = (http_connection_t *) original_request->connection;
+
+  if (!connection->enable_push) {
+    return NULL;
+  }
+
+  http_stream_t * stream = (http_stream_t *) original_request->stream;
+
+  if (connection->outgoing_concurrent_streams >= connection->max_concurrent_streams) {
+    log_debug("Tried opening more than %ld outgoing concurrent streams: stream #%d",
+        connection->max_concurrent_streams, stream->id);
+    return NULL;
+  } else {
+    printf("Push #%ld for stream: stream #%d\n",
+        connection->outgoing_concurrent_streams, stream->id);
+  }
+
+  http_stream_t * pushed_stream = http_stream_init(connection, connection->current_stream_id);
+  ASSERT_OR_RETURN_NULL(pushed_stream);
+  connection->current_stream_id += 2;
+
+  pushed_stream->state = STREAM_STATE_RESERVED_LOCAL;
+  connection->outgoing_concurrent_streams++;
+
+  pushed_stream->associated_stream_id = stream->id;
+
+  http_request_t * pushed_request = http_request_init(connection, pushed_stream, NULL);
+  ASSERT_OR_RETURN_NULL(pushed_request);
+
+  pushed_stream->request = pushed_request;
+
+  return pushed_request;
+
+}
+
+void http_push_promise(http_request_t * const request) {
+
+  http_connection_t * connection = (http_connection_t *) request->connection;
+  http_stream_t * stream = (http_stream_t *) request->stream;
+  http_stream_t * associated_stream = http_stream_get(connection, stream->associated_stream_id);
+
+  return http_emit_push_promise(connection, associated_stream, request->headers, stream->id);
+
+}
+
+http_response_t * http_push_response_get(
+    http_request_t * const request
+) {
+
+  http_stream_t * stream = (http_stream_t *) request->stream;
+
+  http_response_t * pushed_response = http_response_init(request);
+  stream->response = pushed_response;
+
+  return pushed_response;
 
 }
 

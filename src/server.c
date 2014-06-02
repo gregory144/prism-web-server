@@ -125,7 +125,40 @@ static void handle_request(http_request_t * request, http_response_t * response)
     http_response_header_add(response, "date", date);
   }
 
-  http_response_write(response, (uint8_t *)resp_text, content_length, true);
+  http_request_t * pushed_request = http_push_init(request);
+  if (pushed_request) {
+    http_request_header_add(pushed_request, ":method", "GET");
+    http_request_header_add(pushed_request, ":scheme", "http");
+    http_request_header_add(pushed_request, ":authority", "localhost:7000");
+    http_request_header_add(pushed_request, ":path", "/pushed_resource.txt");
+
+    http_push_promise(pushed_request);
+
+    if (pushed_request) {
+      http_response_t * pushed_response = http_push_response_get(pushed_request);
+      http_response_status_set(pushed_response, 200);
+
+      char push_text[256];
+      snprintf(push_text, 255, "Pushed Response at %s\n", date);
+
+      size_t push_content_length = strlen(push_text);
+
+      char push_content_length_s[256];
+      snprintf(push_content_length_s, 255, "%ld", push_content_length);
+      http_response_header_add(pushed_response, "content-length", push_content_length_s);
+
+      http_response_header_add(pushed_response, "server", PACKAGE_STRING);
+      if (date) {
+        http_response_header_add(pushed_response, "date", date);
+      }
+
+      http_response_write(pushed_response, (uint8_t *) strdup(push_text), push_content_length, true);
+    }
+
+
+  }
+
+  http_response_write(response, (uint8_t *) resp_text, content_length, true);
 
   if (LOG_INFO) {
     requests++;

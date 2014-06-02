@@ -34,6 +34,8 @@ typedef struct http_request_t {
 http_request_t * http_request_init_internal(const _http_connection_t connection,
     const _http_stream_t stream, multimap_t * const headers);
 
+void http_request_header_add(const http_request_t * const request, char * name, char * value);
+
 char * http_request_header_get(const http_request_t * const request, char * name);
 
 multimap_values_t * http_request_header_get_values(const http_request_t * const request, char * name);

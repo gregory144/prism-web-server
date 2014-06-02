@@ -13,7 +13,7 @@ http_response_t * http_response_init(http_request_t * const request) {
 
 void http_response_header_add(const http_response_t * const response, char * name, char * value) {
 
-  char *name_copy, *value_copy;
+  char * name_copy, * value_copy;
   COPY_STRING(name_copy, name, strlen(name));
   COPY_STRING(value_copy, value, strlen(value));
 

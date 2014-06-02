@@ -169,33 +169,57 @@ http_request_t * http_request_init_internal(const _http_connection_t connection,
   request->connection = (_http_connection_t)connection;
   request->stream = (_http_stream_t)stream;
 
-  request->headers = headers;
   request->params = multimap_init_with_string_keys();
 
-  char * method = http_request_header_get(request, ":method");
-  if (!method) {
-    log_error("Missing :method header");
-    return NULL;
+
+  if (headers) {
+
+    request->headers = headers;
+
+    char * method = http_request_header_get(request, ":method");
+    if (!method) {
+      log_error("Missing :method header");
+      return NULL;
+    }
+    request->method = strdup(method);
+
+    char * scheme = http_request_header_get(request, ":scheme");
+    if (!scheme) {
+      log_error("Missing :scheme header");
+      return NULL;
+    }
+    request->scheme = strdup(scheme);
+
+    if (!parse_path(request)) {
+      return NULL;
+    }
+
+    parse_authority(request);
+    parse_parameters(request->params, request->query_string);
+
+    remove_special_headers(headers);
+  } else {
+
+    request->headers = multimap_init_with_string_keys();
+
+    request->path = NULL;
+    request->query_string = NULL;
+    request->host = NULL;
+    request->method = NULL;
+    request->scheme = NULL;
+
   }
-  request->method = strdup(method);
-
-  char * scheme = http_request_header_get(request, ":scheme");
-  if (!scheme) {
-    log_error("Missing :scheme header");
-    return NULL;
-  }
-  request->scheme = strdup(scheme);
-
-  if (!parse_path(request)) {
-    return NULL;
-  }
-
-  parse_authority(request);
-  parse_parameters(request->params, request->query_string);
-
-  remove_special_headers(headers);
 
   return request;
+}
+
+void http_request_header_add(const http_request_t * const request, char * name, char * value) {
+
+  char * name_copy, * value_copy;
+  COPY_STRING(name_copy, name, strlen(name));
+  COPY_STRING(value_copy, value, strlen(value));
+
+  multimap_put(request->headers, name_copy, value_copy);
 }
 
 /**

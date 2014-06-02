@@ -10,13 +10,17 @@ void catcher(int sig) {
   exit(EXIT_SUCCESS);
 }
 
+void log_sigpipe(int sig) {
+  if (LOG_ERROR) log_error("caught signal %d", sig);
+}
+
 int main() {
   // ignore sigpipe
   struct sigaction sigact_pipe;
   sigemptyset(&sigact_pipe.sa_mask);
   sigact_pipe.sa_flags = 0;
-  sigact_pipe.sa_handler = catcher;
-  sigaction(SIGPIPE, &sigact_pipe, NULL );
+  sigact_pipe.sa_handler = log_sigpipe;
+  sigaction(SIGPIPE, &sigact_pipe, NULL);
 
   struct sigaction sigact_int;
   sigemptyset(&sigact_int.sa_mask);
