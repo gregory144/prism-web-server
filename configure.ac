@@ -1,8 +1,6 @@
 AC_INIT([conduit],[0.0.1],[greg@gtgross.com])
 AM_INIT_AUTOMAKE([foreign -Wall -Werror])
 
-CFLAGS="-g -O0 -Wall -Wextra"
-
 AC_PROG_CC
 AC_PROG_CC_C99
 
