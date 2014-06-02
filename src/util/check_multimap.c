@@ -6,23 +6,28 @@
 
 multimap_t * map;
 
-void setup_mm_strings() {
+void setup_mm_strings()
+{
   map = multimap_init_with_string_keys();
 }
 
-void teardown_mm_strings() {
+void teardown_mm_strings()
+{
   multimap_free(map, free, free);
 }
 
-START_TEST(test_mm_strings_put_and_get) {
+START_TEST(test_mm_strings_put_and_get)
+{
   ck_assert(multimap_put(map, strdup("k1"), strdup("v1")));
   multimap_values_t * values = multimap_get(map, "k1");
   ck_assert_str_eq(values->value, "v1");
   ck_assert(!values->next);
   ck_assert_uint_eq(1, multimap_size(map));
-} END_TEST
+}
+END_TEST
 
-START_TEST(test_mm_strings_put_and_get_multiple) {
+START_TEST(test_mm_strings_put_and_get_multiple)
+{
   ck_assert(multimap_put(map, strdup("k1"), strdup("v1")));
   ck_assert(multimap_put(map, strdup("k1"), strdup("v2")));
   ck_assert(multimap_put(map, strdup("k1"), strdup("v3")));
@@ -34,11 +39,14 @@ START_TEST(test_mm_strings_put_and_get_multiple) {
   ck_assert_str_eq(values->next->value, "v2");
   ck_assert_str_eq(values->next->next->value, "v3");
   ck_assert_uint_eq(3, multimap_size(map));
-} END_TEST
+}
+END_TEST
 
-START_TEST(test_mm_strings_put_and_grow) {
+START_TEST(test_mm_strings_put_and_grow)
+{
   int i, j;
   char keys[1000][10];
+
   for (i = 0; i < 1000; i++) {
     snprintf(keys[i], 10, "%d", i);
     ck_assert(multimap_put(map, strdup(keys[i]), strdup(keys[i])));
@@ -51,9 +59,11 @@ START_TEST(test_mm_strings_put_and_grow) {
 
     ck_assert_uint_eq(i + 1, multimap_size(map));
   }
-} END_TEST
+}
+END_TEST
 
-START_TEST(test_mm_strings_put_and_remove) {
+START_TEST(test_mm_strings_put_and_remove)
+{
   ck_assert(multimap_put(map, strdup("k1"), strdup("v1")));
   multimap_values_t * values = multimap_get(map, "k1");
   ck_assert_str_eq(values->value, "v1");
@@ -66,9 +76,11 @@ START_TEST(test_mm_strings_put_and_remove) {
   values = multimap_get(map, "k1");
   ck_assert(!values);
 
-} END_TEST
+}
+END_TEST
 
-START_TEST(test_mm_strings_put_and_remove_multiple) {
+START_TEST(test_mm_strings_put_and_remove_multiple)
+{
   ck_assert(multimap_put(map, strdup("k1"), strdup("v1")));
   ck_assert(multimap_put(map, strdup("k1"), strdup("v2")));
   multimap_values_t * values = multimap_get(map, "k1");
@@ -80,17 +92,21 @@ START_TEST(test_mm_strings_put_and_remove_multiple) {
   values = multimap_get(map, "k1");
   ck_assert(!values);
 
-} END_TEST
+}
+END_TEST
 
-void setup_mm_ints() {
+void setup_mm_ints()
+{
   map = multimap_init_with_int_keys();
 }
 
-void teardown_mm_ints() {
+void teardown_mm_ints()
+{
   multimap_free(map, free, free);
 }
 
-START_TEST(test_mm_ints_put_and_get) {
+START_TEST(test_mm_ints_put_and_get)
+{
   long * k1 = malloc(sizeof(long));
   * k1 = 10;
 
@@ -99,9 +115,11 @@ START_TEST(test_mm_ints_put_and_get) {
   ck_assert_str_eq(values->value, "v1");
   ck_assert(!values->next);
   ck_assert_uint_eq(1, multimap_size(map));
-} END_TEST
+}
+END_TEST
 
-START_TEST(test_mm_ints_put_and_get_multiple) {
+START_TEST(test_mm_ints_put_and_get_multiple)
+{
   long * k1 = malloc(sizeof(long));
   * k1 = 10;
 
@@ -116,10 +134,13 @@ START_TEST(test_mm_ints_put_and_get_multiple) {
   ck_assert_str_eq(values->next->value, "v2");
   ck_assert_str_eq(values->next->next->value, "v3");
   ck_assert_uint_eq(3, multimap_size(map));
-} END_TEST
+}
+END_TEST
 
-START_TEST(test_mm_ints_put_and_grow) {
+START_TEST(test_mm_ints_put_and_grow)
+{
   long i, j;
+
   for (i = 0; i < 300; i++) {
     long * i_key = malloc(sizeof(long));
     * i_key = i;
@@ -142,9 +163,11 @@ START_TEST(test_mm_ints_put_and_grow) {
 
     ck_assert_uint_eq(i + 1, multimap_size(map));
   }
-} END_TEST
+}
+END_TEST
 
-START_TEST(test_mm_ints_put_and_remove) {
+START_TEST(test_mm_ints_put_and_remove)
+{
   long * k1 = malloc(sizeof(long));
   * k1 = 10;
 
@@ -160,9 +183,11 @@ START_TEST(test_mm_ints_put_and_remove) {
   values = multimap_get(map, k1);
   ck_assert(!values);
 
-} END_TEST
+}
+END_TEST
 
-START_TEST(test_mm_ints_put_and_remove_multiple) {
+START_TEST(test_mm_ints_put_and_remove_multiple)
+{
   long * k1 = malloc(sizeof(long));
   * k1 = 10;
 
@@ -177,12 +202,14 @@ START_TEST(test_mm_ints_put_and_remove_multiple) {
   values = multimap_get(map, k1);
   ck_assert(!values);
 
-} END_TEST
+}
+END_TEST
 
-Suite * suite() {
-  Suite *s = suite_create("multimap");
+Suite * suite()
+{
+  Suite * s = suite_create("multimap");
 
-  TCase *tc_mm_strings = tcase_create("multimap with string keys");
+  TCase * tc_mm_strings = tcase_create("multimap with string keys");
   tcase_add_checked_fixture(tc_mm_strings, setup_mm_strings, teardown_mm_strings);
 
   tcase_add_test(tc_mm_strings, test_mm_strings_put_and_get);
@@ -193,7 +220,7 @@ Suite * suite() {
 
   suite_add_tcase(s, tc_mm_strings);
 
-  TCase *tc_mm_ints = tcase_create("multimap with integer keys");
+  TCase * tc_mm_ints = tcase_create("multimap with integer keys");
   tcase_add_checked_fixture(tc_mm_ints, setup_mm_ints, teardown_mm_ints);
 
   tcase_add_test(tc_mm_ints, test_mm_ints_put_and_get);
@@ -207,9 +234,10 @@ Suite * suite() {
   return s;
 }
 
-int main () {
-  Suite *s = suite();
-  SRunner *sr = srunner_create(s);
+int main()
+{
+  Suite * s = suite();
+  SRunner * sr = srunner_create(s);
   srunner_run_all(sr, CK_NORMAL);
   int number_failed = srunner_ntests_failed(sr);
   srunner_free(sr);

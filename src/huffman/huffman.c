@@ -7,7 +7,8 @@
 #include "huffman_decoder_data.c"
 #include "huffman_encoder_data.c"
 
-bool huffman_decode(const uint8_t * const input, const size_t input_length_in_octets, huffman_result_t * const result) {
+bool huffman_decode(const uint8_t * const input, const size_t input_length_in_octets, huffman_result_t * const result)
+{
   const size_t input_length = input_length_in_octets * 8;
   // Every 4 bits might represent a character, so a char can be 2 characters
   const size_t output_length = (input_length / 4) + 1;
@@ -19,6 +20,7 @@ bool huffman_decode(const uint8_t * const input, const size_t input_length_in_oc
 
   huffman_decoder_entry_t current = huffman_decoder_table[huffman_decoder_size - 1];
   bool bit = get_bit(input, input_index++);
+
   while (input_index <= input_length) {
     if (current.value != -1) {
       output[output_index++] = current.value;
@@ -31,6 +33,7 @@ bool huffman_decode(const uint8_t * const input, const size_t input_length_in_oc
       bit = get_bit(input, input_index++);
     }
   }
+
   if (current.value != -1) {
     output[output_index++] = current.value;
   }
@@ -40,7 +43,8 @@ bool huffman_decode(const uint8_t * const input, const size_t input_length_in_oc
   return true;
 }
 
-bool huffman_encode(const char * const buf, const size_t len, huffman_result_t * const result) {
+bool huffman_encode(const char * const buf, const size_t len, huffman_result_t * const result)
+{
   size_t max_len = len;
   uint8_t * encoded = malloc(sizeof(char) * (max_len + 1));
   ASSERT_OR_RETURN_FALSE(encoded);
@@ -50,6 +54,7 @@ bool huffman_encode(const char * const buf, const size_t len, huffman_result_t *
   uint8_t current_byte = 0;
 
   size_t buf_index;
+
   for (buf_index = 0; buf_index < len; buf_index++) {
 
     size_t to_encode = (size_t) buf[buf_index];
@@ -64,6 +69,7 @@ bool huffman_encode(const char * const buf, const size_t len, huffman_result_t *
       current_byte |= bit;
       bits_left_in_byte--;
       pos_in_entry--;
+
       if (bits_left_in_byte == 0) {
 
         // make sure there is enough room to write the extra byte
@@ -72,6 +78,7 @@ bool huffman_encode(const char * const buf, const size_t len, huffman_result_t *
           encoded = realloc(encoded, sizeof(char) * (max_len + 1));
           ASSERT_OR_RETURN_FALSE(encoded);
         }
+
         encoded[encoded_index++] = current_byte;
 
         current_byte = 0;
@@ -81,12 +88,14 @@ bool huffman_encode(const char * const buf, const size_t len, huffman_result_t *
       }
     }
   }
+
   if (bits_left_in_byte != 8) {
     current_byte = current_byte << (bits_left_in_byte - 1);
     // pad with 1's
     current_byte |= (1 << bits_left_in_byte) - 1;
     encoded[encoded_index++] = current_byte;
   }
+
   encoded[encoded_index] = 0x0;
 
   result->value = encoded;

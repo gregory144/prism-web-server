@@ -4,7 +4,8 @@
 
 #include "huffman.h"
 
-int main(int argc, char * argv[]) {
+int main(int argc, char * argv[])
+{
 
   bool print_stats = false;
 
@@ -13,8 +14,10 @@ int main(int argc, char * argv[]) {
 
   if (argc > 1) {
     size_t arg_index;
+
     for (arg_index = 1; arg_index < (size_t)argc; arg_index++) {
       char * arg = argv[arg_index];
+
       if (strcmp(arg, "-s") == 0) {
         print_stats = true;
       } else if (strcmp(arg, "-d") == 0) {
@@ -36,6 +39,7 @@ int main(int argc, char * argv[]) {
   size_t bytes_read;
   size_t total_bytes_read = 0;
   size_t total_bytes_written = 0;
+
   do {
     bytes_read = fread(buffer, sizeof(uint8_t), block_size, stdin);
     total_bytes_read += bytes_read;
@@ -78,6 +82,7 @@ int main(int argc, char * argv[]) {
 
     if (!print_stats) {
       size_t bytes_written = fwrite(intermediate, sizeof(uint8_t), intermediate_length, stdout);
+
       if (bytes_written != intermediate_length) {
         fprintf(stderr, "Could not write result to stdout\n");
         exit(EXIT_FAILURE);

@@ -16,7 +16,8 @@
  * See http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
  *
  */
-size_t roundup_to_power_of_2(size_t v) {
+size_t roundup_to_power_of_2(size_t v)
+{
 
   // TODO - does this work for values greater than 2^32?
 
@@ -31,8 +32,9 @@ size_t roundup_to_power_of_2(size_t v) {
   return v;
 }
 
-bool get_bit(const uint8_t * const buffer, const size_t total_bit_index) {
-  const uint8_t* at_byte = buffer + (total_bit_index / 8);
+bool get_bit(const uint8_t * const buffer, const size_t total_bit_index)
+{
+  const uint8_t * at_byte = buffer + (total_bit_index / 8);
   size_t bit_index = total_bit_index % 8;
 
   uint8_t b = *at_byte;
@@ -41,41 +43,51 @@ bool get_bit(const uint8_t * const buffer, const size_t total_bit_index) {
   return res;
 }
 
-uint8_t get_bits8(const uint8_t * const buf, const size_t offset, const uint8_t mask) {
+uint8_t get_bits8(const uint8_t * const buf, const size_t offset, const uint8_t mask)
+{
   const size_t num_bytes = 1;
   const uint8_t * curr = buf + offset;
   uint8_t val = 0;
+
   for (; curr < buf + offset + num_bytes; curr++) {
     val = (val << 8) | *curr;
   }
+
   return val & mask;
 }
 
-uint16_t get_bits16(const uint8_t * const buf, const size_t offset, const uint16_t mask) {
+uint16_t get_bits16(const uint8_t * const buf, const size_t offset, const uint16_t mask)
+{
   const size_t num_bytes = 2;
   const uint8_t * curr = buf + offset;
   uint16_t val = 0;
+
   for (; curr < buf + offset + num_bytes; curr++) {
     val = (val << 8) | *curr;
   }
+
   return val & mask;
 }
 
-uint32_t get_bits32(const uint8_t * const buf, const size_t offset, const uint32_t mask) {
+uint32_t get_bits32(const uint8_t * const buf, const size_t offset, const uint32_t mask)
+{
   const size_t num_bytes = 4;
   const uint8_t * curr = buf + offset;
   uint32_t val = 0;
+
   for (; curr < buf + offset + num_bytes; curr++) {
     val = (val << 8) | *curr;
   }
+
   return val & mask;
 }
 
 static const char * DAY_NAMES[] =
-  { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
-static const char * MONTH_NAMES[] =
-  { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+{ "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+static const char * MONTH_NAMES[] = {
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+};
 
 /**
  * Returns the current date + time as a string as specified
@@ -83,27 +95,31 @@ static const char * MONTH_NAMES[] =
  *
  * Returns NULL if malloc or strftime fail.
  */
-/*@null@*/ char * date_rfc1123(char * date_buf, size_t buf_len) {
-    time_t t;
-    struct tm * tm;
-    if (date_buf == NULL) {
-      date_buf = malloc(sizeof(char) * buf_len);
-      buf_len = RFC1123_TIME_LEN + 1;
-    }
-    ASSERT_OR_RETURN_NULL(date_buf);
+/*@null@*/ char * date_rfc1123(char * date_buf, size_t buf_len)
+{
+  time_t t;
+  struct tm * tm;
 
-    t = time(NULL);
-    tm = gmtime(&t);
+  if (date_buf == NULL) {
+    date_buf = malloc(sizeof(char) * buf_len);
+    buf_len = RFC1123_TIME_LEN + 1;
+  }
 
-    if (strftime(date_buf, buf_len, "---, %d --- %Y %H:%M:%S GMT", tm) < 1) {
-      log_fatal("Unable to get date as string");
-      free(date_buf);
-      return NULL;
-    }
-    memcpy(date_buf, DAY_NAMES[tm->tm_wday], 3);
-    memcpy(date_buf+8, MONTH_NAMES[tm->tm_mon], 3);
+  ASSERT_OR_RETURN_NULL(date_buf);
 
-    return date_buf;
+  t = time(NULL);
+  tm = gmtime(&t);
+
+  if (strftime(date_buf, buf_len, "---, %d --- %Y %H:%M:%S GMT", tm) < 1) {
+    log_fatal("Unable to get date as string");
+    free(date_buf);
+    return NULL;
+  }
+
+  memcpy(date_buf, DAY_NAMES[tm->tm_wday], 3);
+  memcpy(date_buf + 8, MONTH_NAMES[tm->tm_mon], 3);
+
+  return date_buf;
 }
 
 #define LOG_WITH_LEVEL(level) \
@@ -120,37 +136,43 @@ static const char * MONTH_NAMES[] =
   } \
   va_end(ap);
 
-void log_fatal(char * format, ...) {
+void log_fatal(char * format, ...)
+{
   if (LOG_FATAL) {
     LOG_WITH_LEVEL("FATAL")
   }
 }
 
-void log_warning(char * format, ...) {
+void log_warning(char * format, ...)
+{
   if (LOG_WARN) {
     LOG_WITH_LEVEL("WARN")
   }
 }
 
-void log_error(char * format, ...) {
+void log_error(char * format, ...)
+{
   if (LOG_ERROR) {
     LOG_WITH_LEVEL("ERROR")
   }
 }
 
-void log_info(char * format, ...) {
+void log_info(char * format, ...)
+{
   if (LOG_INFO) {
     LOG_WITH_LEVEL("INFO")
   }
 }
 
-void log_debug(char * format, ...) {
+void log_debug(char * format, ...)
+{
   if (LOG_DEBUG) {
     LOG_WITH_LEVEL("DEBUG")
   }
 }
 
-void log_trace(char * format, ...) {
+void log_trace(char * format, ...)
+{
   if (LOG_TRACE) {
     LOG_WITH_LEVEL("TRACE")
   }

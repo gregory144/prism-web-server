@@ -40,7 +40,7 @@ typedef struct {
  * A string + length pair
  */
 typedef struct huffman_result_t {
-  uint8_t* value;
+  uint8_t * value;
   // length in octets
   size_t length;
 } huffman_result_t;

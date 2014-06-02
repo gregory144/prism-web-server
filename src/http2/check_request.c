@@ -7,10 +7,12 @@
 
 #include "request.c"
 
-void setup() {
+void setup()
+{
 }
 
-void teardown() {
+void teardown()
+{
 }
 
 #define DECODE_TEST(name, encoded_s, decoded_s) \
@@ -33,10 +35,11 @@ DECODE_TEST(test_request_decode_url_with_many_percent_encodings, "a%26b%26c", "a
 DECODE_TEST(test_request_decode_url_with_consecutive_percent_encodings, "%7E%26%20", "~& ")
 DECODE_TEST(test_request_decode_url_with_invalid_percent_encoding, "abc%2", "abc%2")
 
-Suite * request_suite() {
-  Suite *s = suite_create("request");
+Suite * request_suite()
+{
+  Suite * s = suite_create("request");
 
-  TCase *tc_decoder = tcase_create("url_decoder");
+  TCase * tc_decoder = tcase_create("url_decoder");
   tcase_add_checked_fixture(tc_decoder, setup, teardown);
 
   tcase_add_test(tc_decoder, test_request_decode_url_empty);
@@ -57,10 +60,11 @@ Suite * request_suite() {
   return s;
 }
 
-int main () {
+int main()
+{
   int number_failed;
-  Suite *s = request_suite();
-  SRunner *sr = srunner_create(s);
+  Suite * s = request_suite();
+  SRunner * sr = srunner_create(s);
   srunner_run_all(sr, CK_NORMAL);
   number_failed = srunner_ntests_failed(sr);
   srunner_free(sr);

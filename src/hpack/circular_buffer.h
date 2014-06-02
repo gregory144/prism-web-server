@@ -9,7 +9,7 @@ typedef struct {
   size_t length;
   size_t capacity;
   size_t shift;
-  void * * entries;
+  void ** entries;
 } circular_buffer_t;
 
 typedef struct {

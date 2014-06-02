@@ -5,16 +5,24 @@
 
 #include "server.h"
 
-void catcher(int sig) {
-  if (LOG_ERROR) log_error("caught signal %d", sig);
+void catcher(int sig)
+{
+  if (LOG_ERROR) {
+    log_error("caught signal %d", sig);
+  }
+
   exit(EXIT_SUCCESS);
 }
 
-void log_sigpipe(int sig) {
-  if (LOG_ERROR) log_error("caught signal %d", sig);
+void log_sigpipe(int sig)
+{
+  if (LOG_ERROR) {
+    log_error("caught signal %d", sig);
+  }
 }
 
-int main() {
+int main()
+{
   // ignore sigpipe
   struct sigaction sigact_pipe;
   sigemptyset(&sigact_pipe.sa_mask);

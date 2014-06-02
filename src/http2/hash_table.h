@@ -23,7 +23,7 @@ typedef void (*hash_table_free_func_t)(void * x);
 
 typedef struct hash_table_s hash_table_t;
 struct hash_table_s {
-  hash_table_entry_t * * buckets;
+  hash_table_entry_t ** buckets;
   size_t capacity;
   size_t size;
   hash_table_hash_func_t hash_func;
@@ -41,36 +41,36 @@ typedef struct {
 } hash_table_iter_t;
 
 hash_table_t * hash_table_init_with_string_keys(
-    hash_table_free_func_t free_value
+  hash_table_free_func_t free_value
 );
 
 hash_table_t * hash_table_init_with_string_keys_and_capacity(
-    size_t initial_capacity,
-    hash_table_free_func_t free_value
+  size_t initial_capacity,
+  hash_table_free_func_t free_value
 );
 
 hash_table_t * hash_table_init_with_int_keys(
-    hash_table_free_func_t free_value
+  hash_table_free_func_t free_value
 );
 
 hash_table_t * hash_table_init_with_int_keys_and_capacity(
-    size_t initial_capacity,
-    hash_table_free_func_t free_value
+  size_t initial_capacity,
+  hash_table_free_func_t free_value
 );
 
 hash_table_t * hash_table_init_with_capacity(
-    hash_table_hash_func_t hash_func,
-    hash_table_cmp_key_func_t cmp_key_func,
-    size_t initial_capacity,
-    hash_table_free_func_t free_key,
-    hash_table_free_func_t free_value
+  hash_table_hash_func_t hash_func,
+  hash_table_cmp_key_func_t cmp_key_func,
+  size_t initial_capacity,
+  hash_table_free_func_t free_key,
+  hash_table_free_func_t free_value
 );
 
 hash_table_t * hash_table_init(
-    hash_table_hash_func_t hash_func,
-    hash_table_cmp_key_func_t cmp_key_func,
-    hash_table_free_func_t free_key,
-    hash_table_free_func_t free_value
+  hash_table_hash_func_t hash_func,
+  hash_table_cmp_key_func_t cmp_key_func,
+  hash_table_free_func_t free_key,
+  hash_table_free_func_t free_value
 );
 
 size_t hash_table_size(hash_table_t * table);

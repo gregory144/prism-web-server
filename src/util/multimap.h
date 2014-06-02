@@ -29,7 +29,7 @@ typedef int (*hash_cmp_key_func_t)(void * key1, void * key2);
 typedef void (*free_func_t)(void * x);
 
 typedef struct {
-  multimap_entry_t * * buckets;
+  multimap_entry_t ** buckets;
   size_t capacity;
   size_t size;
   hash_func_t hash_func;
@@ -55,10 +55,10 @@ multimap_t * multimap_init_with_int_keys();
 multimap_t * multimap_init_with_int_keys_and_size(const size_t initial_size);
 
 multimap_t * multimap_init_with_size(const hash_func_t hash_func,
-    const hash_cmp_key_func_t cmp_key_func, const size_t initial_size);
+                                     const hash_cmp_key_func_t cmp_key_func, const size_t initial_size);
 
 multimap_t * multimap_init(const hash_func_t hash_func,
-    const hash_cmp_key_func_t cmp_key_func);
+                           const hash_cmp_key_func_t cmp_key_func);
 
 multimap_values_t * multimap_get(const multimap_t * const table, void * key);
 
