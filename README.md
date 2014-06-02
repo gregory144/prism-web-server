@@ -11,8 +11,7 @@
 * better goaway handling
 * goaway on bad hpack indexes
 * stream priority
-* fast huffman coding + decoding based - more than one bit at a time
-* push promise
+* fast huffman coding + decoding - more than one bit at a time
 * upgrade from 1.1
 * API for processing streams and frames
 * better error handling for libuv calls
