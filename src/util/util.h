@@ -102,11 +102,11 @@ size_t roundup_to_power_of_2(size_t value);
 
 bool get_bit(const uint8_t * const buffer, const size_t total_bit_index);
 
-uint8_t get_bits8(const uint8_t * const buf, const size_t offset, const uint8_t mask);
+uint8_t get_bits8(const uint8_t * const buf, const uint8_t mask);
 
-uint16_t get_bits16(const uint8_t * const buf, const size_t offset, const uint16_t mask);
+uint16_t get_bits16(const uint8_t * const buf, const uint16_t mask);
 
-uint32_t get_bits32(const uint8_t * const buf, const size_t offset, const uint32_t mask);
+uint32_t get_bits32(const uint8_t * const buf, const uint32_t mask);
 
 #define RFC1123_TIME_LEN 29
 

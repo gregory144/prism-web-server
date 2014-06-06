@@ -1284,7 +1284,7 @@ static bool http_parse_frame_headers(http_connection_t * const connection, const
   }
 
   if (FRAME_FLAG(frame, FLAG_PRIORITY)) {
-    stream->priority = get_bits32(pos, 4, 0x7FFFFFFF);
+    stream->priority = get_bits32(pos + 4, 0x7FFFFFFF);
     pos += 4;
     header_block_fragment_size -= 4;
   }
@@ -1356,7 +1356,7 @@ static bool http_parse_frame_settings(http_connection_t * const connection, cons
     for (i = 0; i < num_settings; i++) {
       uint8_t * curr_setting = pos + (i * setting_size);
       uint8_t setting_id = curr_setting[0];
-      uint32_t setting_value = get_bits32(curr_setting, 1, 0xFFFFFFFF);
+      uint32_t setting_value = get_bits32(curr_setting + 1, 0xFFFFFFFF);
 
       if (!http_setting_set(connection, setting_id, setting_value)) {
         return false;
@@ -1435,7 +1435,7 @@ static bool http_parse_frame_window_update(http_connection_t * const connection,
     http_frame_window_update_t * const frame)
 {
   uint8_t * buf = connection->buffer + connection->buffer_position;
-  frame->increment = get_bits32(buf, 0, 0x7FFFFFFF);
+  frame->increment = get_bits32(buf, 0x7FFFFFFF);
 
   bool success = false;
 
@@ -1454,7 +1454,7 @@ static bool http_parse_frame_window_update(http_connection_t * const connection,
 static bool http_parse_frame_rst_stream(http_connection_t * const connection, http_frame_rst_stream_t * const frame)
 {
   uint8_t * buf = connection->buffer + connection->buffer_position;
-  frame->error_code = get_bits32(buf, 0, 0xFFFFFFFF);
+  frame->error_code = get_bits32(buf, 0xFFFFFFFF);
 
   if (LOG_WARN) log_warning("Received reset stream: stream #%d, error code: %d",
                               frame->stream_id, frame->error_code);
@@ -1469,8 +1469,8 @@ static bool http_parse_frame_rst_stream(http_connection_t * const connection, ht
 static bool http_parse_frame_goaway(http_connection_t * const connection, http_frame_goaway_t * const frame)
 {
   uint8_t * buf = connection->buffer + connection->buffer_position;
-  frame->last_stream_id = get_bits32(buf, 0, 0x7FFFFFFF);
-  frame->error_code = get_bits32(buf, 4, 0xFFFFFFFF);
+  frame->last_stream_id = get_bits32(buf, 0x7FFFFFFF);
+  frame->error_code = get_bits32(buf + 4, 0xFFFFFFFF);
   size_t debug_data_length = (frame->length - 8);
 
   uint8_t debug_data[debug_data_length + 1];
@@ -1636,7 +1636,7 @@ static bool http_connection_add_from_buffer(http_connection_t * const connection
 
   // Read the frame header
   // get 14 bits of first 2 bytes
-  uint16_t frame_length = get_bits16(pos, 0, 0x3FFF);
+  uint16_t frame_length = get_bits16(pos, 0x3FFF);
 
   // is there enough in the buffer to read the frame payload?
   if (connection->buffer_position + FRAME_HEADER_SIZE + frame_length <= connection->buffer_length) {
@@ -1644,7 +1644,7 @@ static bool http_connection_add_from_buffer(http_connection_t * const connection
     uint8_t frame_type = pos[2];
     uint8_t frame_flags = pos[3];
     // get 31 bits
-    uint32_t stream_id = get_bits32(pos, 4, 0x7FFFFFFF);
+    uint32_t stream_id = get_bits32(pos + 4, 0x7FFFFFFF);
 
     // is this a valid frame type?
     if (!is_valid_frame_type(frame_type)) {
