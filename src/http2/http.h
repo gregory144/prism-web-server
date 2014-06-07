@@ -357,7 +357,7 @@ typedef struct {
   /**
    * connection state
    */
-  bool received_connection_header;
+  bool received_connection_preface;
   bool received_settings;
   // the next stream id that can be used to start a pushed stream
   size_t current_stream_id;

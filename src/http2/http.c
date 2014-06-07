@@ -23,8 +23,8 @@
 
 #define PING_OPAQUE_DATA_LENGTH 8
 
-const char * HTTP_CONNECTION_HEADER = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
-const size_t HTTP_CONNECTION_HEADER_LENGTH = 24;
+const char * HTTP_CONNECTION_PREFACE = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+const size_t HTTP_CONNECTION_PREFACE_LENGTH = 24;
 
 typedef struct {
   uint16_t length_min;
@@ -314,7 +314,7 @@ http_connection_t * http_connection_init(void * const data, const request_cb req
   connection->writer = writer;
   connection->closer = closer;
 
-  connection->received_connection_header = false;
+  connection->received_connection_preface = false;
   connection->received_settings = false;
   connection->last_stream_id = 0;
   connection->current_stream_id = 2;
@@ -995,12 +995,12 @@ static bool http_frame_flag_get(const http_frame_t * const frame, int mask)
  * Returns true if the first part of data is the http connection
  * header string
  */
-static bool http_connection_recognize_connection_header(http_connection_t * const connection)
+static bool http_connection_recognize_connection_preface(http_connection_t * const connection)
 {
-  if (connection->buffer_length >= HTTP_CONNECTION_HEADER_LENGTH) {
-    connection->buffer_position = HTTP_CONNECTION_HEADER_LENGTH;
-    return memcmp(connection->buffer, HTTP_CONNECTION_HEADER,
-                  HTTP_CONNECTION_HEADER_LENGTH) == 0;
+  if (connection->buffer_length >= HTTP_CONNECTION_PREFACE_LENGTH) {
+    connection->buffer_position = HTTP_CONNECTION_PREFACE_LENGTH;
+    return memcmp(connection->buffer, HTTP_CONNECTION_PREFACE,
+                  HTTP_CONNECTION_PREFACE_LENGTH) == 0;
   }
 
   return false;
@@ -1840,9 +1840,9 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
 
   connection->buffer_position = 0;
 
-  if (!connection->received_connection_header) {
-    if (http_connection_recognize_connection_header(connection)) {
-      connection->received_connection_header = true;
+  if (!connection->received_connection_preface) {
+    if (http_connection_recognize_connection_preface(connection)) {
+      connection->received_connection_preface = true;
 
       if (LOG_TRACE) {
         log_trace("Found HTTP2 connection");
