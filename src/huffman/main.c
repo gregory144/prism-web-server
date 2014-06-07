@@ -91,7 +91,6 @@ int main(int argc, char * argv[])
 
     if (intermediate && free_intermediate) {
       free(intermediate);
-      free_intermediate = false;
       intermediate = NULL;
     }
 

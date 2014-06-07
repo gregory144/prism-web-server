@@ -293,9 +293,8 @@ void server_parse(uv_stream_t * client, uint8_t * buffer, size_t len)
 
 void server_stream_shutdown(uv_stream_t * stream)
 {
-  http_client_data_t * client_data = stream->data;
-
   if (LOG_TRACE) {
+    http_client_data_t * client_data = stream->data;
     log_trace("shutting down... (%ld)", client_data->uv_read_count);
   }
 
@@ -342,7 +341,7 @@ void server_http_write(void * stream, uint8_t * buf, size_t len)
 
   // copy bytes to write to new buffer
   uv_buf_t * write_buf = malloc(sizeof(uv_buf_t));
-  write_buf->base = malloc(sizeof(uint8_t) * len);
+  write_buf->base = malloc(sizeof(char) * len);
   memcpy(write_buf->base, buf, len);
   write_buf->len = len;
   // keep track of the buffer so we can free it later

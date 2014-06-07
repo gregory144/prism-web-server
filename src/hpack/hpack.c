@@ -159,7 +159,12 @@ hpack_context_t * hpack_context_init(const size_t header_table_size)
   ASSERT_OR_RETURN_NULL(context);
 
   context->header_table = malloc(sizeof(hpack_header_table_t));
-  ASSERT_OR_RETURN_NULL(context->header_table);
+
+  if (!context->header_table) {
+    free(context);
+    return NULL;
+  }
+
   context->header_table->max_size = header_table_size;
   context->header_table->current_size = 0;
   context->header_table->entries = circular_buffer_init(header_table_size / ESTIMATED_HEADER_ENTRY_SIZE);
@@ -475,6 +480,9 @@ static bool hpack_decode_literal_header(
 
   if (!hpack_decode_string_literal(context, buf, length, current, &ret)) {
     log_error("Error decoding literal header: unable to decode literal value");
+    if (key_name) {
+      free(key_name);
+    }
     return false;
   }
 

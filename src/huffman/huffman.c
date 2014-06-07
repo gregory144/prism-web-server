@@ -46,7 +46,7 @@ bool huffman_decode(const uint8_t * const input, const size_t input_length_in_oc
 bool huffman_encode(const char * const buf, const size_t len, huffman_result_t * const result)
 {
   size_t max_len = len;
-  uint8_t * encoded = malloc(sizeof(char) * (max_len + 1));
+  uint8_t * encoded = malloc(sizeof(uint8_t) * (max_len + 1));
   ASSERT_OR_RETURN_FALSE(encoded);
 
   size_t encoded_index = 0;
@@ -75,7 +75,7 @@ bool huffman_encode(const char * const buf, const size_t len, huffman_result_t *
         // make sure there is enough room to write the extra byte
         if (encoded_index >= max_len) {
           max_len += max_len;
-          encoded = realloc(encoded, sizeof(char) * (max_len + 1));
+          encoded = realloc(encoded, sizeof(uint8_t) * (max_len + 1));
           ASSERT_OR_RETURN_FALSE(encoded);
         }
 

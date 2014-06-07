@@ -194,6 +194,11 @@ http_request_t * http_request_init_internal(const _http_connection_t connection,
 
   request->params = multimap_init_with_string_keys();
 
+  request->path = NULL;
+  request->query_string = NULL;
+  request->host = NULL;
+  request->method = NULL;
+  request->scheme = NULL;
 
   if (headers) {
 
@@ -203,6 +208,7 @@ http_request_t * http_request_init_internal(const _http_connection_t connection,
 
     if (!method) {
       log_error("Missing :method header");
+      http_request_free(request);
       return NULL;
     }
 
@@ -212,12 +218,14 @@ http_request_t * http_request_init_internal(const _http_connection_t connection,
 
     if (!scheme) {
       log_error("Missing :scheme header");
+      http_request_free(request);
       return NULL;
     }
 
     request->scheme = strdup(scheme);
 
     if (!parse_path(request)) {
+      http_request_free(request);
       return NULL;
     }
 

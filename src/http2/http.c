@@ -303,6 +303,7 @@ http_connection_t * http_connection_init(void * const data, const request_cb req
     const data_cb data_handler, const write_cb writer, const close_cb closer)
 {
   http_connection_t * connection = malloc(sizeof(http_connection_t));
+  ASSERT_OR_RETURN_NULL(connection);
 
   connection->data = data;
   connection->request_handler = request_handler;
@@ -326,19 +327,48 @@ http_connection_t * http_connection_init(void * const data, const request_cb req
   connection->buffer_length = 0;
   connection->buffer_position = 0;
 
-  connection->write_buffer = binary_buffer_init(NULL, 0);
-
   connection->header_table_size = DEFAULT_HEADER_TABLE_SIZE;
   connection->enable_push = DEFAULT_ENABLE_PUSH;
   connection->max_concurrent_streams = DEFAULT_MAX_CONNCURRENT_STREAMS;
   connection->initial_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
   connection->enable_compress_data = DEFAULT_COMPRESS_DATA;
 
-  connection->streams = hash_table_init_with_int_keys(http_stream_free);
-  ASSERT_OR_RETURN_NULL(connection->streams);
+  /**
+   * Set these to NULL, http_connection_free requires the values to be set
+   * to something other than garbage
+   */
+  connection->encoding_context = NULL;
+  connection->decoding_context = NULL;
+  connection->streams = NULL;
+  connection->write_buffer = NULL;
 
   connection->encoding_context = hpack_context_init(DEFAULT_HEADER_TABLE_SIZE);
+
+  if (!connection->encoding_context) {
+    http_connection_free(connection);
+    return NULL;
+  }
+
   connection->decoding_context = hpack_context_init(connection->header_table_size);
+
+  if (!connection->decoding_context) {
+    http_connection_free(connection);
+    return NULL;
+  }
+
+  connection->streams = hash_table_init_with_int_keys(http_stream_free);
+
+  if (!connection->streams) {
+    http_connection_free(connection);
+    return NULL;
+  }
+
+  connection->write_buffer = binary_buffer_init(NULL, 0);
+
+  if (!connection->write_buffer) {
+    http_connection_free(connection);
+    return NULL;
+  }
 
   return connection;
 }
@@ -404,6 +434,7 @@ void http_connection_free(http_connection_t * const connection)
   hpack_context_free(connection->encoding_context);
   hpack_context_free(connection->decoding_context);
   binary_buffer_free(connection->write_buffer);
+
   free(connection);
 }
 
@@ -1072,6 +1103,7 @@ static http_stream_t * http_stream_init(http_connection_t * const connection, co
   if (!stream_id_key) {
     emit_error_and_close(connection, stream_id, HTTP_ERROR_INTERNAL_ERROR,
                          "Unable to initialize stream (stream identifier): %ld", stream_id);
+    free(stream);
     return NULL;
   }
 
@@ -1258,6 +1290,7 @@ static bool http_parse_header_fragments(http_connection_t * const connection, ht
 
   if (!stream->headers) {
     emit_error_and_close(connection, stream->id, HTTP_ERROR_COMPRESSION_ERROR, "Unable to decode headers");
+    free(headers);
     return false;
   }
 
@@ -1498,51 +1531,51 @@ static http_frame_t * http_frame_init(http_connection_t * const connection, cons
 
   switch (type) {
     case FRAME_TYPE_DATA:
-      frame = malloc(sizeof(http_frame_data_t));
+      frame = (http_frame_t *) malloc(sizeof(http_frame_data_t));
       break;
 
     case FRAME_TYPE_HEADERS:
-      frame = malloc(sizeof(http_frame_headers_t));
+      frame = (http_frame_t *) malloc(sizeof(http_frame_headers_t));
       break;
 
     case FRAME_TYPE_PRIORITY:
-      frame = malloc(sizeof(http_frame_priority_t));
+      frame = (http_frame_t *) malloc(sizeof(http_frame_priority_t));
       break;
 
     case FRAME_TYPE_RST_STREAM:
-      frame = malloc(sizeof(http_frame_rst_stream_t));
+      frame = (http_frame_t *) malloc(sizeof(http_frame_rst_stream_t));
       break;
 
     case FRAME_TYPE_SETTINGS:
-      frame = malloc(sizeof(http_frame_settings_t));
+      frame = (http_frame_t *) malloc(sizeof(http_frame_settings_t));
       break;
 
     case FRAME_TYPE_PUSH_PROMISE:
-      frame = malloc(sizeof(http_frame_push_promise_t));
+      frame = (http_frame_t *) malloc(sizeof(http_frame_push_promise_t));
       break;
 
     case FRAME_TYPE_PING:
-      frame = malloc(sizeof(http_frame_ping_t));
+      frame = (http_frame_t *) malloc(sizeof(http_frame_ping_t));
       break;
 
     case FRAME_TYPE_GOAWAY:
-      frame = malloc(sizeof(http_frame_goaway_t));
+      frame = (http_frame_t *) malloc(sizeof(http_frame_goaway_t));
       break;
 
     case FRAME_TYPE_WINDOW_UPDATE:
-      frame = malloc(sizeof(http_frame_window_update_t));
+      frame = (http_frame_t *) malloc(sizeof(http_frame_window_update_t));
       break;
 
     case FRAME_TYPE_CONTINUATION:
-      frame = malloc(sizeof(http_frame_continuation_t));
+      frame = (http_frame_t *) malloc(sizeof(http_frame_continuation_t));
       break;
 
     case FRAME_TYPE_ALTSVC:
-      frame = malloc(sizeof(http_frame_t));
+      frame = (http_frame_t *) malloc(sizeof(http_frame_t));
       break;
 
     case FRAME_TYPE_BLOCKED:
-      frame = malloc(sizeof(http_frame_blocked_t));
+      frame = (http_frame_t *) malloc(sizeof(http_frame_blocked_t));
       break;
 
     default:
