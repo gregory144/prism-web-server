@@ -13,7 +13,9 @@
 #include "hash_table.h"
 
 #define FRAME_HEADER_SIZE 8 // octets
-#define DEFAULT_STREAM_PRIORITY 0x40000000 // 2^30
+#define DEFAULT_STREAM_EXCLUSIVE_FLAG 0
+#define DEFAULT_STREAM_DEPENDENCY 0
+#define DEFAULT_STREAM_WEIGHT 16
 
 #define MAX_FRAME_SIZE 0x3FFF // 16,383
 #define MAX_WINDOW_SIZE 0x7FFFFFFF // 2^31 - 1
@@ -1117,7 +1119,11 @@ static http_stream_t * http_stream_init(http_connection_t * const connection, co
   stream->closing = false;
   stream->header_fragments = NULL;
   stream->headers = NULL;
-  stream->priority = DEFAULT_STREAM_PRIORITY;
+
+  stream->priority_exclusive = DEFAULT_STREAM_EXCLUSIVE_FLAG;
+  stream->priority_dependency = DEFAULT_STREAM_DEPENDENCY;
+  stream->priority_weight = DEFAULT_STREAM_WEIGHT;
+
   stream->outgoing_window_size = connection->initial_window_size;
   stream->incoming_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
 
@@ -1319,9 +1325,18 @@ static bool http_parse_frame_headers(http_connection_t * const connection, const
   }
 
   if (FRAME_FLAG(frame, FLAG_PRIORITY)) {
-    stream->priority = get_bits32(pos + 4, 0x7FFFFFFF);
-    pos += 4;
-    header_block_fragment_size -= 4;
+
+    stream->priority_exclusive = get_bit(pos, 0);
+    stream->priority_dependency = get_bits32(pos, 0x7FFFFFFF);
+    // add 1 to get a value between 1 and 256
+    stream->priority_weight = get_bits8(pos + 4, 0xFF) + 1;
+
+    log_trace("Stream #%d priority: exclusive: %s, dependency: %d, weight: %d",
+        stream->id, stream->priority_exclusive ? "yes" : "no", stream->priority_dependency,
+        stream->priority_weight);
+
+    pos += 5;
+    header_block_fragment_size -= 5;
   }
 
   http_stream_add_header_fragment(stream, pos, header_block_fragment_size);
@@ -1501,6 +1516,25 @@ static bool http_parse_frame_rst_stream(http_connection_t * const connection, ht
   http_stream_t * stream = http_stream_get(connection, frame->stream_id);
 
   http_stream_close(connection, stream, true);
+
+  return true;
+}
+
+static bool http_parse_frame_priority(http_connection_t * const connection, http_frame_priority_t * const frame)
+{
+  uint8_t * buf = connection->buffer + connection->buffer_position;
+
+  http_stream_t * stream = http_stream_get(connection, frame->stream_id);
+
+  if (!stream) {
+    emit_error_and_close(connection, frame->stream_id, HTTP_ERROR_PROTOCOL_ERROR, "Unknown stream id: %d", frame->stream_id);
+    return true;
+  }
+
+  stream->priority_exclusive = get_bit(buf, 0);
+  stream->priority_dependency = get_bits32(buf, 0x7FFFFFFF);
+  // add 1 to get a value between 1 and 256
+  stream->priority_weight = get_bits8(buf+ 4, 0xFF) + 1;
 
   return true;
 }
@@ -1717,10 +1751,10 @@ static bool http_connection_add_from_buffer(http_connection_t * const connection
           success = http_parse_frame_headers(connection, (http_frame_headers_t *) frame);
           break;
 
-          /*
-          case FRAME_TYPE_PRIORITY:
-            parse_frame_priority(connection);
-          */
+        case FRAME_TYPE_PRIORITY:
+          success = http_parse_frame_priority(connection, (http_frame_priority_t *) frame);
+          break;
+
         case FRAME_TYPE_RST_STREAM:
           success = http_parse_frame_rst_stream(connection, (http_frame_rst_stream_t *) frame);
           break;

@@ -74,9 +74,9 @@ enum settings_e {
 #define FLAG_END_STREAM 0x1
 #define FLAG_END_SEGMENT 0x2
 #define FLAG_END_HEADERS 0x4
-#define FLAG_PRIORITY 0x8
-#define FLAG_PAD_LOW 0x10
-#define FLAG_PAD_HIGH 0x20
+#define FLAG_PAD_LOW 0x8
+#define FLAG_PAD_HIGH 0x10
+#define FLAG_PRIORITY 0x20
 
 /**
  * HTTP errors
@@ -329,6 +329,10 @@ typedef struct http_stream_t {
    * opened this
    */
   uint32_t associated_stream_id;
+
+  uint32_t priority_dependency;
+  uint8_t priority_weight;
+  bool priority_exclusive;
 
 } http_stream_t;
 
