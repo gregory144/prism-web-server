@@ -26,6 +26,22 @@
 const char * HTTP_CONNECTION_PREFACE = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 const size_t HTTP_CONNECTION_PREFACE_LENGTH = 24;
 
+char * http_connection_errors[] = {
+  "NO_ERROR",
+  "PROTOCOL_ERROR",
+  "INTERNAL_ERROR",
+  "FLOW_CONTROL_ERROR",
+  "SETTINGS_TIMEOUT",
+  "STREAM_CLOSED",
+  "FRAME_SIZE_ERROR",
+  "REFUSED_STREAM",
+  "CANCEL",
+  "COMPRESSION_ERROR",
+  "CONNECT_ERROR",
+  "ENHANCE_YOUR_CALM",
+  "INADEQUATE_SECURITY"
+};
+
 typedef struct {
   uint16_t length_min;
   uint16_t length_max;
@@ -1551,8 +1567,15 @@ static bool http_parse_frame_goaway(http_connection_t * const connection, http_f
   debug_data[debug_data_length] = '\0';
   frame->debug_data = debug_data;
 
-  if (LOG_TRACE) log_trace("Received goaway, last stream: %d, error code: %d, debug_data: %s",
-                             frame->last_stream_id, frame->error_code, frame->debug_data);
+  if (frame->error_code == HTTP_ERROR_NO_ERROR) {
+    log_trace("Received goaway, last stream: %d, error code: %s (%d), debug_data: %s",
+                               frame->last_stream_id, http_connection_errors[frame->error_code],
+                               frame->error_code, frame->debug_data);
+  } else {
+    log_error("Received goaway, last stream: %d, error code: %s (%d), debug_data: %s",
+                               frame->last_stream_id, http_connection_errors[frame->error_code],
+                               frame->error_code, frame->debug_data);
+  }
 
   frame->debug_data = NULL;
 
