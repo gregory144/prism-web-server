@@ -109,6 +109,7 @@ hash_table_t * hash_table_init_with_capacity(
   ASSERT_OR_RETURN_NULL(table);
 
   table->buckets = calloc(initial_capacity, sizeof(hash_table_entry_t *));
+
   if (!table->buckets) {
     free(table);
     return NULL;

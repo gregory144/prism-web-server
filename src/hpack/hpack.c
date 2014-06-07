@@ -480,9 +480,11 @@ static bool hpack_decode_literal_header(
 
   if (!hpack_decode_string_literal(context, buf, length, current, &ret)) {
     log_error("Error decoding literal header: unable to decode literal value");
+
     if (key_name) {
       free(key_name);
     }
+
     return false;
   }
 

@@ -10,6 +10,7 @@ binary_buffer_t * binary_buffer_init(binary_buffer_t * buffer, size_t capacity)
 {
 
   bool allocated = false;
+
   if (!buffer) {
     buffer = malloc(sizeof(binary_buffer_t));
     ASSERT_OR_RETURN_NULL(buffer);
@@ -17,10 +18,12 @@ binary_buffer_t * binary_buffer_init(binary_buffer_t * buffer, size_t capacity)
   }
 
   buffer->buf = NULL;
+
   if (!binary_buffer_reset(buffer, capacity)) {
     if (allocated) {
       free(buffer);
     }
+
     return NULL;
   }
 

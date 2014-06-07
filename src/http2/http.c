@@ -1333,6 +1333,7 @@ static bool http_parse_frame_headers(http_connection_t * const connection, const
     }
 
     bool success = http_parse_header_fragments(connection, stream);
+
     if (!success) {
       emit_error_and_close(connection, stream->id, HTTP_ERROR_INTERNAL_ERROR, "Unable to process stream");
     }
