@@ -1094,7 +1094,7 @@ static http_stream_t * http_stream_init(http_connection_t * const connection, co
   return stream;
 }
 
-void http_trigger_request(http_connection_t * const connection, http_stream_t * const stream)
+static bool http_trigger_request(http_connection_t * const connection, http_stream_t * const stream)
 {
   if (!connection->request_handler) {
     if (LOG_FATAL) {
@@ -1107,7 +1107,7 @@ void http_trigger_request(http_connection_t * const connection, http_stream_t * 
   http_request_t * request = http_request_init(connection, stream, stream->headers);
 
   if (!request) {
-    abort();
+    return false;
   }
 
   stream->request = request;
@@ -1123,6 +1123,8 @@ void http_trigger_request(http_connection_t * const connection, http_stream_t * 
   }
 
   connection->request_handler(request, response);
+
+  return true;
 }
 
 static bool http_parse_frame_data(http_connection_t * const connection, const http_frame_data_t * const frame)
@@ -1267,7 +1269,7 @@ static bool http_parse_header_fragments(http_connection_t * const connection, ht
 
   // TODO - check that the stream is not closed?
   if (!connection->closing) {
-    http_trigger_request(connection, stream);
+    return http_trigger_request(connection, stream);
   }
 
   return true;
@@ -1297,7 +1299,10 @@ static bool http_parse_frame_headers(http_connection_t * const connection, const
       log_trace("Parsing headers");
     }
 
-    return http_parse_header_fragments(connection, stream);
+    bool success = http_parse_header_fragments(connection, stream);
+    if (!success) {
+      emit_error_and_close(connection, stream->id, HTTP_ERROR_INTERNAL_ERROR, "Unable to process stream");
+    }
   } else {
     // TODO mark stream as waiting for continuation frame
   }
