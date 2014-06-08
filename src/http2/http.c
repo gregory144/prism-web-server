@@ -335,6 +335,7 @@ http_connection_t * http_connection_init(void * const data, const request_cb req
   connection->current_stream_id = 2;
   connection->outgoing_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
   connection->incoming_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
+  connection->can_send_blocked_frame = true;
   connection->closing = false;
 
   connection->outgoing_concurrent_streams = 0;
@@ -654,7 +655,7 @@ static bool http_emit_blocked(const http_connection_t * const connection, const 
 
   uint8_t flags = 0; // no flags
 
-  http_frame_header_write(buf, 0, FRAME_TYPE_BLOCKED, flags, stream->id);
+  http_frame_header_write(buf, 0, FRAME_TYPE_BLOCKED, flags, stream ? stream->id : 0);
 
   log_debug("Writing blocked frame");
 
@@ -814,8 +815,9 @@ static bool http_stream_trigger_send_data(http_connection_t * const connection, 
     http_queued_frame_t * frame = stream->queued_data_frames;
     size_t frame_payload_size = frame->buf_length;
 
-    if ((long)frame_payload_size <= connection->outgoing_window_size &&
-        (long)frame_payload_size <= stream->outgoing_window_size) {
+    bool connection_window_open = (long)frame_payload_size <= connection->outgoing_window_size;
+    bool stream_window_open = (long)frame_payload_size <= stream->outgoing_window_size;
+    if (connection_window_open && stream_window_open) {
       bool success = http_emit_data_frame(connection, stream, frame);
       if (success) {
         connection->outgoing_window_size -= frame_payload_size;
@@ -835,10 +837,28 @@ static bool http_stream_trigger_send_data(http_connection_t * const connection, 
       }
 
     } else {
-      log_warning("Wanted to send %ld octets, but connection window is %ld and stream window is %ld", frame_payload_size,
-                  connection->outgoing_window_size, stream->outgoing_window_size);
 
-      return http_emit_blocked(connection, stream);
+      bool success = true;
+
+      if (connection->can_send_blocked_frame && !connection_window_open) {
+        connection->can_send_blocked_frame = false;
+
+        log_warning("Wanted to send %ld octets, but connection window is %ld and stream window is %ld", frame_payload_size,
+                    connection->outgoing_window_size, stream->outgoing_window_size);
+
+        success = http_emit_blocked(connection, NULL);
+      }
+
+      if (stream->can_send_blocked_frame && !stream_window_open) {
+        stream->can_send_blocked_frame = false;
+
+        log_warning("Wanted to send %ld octets, but connection window is %ld and stream window is %ld", frame_payload_size,
+                    connection->outgoing_window_size, stream->outgoing_window_size);
+
+        success = success && http_emit_blocked(connection, stream);
+      }
+
+      return success;
     }
   }
 
@@ -1194,6 +1214,8 @@ static http_stream_t * http_stream_init(http_connection_t * const connection, co
   stream->incoming_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
 
   stream->associated_stream_id = 0;
+
+  stream->can_send_blocked_frame = true;
 
   return stream;
 }
@@ -1639,6 +1661,10 @@ static bool http_increment_connection_window_size(http_connection_t * const conn
 
   log_trace("Connection window size incremented to: %ld", connection->outgoing_window_size);
 
+  if (connection->outgoing_window_size > 0) {
+    connection->can_send_blocked_frame = true;
+  }
+
   return http_trigger_send_data(connection, NULL);
 }
 
@@ -1646,26 +1672,29 @@ static bool http_increment_stream_window_size(http_connection_t * const connecti
     const uint32_t increment)
 {
 
+  if (http_stream_closed(connection, stream_id)) {
+    log_trace("Can't update stream #%ld's window size, already closed", stream_id);
+    // the stream may have been recently closed, ignore
+    return true;
+  }
+
   http_stream_t * stream = http_stream_get(connection, stream_id);
 
-  if (stream) {
-
-    stream->outgoing_window_size += increment;
-
-    log_trace("Stream window size incremented to: %ld", stream->outgoing_window_size);
-
-    return http_trigger_send_data(connection, stream);
-
-  } else {
-
-    if (!http_stream_closed(connection, stream_id)) {
-      emit_error_and_close(connection, stream_id, HTTP_ERROR_PROTOCOL_ERROR,
-                           "Could not find stream #%d to update it's window size", stream_id);
-    }
-
-    return true;
-
+  if (!stream) {
+    emit_error_and_close(connection, stream_id, HTTP_ERROR_PROTOCOL_ERROR,
+                         "Could not find stream #%d to update it's window size", stream_id);
+    return false;
   }
+
+  stream->outgoing_window_size += increment;
+
+  log_trace("Stream window size incremented to: %ld", stream->outgoing_window_size);
+
+  if (stream->outgoing_window_size > 0) {
+    stream->can_send_blocked_frame = true;
+  }
+
+  return http_trigger_send_data(connection, stream);
 
 }
 

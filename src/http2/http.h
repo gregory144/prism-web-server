@@ -322,6 +322,8 @@ typedef struct http_stream_t {
   long outgoing_window_size;
   long incoming_window_size;
 
+  bool can_send_blocked_frame;
+
   http_header_fragment_t * header_fragments;
 
   http_queued_frame_t * queued_data_frames;
@@ -375,6 +377,7 @@ typedef struct {
   long incoming_window_size;
   // is the connection waiting to be gracefully closed?
   bool closing;
+  bool can_send_blocked_frame;
 
   // the number of streams that are currently opened
   // that the server has initiated
