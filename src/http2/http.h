@@ -414,9 +414,9 @@ void http_connection_free(http_connection_t * const connection);
 
 void http_connection_read(http_connection_t * const connection, uint8_t * const buffer, const size_t len);
 
-void http_response_write(http_response_t * const response, uint8_t * data, const size_t data_length, bool last);
+bool http_response_write(http_response_t * const response, uint8_t * data, const size_t data_length, bool last);
 
-void http_response_write_data(http_response_t * const response, uint8_t * data, const size_t data_length, bool last);
+bool http_response_write_data(http_response_t * const response, uint8_t * data, const size_t data_length, bool last);
 
 http_request_t * http_push_init(http_request_t * const request);
 

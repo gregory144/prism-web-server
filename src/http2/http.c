@@ -289,9 +289,6 @@ frame_parser_definition_t frame_parser_definitions[] = {
 
 };
 
-static void emit_error_and_close(http_connection_t * const connection, uint32_t stream_id,
-                                 enum h2_error_code_e error_code, char * format, ...);
-
 static void http_stream_free(void * value)
 {
   http_stream_t * stream = value;
@@ -632,14 +629,17 @@ static void emit_error_and_close(http_connection_t * const connection, uint32_t 
   if (stream_id > 0) {
     http_emit_rst_stream(connection, stream_id, error_code);
   } else {
-    http_emit_goaway(connection, error_code, format ? buf : NULL);
+    if (!http_emit_goaway(connection, error_code, format ? buf : NULL)) {
+      return false;
+    }
   }
 
   // TODO gracefully shutdown connection
   http_connection_close(connection);
+  return true;
 }
 
-static void http_emit_headers(http_connection_t * const connection, const http_stream_t * const stream,
+static bool http_emit_headers(http_connection_t * const connection, const http_stream_t * const stream,
                               const multimap_t * const headers)
 {
   // TODO split large headers into multiple frames
@@ -692,6 +692,8 @@ static void http_emit_headers(http_connection_t * const connection, const http_s
   }
 
   http_connection_write(connection, buf, buf_length);
+
+  return true;
 }
 
 static void http_emit_push_promise(http_connection_t * const connection, const http_stream_t * const stream,
@@ -877,10 +879,14 @@ static void http_trigger_send_data(http_connection_t * const connection, http_st
 
 }
 
-static void http_queue_data_frame(http_stream_t * const stream, uint8_t * buf, const size_t buf_length,
+static http_queued_frame_t * http_queue_data_frame(http_stream_t * const stream, uint8_t * buf, const size_t buf_length,
                                   const bool end_stream, void * const buf_begin)
 {
   http_queued_frame_t * new_frame = malloc(sizeof(http_queued_frame_t));
+  if (!new_frame) {
+    log_error("Unable to allocate space for new data frame");
+    return NULL;
+  }
   new_frame->buf = buf;
   new_frame->buf_length = buf_length;
   new_frame->end_stream = end_stream;
@@ -898,9 +904,10 @@ static void http_queue_data_frame(http_stream_t * const stream, uint8_t * buf, c
 
     curr->next = new_frame;
   }
+  return new_frame;
 }
 
-static void http_emit_data(http_connection_t * const connection, http_stream_t * const stream, uint8_t * text,
+static bool http_emit_data(http_connection_t * const connection, http_stream_t * const stream, uint8_t * text,
                            const size_t text_length, bool last)
 {
   // TODO support padding?
@@ -922,15 +929,20 @@ static void http_emit_data(http_connection_t * const connection, http_stream_t *
         last_per_call = true;
       }
 
-      http_queue_data_frame(stream, per_frame_text, per_frame_length, last && last_per_call, last_per_call ? text : NULL);
+      if (!http_queue_data_frame(stream, per_frame_text, per_frame_length, last && last_per_call, last_per_call ? text : NULL)) {
+        return false;
+      }
       remaining_length -= per_frame_length;
       per_frame_text += per_frame_length;
     }
   } else {
-    http_queue_data_frame(stream, text, text_length, last, text);
+    if (!http_queue_data_frame(stream, text, text_length, last, text)) {
+      return false;
+    }
   }
 
   http_trigger_send_data(connection, stream);
+  return true;
 }
 
 static void http_emit_settings_ack(const http_connection_t * const connection)
@@ -2064,7 +2076,7 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
 
 }
 
-void http_response_write(http_response_t * const response, uint8_t * data, const size_t data_length, bool last)
+bool http_response_write(http_response_t * const response, uint8_t * data, const size_t data_length, bool last)
 {
   char status_buf[10];
   snprintf(status_buf, 10, "%d", response->status);
@@ -2075,10 +2087,16 @@ void http_response_write(http_response_t * const response, uint8_t * data, const
   http_stream_t * stream = (http_stream_t *)response->request->stream;
 
   if (stream->state != STREAM_STATE_CLOSED) {
-    http_emit_headers(connection, stream, response->headers);
+    if (!http_emit_headers(connection, stream, response->headers)) {
+      emit_error_and_close(connection, stream->id, HTTP_ERROR_INTERNAL_ERROR, "Unable to emit headers");
+      return false;
+    }
 
     if (data || last) {
-      http_emit_data(connection, stream, data, data_length, last);
+      if (!http_emit_data(connection, stream, data, data_length, last)) {
+        emit_error_and_close(connection, stream->id, HTTP_ERROR_INTERNAL_ERROR, "Unable to emit data");
+        return false;
+      }
     }
   }
 
@@ -2087,16 +2105,20 @@ void http_response_write(http_response_t * const response, uint8_t * data, const
 
     http_stream_mark_closing(connection, stream);
   }
+  return true;
 }
 
-void http_response_write_data(http_response_t * const response, uint8_t * data, const size_t data_length, bool last)
+bool http_response_write_data(http_response_t * const response, uint8_t * data, const size_t data_length, bool last)
 {
 
   http_connection_t * connection = (http_connection_t *)response->request->connection;
   http_stream_t * stream = (http_stream_t *)response->request->stream;
 
   if (data || last) {
-    http_emit_data(connection, stream, data, data_length, last);
+    if (!http_emit_data(connection, stream, data, data_length, last)) {
+      emit_error_and_close(connection, stream->id, HTTP_ERROR_INTERNAL_ERROR, "Unable to emit data");
+      return false;
+    }
   }
 
   if (last) {
