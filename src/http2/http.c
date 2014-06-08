@@ -1014,10 +1014,12 @@ static void http_emit_settings_default(const http_connection_t * const connectio
   http_connection_write(connection, buf, buf_length);
 }
 
-static void http_emit_ping_ack(const http_connection_t * const connection, uint8_t * opaque_data)
+static bool http_emit_ping_ack(const http_connection_t * const connection, uint8_t * opaque_data)
 {
-  size_t buf_length = FRAME_HEADER_SIZE;
+  size_t payload_length = PING_OPAQUE_DATA_LENGTH;
+  size_t buf_length = FRAME_HEADER_SIZE + payload_length;
   uint8_t buf[buf_length];
+
   uint8_t flags = 0;
   bool ack = true;
 
@@ -1025,12 +1027,13 @@ static void http_emit_ping_ack(const http_connection_t * const connection, uint8
     flags |= FLAG_ACK;
   }
 
-  http_frame_header_write(buf, PING_OPAQUE_DATA_LENGTH, FRAME_TYPE_PING, flags, 0);
+  http_frame_header_write(buf, payload_length, FRAME_TYPE_PING, flags, 0);
 
   log_debug("Writing ping ack frame");
 
-  http_connection_write(connection, buf, buf_length);
-  http_connection_write(connection, opaque_data, PING_OPAQUE_DATA_LENGTH);
+  memcpy(buf + FRAME_HEADER_SIZE, opaque_data, payload_length);
+
+  return http_connection_write(connection, buf, buf_length);
 }
 
 static void http_emit_window_update(const http_connection_t * const connection, const uint32_t stream_id,
@@ -1598,9 +1601,8 @@ static bool http_parse_frame_ping(http_connection_t * const connection, const ht
   UNUSED(frame);
 
   uint8_t * opaque_data = connection->buffer + connection->buffer_position;
-  http_emit_ping_ack(connection, opaque_data);
+  return http_emit_ping_ack(connection, opaque_data);
 
-  return true;
 }
 
 static bool http_parse_frame_blocked(http_connection_t * const connection, const http_frame_blocked_t * const frame)
