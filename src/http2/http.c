@@ -716,7 +716,7 @@ static bool http_emit_headers(http_connection_t * const connection, const http_s
   return true;
 }
 
-static void http_emit_push_promise(http_connection_t * const connection, const http_stream_t * const stream,
+static bool http_emit_push_promise(http_connection_t * const connection, const http_stream_t * const stream,
                                    const multimap_t * const headers, const uint32_t associated_stream_id)
 {
 
@@ -731,7 +731,7 @@ static void http_emit_push_promise(http_connection_t * const connection, const h
       // don't send stream ID because we want to generate a goaway - the
       // encoding context may have been corrupted
       emit_error_and_close(connection, 0, HTTP_ERROR_INTERNAL_ERROR, "Error encoding headers");
-      return;
+      return false;
     }
 
     hpack_buf = encoded.buf;
@@ -778,7 +778,7 @@ static void http_emit_push_promise(http_connection_t * const connection, const h
   log_debug("Writing push promise frame: associated stream %d, new stream %d, %ld octets", stream->id,
             associated_stream_id, buf_length);
 
-  http_connection_write(connection, buf, buf_length);
+  return http_connection_write(connection, buf, buf_length);
 }
 
 static bool http_emit_data_frame(const http_connection_t * const connection, const http_stream_t * const stream,
@@ -2146,7 +2146,7 @@ http_request_t * http_push_init(http_request_t * const original_request)
 
 }
 
-void http_push_promise(http_request_t * const request)
+bool http_push_promise(http_request_t * const request)
 {
 
   http_connection_t * connection = (http_connection_t *) request->connection;

@@ -420,7 +420,7 @@ bool http_response_write_data(http_response_t * const response, uint8_t * data, 
 
 http_request_t * http_push_init(http_request_t * const request);
 
-void http_push_promise(http_request_t * const request);
+bool http_push_promise(http_request_t * const request);
 
 http_response_t * http_push_response_get(http_request_t * const request);
 
