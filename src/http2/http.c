@@ -1411,15 +1411,19 @@ static bool http_parse_frame_data(http_connection_t * const connection, const ht
   return true;
 }
 
-static void http_stream_add_header_fragment(http_stream_t * const stream, const uint8_t * const buffer,
+static bool http_stream_add_header_fragment(http_stream_t * const stream, const uint8_t * const buffer,
     const size_t length)
 {
   http_header_fragment_t * fragment = malloc(sizeof(http_header_fragment_t));
-  fragment->buffer = malloc(length);
+  if (!fragment) {
+    log_error("Unable to allocate space for header fragment");
+    return false;
+  }
 
+  fragment->buffer = malloc(length);
   if (!fragment->buffer) {
-    // TODO make this return false/null
-    abort();
+    log_error("Unable to allocate space for header fragment");
+    return false;
   }
 
   memcpy(fragment->buffer, buffer, length);
@@ -1435,6 +1439,8 @@ static void http_stream_add_header_fragment(http_stream_t * const stream, const 
   } else {
     current->next = fragment;
   }
+
+  return true;
 }
 
 static bool http_parse_header_fragments(http_connection_t * const connection, http_stream_t * const stream)
@@ -1520,7 +1526,9 @@ static bool http_parse_frame_headers(http_connection_t * const connection, const
     header_block_fragment_size -= 5;
   }
 
-  http_stream_add_header_fragment(stream, pos, header_block_fragment_size);
+  if (!http_stream_add_header_fragment(stream, pos, header_block_fragment_size)) {
+    return false;
+  }
 
   if (FRAME_FLAG(frame, FLAG_END_HEADERS)) {
     // parse the headers
@@ -1544,7 +1552,9 @@ static bool http_parse_frame_continuation(http_connection_t * const connection,
   uint8_t * pos = connection->buffer + connection->buffer_position;
   size_t header_block_fragment_size = frame->length;
   http_stream_t * stream = http_stream_get(connection, frame->stream_id);
-  http_stream_add_header_fragment(stream, pos, header_block_fragment_size);
+  if (!http_stream_add_header_fragment(stream, pos, header_block_fragment_size)) {
+    return false;
+  }
 
   if (FRAME_FLAG(frame, FLAG_END_HEADERS)) {
     // TODO unmark stream as waiting for continuation frame
