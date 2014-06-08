@@ -572,9 +572,7 @@ static void http_emit_goaway(const http_connection_t * const connection, enum h2
     memcpy(buf + pos, debug, debug_length);
   }
 
-  if (LOG_DEBUG) {
-    log_debug("Writing goaway frame");
-  }
+  log_debug("Writing goaway frame");
 
   http_connection_write(connection, buf, buf_length);
 }
@@ -601,9 +599,7 @@ static void http_emit_rst_stream(const http_connection_t * const connection, uin
   buf[pos++] = (error_code >> 8) & 0xFF;
   buf[pos++] = (error_code) & 0xFF;
 
-  if (LOG_DEBUG) {
-    log_debug("Writing reset stream frame");
-  }
+  log_debug("Writing reset stream frame");
 
   http_connection_write(connection, buf, buf_length);
 }
@@ -629,14 +625,27 @@ static void emit_error_and_close(http_connection_t * const connection, uint32_t 
   if (stream_id > 0) {
     http_emit_rst_stream(connection, stream_id, error_code);
   } else {
-    if (!http_emit_goaway(connection, error_code, format ? buf : NULL)) {
-      return false;
-    }
+    http_emit_goaway(connection, error_code, format ? buf : NULL);
   }
 
   // TODO gracefully shutdown connection
   http_connection_close(connection);
-  return true;
+}
+
+static void http_emit_blocked(const http_connection_t * const connection, const http_stream_t * const stream)
+{
+
+  size_t buf_length = FRAME_HEADER_SIZE;
+
+  uint8_t buf[buf_length];
+
+  uint8_t flags = 0; // no flags
+
+  http_frame_header_write(buf, 0, FRAME_TYPE_BLOCKED, flags, stream->id);
+
+  log_debug("Writing blocked frame");
+
+  http_connection_write(connection, buf, buf_length);
 }
 
 static bool http_emit_headers(http_connection_t * const connection, const http_stream_t * const stream,
@@ -687,9 +696,7 @@ static bool http_emit_headers(http_connection_t * const connection, const http_s
     free(hpack_buf);
   }
 
-  if (LOG_DEBUG) {
-    log_debug("Writing headers frame: stream %d, %ld octets", stream->id, buf_length);
-  }
+  log_debug("Writing headers frame: stream %d, %ld octets", stream->id, buf_length);
 
   http_connection_write(connection, buf, buf_length);
 
@@ -755,10 +762,8 @@ static void http_emit_push_promise(http_connection_t * const connection, const h
     free(hpack_buf);
   }
 
-  if (LOG_DEBUG) {
-    log_debug("Writing push promise frame: associated stream %d, new stream %d, %ld octets", stream->id,
-              associated_stream_id, buf_length);
-  }
+  log_debug("Writing push promise frame: associated stream %d, new stream %d, %ld octets", stream->id,
+            associated_stream_id, buf_length);
 
   http_connection_write(connection, buf, buf_length);
 }
@@ -780,9 +785,7 @@ static void http_emit_data_frame(const http_connection_t * const connection, con
   http_frame_header_write(header_buf, frame->buf_length, FRAME_TYPE_DATA, flags, stream->id);
   http_connection_write(connection, header_buf, header_length);
 
-  if (LOG_DEBUG) {
-    log_debug("Writing data frame: stream %d, %ld octets", stream->id, frame->buf_length);
-  }
+  log_debug("Writing data frame: stream %d, %ld octets", stream->id, frame->buf_length);
 
   http_connection_write(connection, frame->buf, frame->buf_length);
 }
@@ -812,20 +815,18 @@ static void http_stream_trigger_send_data(http_connection_t * const connection, 
       free(frame);
 
     } else {
-      if (LOG_DEBUG) {
-        log_debug("Wanted to send %ld octets, but connection window is %ld and stream window is %ld", frame_payload_size,
-                  connection->outgoing_window_size, stream->outgoing_window_size);
-      }
+      log_warning("Wanted to send %ld octets, but connection window is %ld and stream window is %ld", frame_payload_size,
+                connection->outgoing_window_size, stream->outgoing_window_size);
+
+      http_emit_blocked(connection, stream);
 
       // wait until the window size has been increased
       break;
     }
   }
 
-  if (LOG_TRACE) {
-    log_trace("Connection window size: %ld, stream window: %ld", connection->outgoing_window_size,
-              stream->outgoing_window_size);
-  }
+  log_trace("Connection window size: %ld, stream window: %ld", connection->outgoing_window_size,
+            stream->outgoing_window_size);
 }
 
 static void http_trigger_send_data(http_connection_t * const connection, http_stream_t * stream)
@@ -835,10 +836,8 @@ static void http_trigger_send_data(http_connection_t * const connection, http_st
 
     http_stream_trigger_send_data(connection, stream);
 
-    if (LOG_TRACE) {
-      log_trace("Connection window size: %ld, stream window: %ld", connection->outgoing_window_size,
-                stream->outgoing_window_size);
-    }
+    log_trace("Connection window size: %ld, stream window: %ld", connection->outgoing_window_size,
+              stream->outgoing_window_size);
 
   } else {
 
@@ -872,9 +871,7 @@ static void http_trigger_send_data(http_connection_t * const connection, http_st
       prev = NULL;
     }
 
-    if (LOG_TRACE) {
-      log_trace("Connection window size: %ld", connection->outgoing_window_size);
-    }
+    log_trace("Connection window size: %ld", connection->outgoing_window_size);
   }
 
 }
@@ -958,9 +955,7 @@ static void http_emit_settings_ack(const http_connection_t * const connection)
 
   http_frame_header_write(buf, 0, FRAME_TYPE_SETTINGS, flags, 0);
 
-  if (LOG_DEBUG) {
-    log_debug("Writing settings ack frame");
-  }
+  log_debug("Writing settings ack frame");
 
   http_connection_write(connection, buf, buf_length);
 }
@@ -975,9 +970,7 @@ static void http_emit_settings_default(const http_connection_t * const connectio
   http_frame_header_write(buf, single_setting_length, FRAME_TYPE_SETTINGS, flags, 0);
   size_t pos = FRAME_HEADER_SIZE;
 
-  if (LOG_DEBUG) {
-    log_debug("Writing settings frame");
-  }
+  log_debug("Writing settings frame");
 
   // emit SETTINGS_COMPRESS_DATA identifier
   buf[pos++] = SETTINGS_COMPRESS_DATA;
@@ -1005,9 +998,7 @@ static void http_emit_ping_ack(const http_connection_t * const connection, uint8
 
   http_frame_header_write(buf, PING_OPAQUE_DATA_LENGTH, FRAME_TYPE_PING, flags, 0);
 
-  if (LOG_DEBUG) {
-    log_debug("Writing ping ack frame");
-  }
+  log_debug("Writing ping ack frame");
 
   http_connection_write(connection, buf, buf_length);
   http_connection_write(connection, opaque_data, PING_OPAQUE_DATA_LENGTH);
@@ -1033,9 +1024,7 @@ static void http_emit_window_update(const http_connection_t * const connection, 
   buf[pos++] = (increment >> 8) & 0xFF;
   buf[pos++] = (increment) & 0xFF;
 
-  if (LOG_DEBUG) {
-    log_debug("Writing window update frame");
-  }
+  log_debug("Writing window update frame");
 
   http_connection_write(connection, buf, buf_length);
 }
@@ -1081,49 +1070,37 @@ static void http_adjust_initial_window_size(http_connection_t * const connection
 
 static bool http_setting_set(http_connection_t * const connection, const enum settings_e id, const uint32_t value)
 {
-  if (LOG_TRACE) {
-    log_trace("Settings: %d: %d", id, value);
-  }
+  log_trace("Settings: %d: %d", id, value);
 
   switch (id) {
     case SETTINGS_HEADER_TABLE_SIZE:
-      if (LOG_TRACE) {
-        log_trace("Settings: Got table size: %d", value);
-      }
+      log_trace("Settings: Got table size: %d", value);
 
       connection->header_table_size = value;
       hpack_header_table_adjust_size(connection->decoding_context, value);
       break;
 
     case SETTINGS_ENABLE_PUSH:
-      if (LOG_TRACE) {
-        log_trace("Settings: Enable push? %s", value ? "yes" : "no");
-      }
+      log_trace("Settings: Enable push? %s", value ? "yes" : "no");
 
       connection->enable_push = value;
       break;
 
     case SETTINGS_MAX_CONCURRENT_STREAMS:
-      if (LOG_TRACE) {
-        log_trace("Settings: Max concurrent streams: %d", value);
-      }
+      log_trace("Settings: Max concurrent streams: %d", value);
 
       connection->max_concurrent_streams = value;
       break;
 
     case SETTINGS_INITIAL_WINDOW_SIZE:
-      if (LOG_TRACE) {
-        log_trace("Settings: Initial window size: %d", value);
-      }
+      log_trace("Settings: Initial window size: %d", value);
 
       http_adjust_initial_window_size(connection, value - connection->initial_window_size);
       connection->initial_window_size = value;
       break;
 
     case SETTINGS_COMPRESS_DATA:
-      if (LOG_TRACE) {
-        log_trace("Settings: Enable compressed data? %s", value ? "yes" : "no");
-      }
+      log_trace("Settings: Enable compressed data? %s", value ? "yes" : "no");
 
       connection->enable_compress_data = value;
       break;
@@ -1192,9 +1169,7 @@ static http_stream_t * http_stream_init(http_connection_t * const connection, co
 static bool http_trigger_request(http_connection_t * const connection, http_stream_t * const stream)
 {
   if (!connection->request_handler) {
-    if (LOG_FATAL) {
-      log_fatal("No request handler set up");
-    }
+    log_fatal("No request handler set up");
 
     abort();
   }
@@ -1321,9 +1296,7 @@ static uint8_t * gzip_inflate_data(uint8_t * in, size_t in_length, size_t * out_
 static bool http_parse_frame_data(http_connection_t * const connection, const http_frame_data_t * const frame)
 {
   if (!connection->data_handler) {
-    if (LOG_FATAL) {
-      log_fatal("No data handler set up");
-    }
+    log_fatal("No data handler set up");
 
     abort();
   }
@@ -1430,9 +1403,7 @@ static bool http_parse_header_fragments(http_connection_t * const connection, ht
   http_header_fragment_t * current = stream->header_fragments;
 
   for (; current; current = current->next) {
-    if (LOG_TRACE) {
-      log_trace("Counting header fragment lengths: %ld", current->length);
-    }
+    log_trace("Counting header fragment lengths: %ld", current->length);
 
     headers_length += current->length;
   }
@@ -1448,9 +1419,7 @@ static bool http_parse_header_fragments(http_connection_t * const connection, ht
   current = stream->header_fragments;
 
   while (current) {
-    if (LOG_TRACE) {
-      log_trace("Appending header fragment: %s (%ld)", current->buffer, current->length);
-    }
+    log_trace("Appending header fragment: %s (%ld)", current->buffer, current->length);
 
     memcpy(header_appender, current->buffer, current->length);
     header_appender += current->length;
@@ -1462,9 +1431,7 @@ static bool http_parse_header_fragments(http_connection_t * const connection, ht
 
   *header_appender = '\0';
 
-  if (LOG_TRACE) {
-    log_trace("Got headers: %s (%ld), decoding", headers, headers_length);
-  }
+  log_trace("Got headers: %s (%ld), decoding", headers, headers_length);
 
   stream->headers = hpack_decode(connection->decoding_context, headers, headers_length);
 
@@ -1517,9 +1484,7 @@ static bool http_parse_frame_headers(http_connection_t * const connection, const
 
   if (FRAME_FLAG(frame, FLAG_END_HEADERS)) {
     // parse the headers
-    if (LOG_TRACE) {
-      log_trace("Parsing headers");
-    }
+    log_trace("Parsing headers");
 
     bool success = http_parse_header_fragments(connection, stream);
 
@@ -1544,9 +1509,7 @@ static bool http_parse_frame_continuation(http_connection_t * const connection,
   if (FRAME_FLAG(frame, FLAG_END_HEADERS)) {
     // TODO unmark stream as waiting for continuation frame
     // parse the headers
-    if (LOG_TRACE) {
-      log_trace("Parsing headers + continuations");
-    }
+    log_trace("Parsing headers + continuations");
 
     return http_parse_header_fragments(connection, stream);
   }
@@ -1564,9 +1527,7 @@ static bool http_parse_frame_settings(http_connection_t * const connection, cons
                            frame->length);
     }
 
-    if (LOG_TRACE) {
-      log_trace("Received settings ACK");
-    }
+    log_trace("Received settings ACK");
 
     // Mark the settings frame we sent as acknowledged.
     // We currently don't send any settings that require
@@ -1577,9 +1538,7 @@ static bool http_parse_frame_settings(http_connection_t * const connection, cons
     size_t setting_size = 5;
     size_t num_settings = frame->length / setting_size;
 
-    if (LOG_TRACE) {
-      log_trace("Settings: Found #%ld settings", num_settings);
-    }
+    log_trace("Settings: Found #%ld settings", num_settings);
 
     size_t i;
 
@@ -1595,10 +1554,8 @@ static bool http_parse_frame_settings(http_connection_t * const connection, cons
 
     connection->received_settings = true;
 
-    if (LOG_TRACE) {
-      log_trace("Settings: %ld, %d, %ld, %ld", connection->header_table_size, connection->enable_push,
-                connection->max_concurrent_streams, connection->initial_window_size);
-    }
+    log_trace("Settings: %ld, %d, %ld, %ld", connection->header_table_size, connection->enable_push,
+              connection->max_concurrent_streams, connection->initial_window_size);
 
     http_emit_settings_ack(connection);
   }
@@ -1620,7 +1577,7 @@ static bool http_parse_frame_blocked(http_connection_t * const connection, const
 {
   UNUSED(connection);
 
-  log_debug("Received BLOCKED frame: stream #%d", frame->stream_id);
+  log_warning("Received BLOCKED frame: stream #%d", frame->stream_id);
 
   return true;
 }
@@ -1629,9 +1586,7 @@ static bool http_increment_connection_window_size(http_connection_t * const conn
 {
   connection->outgoing_window_size += increment;
 
-  if (LOG_TRACE) {
-    log_trace("Connection window size incremented to: %ld", connection->outgoing_window_size);
-  }
+  log_trace("Connection window size incremented to: %ld", connection->outgoing_window_size);
 
   http_trigger_send_data(connection, NULL);
 
@@ -1646,9 +1601,7 @@ static bool http_increment_stream_window_size(http_connection_t * const connecti
   if (stream) {
     stream->outgoing_window_size += increment;
 
-    if (LOG_TRACE) {
-      log_trace("Stream window size incremented to: %ld", stream->outgoing_window_size);
-    }
+    log_trace("Stream window size incremented to: %ld", stream->outgoing_window_size);
 
     http_trigger_send_data(connection, stream);
   } else {
@@ -1675,7 +1628,7 @@ static bool http_parse_frame_window_update(http_connection_t * const connection,
     success = http_increment_connection_window_size(connection, frame->increment);
   }
 
-  if (LOG_TRACE) log_trace("Received window update, stream: %d, increment: %ld",
+  log_trace("Received window update, stream: %d, increment: %ld",
                              frame->stream_id, frame->increment);
 
   return success;
@@ -1686,8 +1639,8 @@ static bool http_parse_frame_rst_stream(http_connection_t * const connection, ht
   uint8_t * buf = connection->buffer + connection->buffer_position;
   frame->error_code = get_bits32(buf, 0xFFFFFFFF);
 
-  if (LOG_WARN) log_warning("Received reset stream: stream #%d, error code: %d",
-                              frame->stream_id, frame->error_code);
+  log_warning("Received reset stream: stream #%d, error code: %d",
+              frame->stream_id, frame->error_code);
 
   http_stream_t * stream = http_stream_get(connection, frame->stream_id);
 
@@ -1867,14 +1820,10 @@ static bool is_valid_frame(http_connection_t * const connection, http_frame_t * 
  */
 static bool http_connection_add_from_buffer(http_connection_t * const connection)
 {
-  if (LOG_TRACE) {
-    log_trace("Reading %ld bytes", connection->buffer_length);
-  }
+  log_trace("Reading %ld bytes", connection->buffer_length);
 
   if (connection->buffer_position == connection->buffer_length) {
-    if (LOG_TRACE) {
-      log_trace("Finished with current buffer");
-    }
+    log_trace("Finished with current buffer");
 
     return false;
   }
@@ -1882,9 +1831,7 @@ static bool http_connection_add_from_buffer(http_connection_t * const connection
   // is there enough in the buffer to read a frame header?
   if (connection->buffer_position + FRAME_HEADER_SIZE > connection->buffer_length) {
     // TODO off-by-one?
-    if (LOG_TRACE) {
-      log_trace("Not enough in buffer to read frame header");
-    }
+    log_trace("Not enough in buffer to read frame header");
 
     return false;
   }
@@ -1990,9 +1937,7 @@ static bool http_connection_add_from_buffer(http_connection_t * const connection
     free(frame);
     return success;
   } else {
-    if (LOG_TRACE) {
-      log_trace("Not enough in buffer to read %ld byte frame payload", frame_length);
-    }
+    log_trace("Not enough in buffer to read %ld byte frame payload", frame_length);
   }
 
   return false;
@@ -2004,9 +1949,7 @@ static bool http_connection_add_from_buffer(http_connection_t * const connection
  */
 void http_connection_read(http_connection_t * const connection, uint8_t * const buffer, const size_t len)
 {
-  if (LOG_TRACE) {
-    log_trace("Reading from buffer: %ld", len);
-  }
+  log_trace("Reading from buffer: %ld", len);
 
   size_t unprocessed_bytes = connection->buffer_length;
 
@@ -2033,15 +1976,11 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
     if (http_connection_recognize_connection_preface(connection)) {
       connection->received_connection_preface = true;
 
-      if (LOG_TRACE) {
-        log_trace("Found HTTP2 connection");
-      }
+      log_trace("Found HTTP2 connection");
 
       http_emit_settings_default(connection);
     } else {
-      if (LOG_WARN) {
-        log_warning("Found non-HTTP2 connection, closing connection");
-      }
+      log_warning("Found non-HTTP2 connection, closing connection");
 
       http_connection_close(connection);
       return;
@@ -2126,6 +2065,8 @@ bool http_response_write_data(http_response_t * const response, uint8_t * data, 
 
     http_stream_mark_closing(connection, stream);
   }
+
+  return true;
 
 }
 
