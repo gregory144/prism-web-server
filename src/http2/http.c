@@ -533,7 +533,7 @@ static void http_frame_header_write(uint8_t * const buf, const uint16_t length, 
   buf[pos++] = (stream_id) & 0xFF;
 }
 
-static void http_emit_goaway(const http_connection_t * const connection, enum h2_error_code_e error_code, char * debug)
+static bool http_emit_goaway(const http_connection_t * const connection, enum h2_error_code_e error_code, char * debug)
 {
 
   size_t last_stream_id_length = 4; // 1 bit + 31 bits
@@ -574,10 +574,10 @@ static void http_emit_goaway(const http_connection_t * const connection, enum h2
 
   log_debug("Writing goaway frame");
 
-  http_connection_write(connection, buf, buf_length);
+  return http_connection_write(connection, buf, buf_length);
 }
 
-static void http_emit_rst_stream(const http_connection_t * const connection, uint32_t stream_id,
+static bool http_emit_rst_stream(const http_connection_t * const connection, uint32_t stream_id,
                                  enum h2_error_code_e error_code)
 {
 
@@ -601,10 +601,10 @@ static void http_emit_rst_stream(const http_connection_t * const connection, uin
 
   log_debug("Writing reset stream frame");
 
-  http_connection_write(connection, buf, buf_length);
+  return http_connection_write(connection, buf, buf_length);
 }
 
-static void emit_error_and_close(http_connection_t * const connection, uint32_t stream_id,
+static bool emit_error_and_close(http_connection_t * const connection, uint32_t stream_id,
                                  enum h2_error_code_e error_code, char * format, ...)
 {
 
@@ -623,13 +623,26 @@ static void emit_error_and_close(http_connection_t * const connection, uint32_t 
   }
 
   if (stream_id > 0) {
-    http_emit_rst_stream(connection, stream_id, error_code);
+
+    bool success = http_emit_rst_stream(connection, stream_id, error_code);
+    if (!success) {
+      log_error("Unable to emit reset stream frame");
+    }
+
+    return success;
+
   } else {
-    http_emit_goaway(connection, error_code, format ? buf : NULL);
+    bool success = http_emit_goaway(connection, error_code, format ? buf : NULL);
+    if (!success) {
+      log_error("Unable to emit goaway frame");
+    }
+
+    // TODO gracefully shutdown connection
+    http_connection_close(connection);
+
+    return success;
   }
 
-  // TODO gracefully shutdown connection
-  http_connection_close(connection);
 }
 
 static void http_emit_blocked(const http_connection_t * const connection, const http_stream_t * const stream)
