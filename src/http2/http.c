@@ -645,7 +645,7 @@ static bool emit_error_and_close(http_connection_t * const connection, uint32_t 
 
 }
 
-static void http_emit_blocked(const http_connection_t * const connection, const http_stream_t * const stream)
+static bool http_emit_blocked(const http_connection_t * const connection, const http_stream_t * const stream)
 {
 
   size_t buf_length = FRAME_HEADER_SIZE;
@@ -658,7 +658,7 @@ static void http_emit_blocked(const http_connection_t * const connection, const 
 
   log_debug("Writing blocked frame");
 
-  http_connection_write(connection, buf, buf_length);
+  return http_connection_write(connection, buf, buf_length);
 }
 
 static bool http_emit_headers(http_connection_t * const connection, const http_stream_t * const stream,
@@ -838,10 +838,7 @@ static bool http_stream_trigger_send_data(http_connection_t * const connection, 
       log_warning("Wanted to send %ld octets, but connection window is %ld and stream window is %ld", frame_payload_size,
                   connection->outgoing_window_size, stream->outgoing_window_size);
 
-      http_emit_blocked(connection, stream);
-
-      // wait until the window size has been increased
-      break;
+      return http_emit_blocked(connection, stream);
     }
   }
 
