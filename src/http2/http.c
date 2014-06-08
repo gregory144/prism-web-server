@@ -971,7 +971,7 @@ static bool http_emit_data(http_connection_t * const connection, http_stream_t *
   return http_trigger_send_data(connection, stream);
 }
 
-static void http_emit_settings_ack(const http_connection_t * const connection)
+static bool http_emit_settings_ack(const http_connection_t * const connection)
 {
   size_t buf_length = FRAME_HEADER_SIZE;
   uint8_t buf[buf_length];
@@ -986,7 +986,7 @@ static void http_emit_settings_ack(const http_connection_t * const connection)
 
   log_debug("Writing settings ack frame");
 
-  http_connection_write(connection, buf, buf_length);
+  return http_connection_write(connection, buf, buf_length);
 }
 
 static void http_emit_settings_default(const http_connection_t * const connection)
@@ -1548,12 +1548,13 @@ static bool http_parse_frame_continuation(http_connection_t * const connection,
 
 static bool http_parse_frame_settings(http_connection_t * const connection, const http_frame_settings_t * const frame)
 {
-  bool ack = FRAME_FLAG(frame, FLAG_ACK);
 
-  if (ack) {
+  if (FRAME_FLAG(frame, FLAG_ACK)) {
+
     if (frame->length != 0) {
       emit_error_and_close(connection, 0, HTTP_ERROR_FRAME_SIZE_ERROR, "Non-zero frame size for ACK settings frame: %ld",
                            frame->length);
+      return false;
     }
 
     log_trace("Received settings ACK");
@@ -1561,6 +1562,7 @@ static bool http_parse_frame_settings(http_connection_t * const connection, cons
     // Mark the settings frame we sent as acknowledged.
     // We currently don't send any settings that require
     // synchonization
+    return true;
 
   } else {
     uint8_t * pos = connection->buffer + connection->buffer_position;
@@ -1586,10 +1588,9 @@ static bool http_parse_frame_settings(http_connection_t * const connection, cons
     log_trace("Settings: %ld, %d, %ld, %ld", connection->header_table_size, connection->enable_push,
               connection->max_concurrent_streams, connection->initial_window_size);
 
-    http_emit_settings_ack(connection);
+    return http_emit_settings_ack(connection);
   }
 
-  return true;
 }
 
 static bool http_parse_frame_ping(http_connection_t * const connection, const http_frame_ping_t * const frame)
