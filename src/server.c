@@ -187,12 +187,8 @@ static void handle_request(http_request_t * request, http_response_t * response)
   }
 }
 
-static void handle_data(
-  http_request_t * request,
-  http_response_t * response,
-  uint8_t * buf,
-  size_t length,
-  bool last)
+static void handle_data(http_request_t * request, http_response_t * response, uint8_t * buf, size_t length, bool last,
+                        bool free_buf)
 {
   UNUSED(request);
 
@@ -209,6 +205,10 @@ static void handle_data(
   }
 
   http_response_write_data(response, out, length, last);
+
+  if (free_buf) {
+    free(buf);
+  }
 
 }
 

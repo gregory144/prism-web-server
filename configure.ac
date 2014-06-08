@@ -31,6 +31,7 @@ AC_CONFIG_MACRO_DIR([m4])
 AC_CHECK_LIB(uv, uv_run)
 # require pthread for libuv
 AC_CHECK_LIB(pthread, pthread_create)
+AC_CHECK_LIB(z, zlibVersion)
 
 # check for 'check' executable
 PKG_CHECK_MODULES([CHECK], [check >= 0.9.4])

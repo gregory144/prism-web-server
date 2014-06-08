@@ -69,14 +69,20 @@ enum settings_e {
  * Frame flags
  */
 
-// headers
+// shared
 #define FLAG_ACK 0x1
 #define FLAG_END_STREAM 0x1
 #define FLAG_END_SEGMENT 0x2
 #define FLAG_END_HEADERS 0x4
 #define FLAG_PAD_LOW 0x8
 #define FLAG_PAD_HIGH 0x10
+
+// headers
 #define FLAG_PRIORITY 0x20
+
+
+// data
+#define FLAG_COMPRESSED 0x20
 
 /**
  * HTTP errors
@@ -158,6 +164,7 @@ enum h2_error_code_e {
   HTTP_ERROR_INADEQUATE_SECURITY
 
 };
+
 
 #define HTTP_FRAME_FIELDS               \
   /* Length in octets of the frame */   \
@@ -338,7 +345,8 @@ typedef struct http_stream_t {
 
 typedef void (*request_cb)(http_request_t * request, http_response_t * response);
 
-typedef void (*data_cb)(http_request_t * request, http_response_t * response, uint8_t * buf, size_t len, bool last);
+typedef void (*data_cb)(http_request_t * request, http_response_t * response, uint8_t * buf, size_t len, bool last,
+                        bool free_buf);
 
 typedef void (*write_cb)(void * data, uint8_t * buf, size_t len);
 

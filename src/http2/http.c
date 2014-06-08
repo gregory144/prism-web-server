@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#include <zlib.h>
+
 #include "../util/util.h"
 #include "../util/binary_buffer.h"
 
@@ -951,6 +953,33 @@ static void http_emit_settings_ack(const http_connection_t * const connection)
   http_connection_write(connection, buf, buf_length);
 }
 
+static void http_emit_settings_default(const http_connection_t * const connection)
+{
+  size_t single_setting_length = 5;
+  size_t buf_length = FRAME_HEADER_SIZE + single_setting_length;
+  uint8_t buf[buf_length];
+  uint8_t flags = 0;
+
+  http_frame_header_write(buf, single_setting_length, FRAME_TYPE_SETTINGS, flags, 0);
+  size_t pos = FRAME_HEADER_SIZE;
+
+  if (LOG_DEBUG) {
+    log_debug("Writing settings frame");
+  }
+
+  // emit SETTINGS_COMPRESS_DATA identifier
+  buf[pos++] = SETTINGS_COMPRESS_DATA;
+
+  // emit SETTINGS_COMPRESS_DATA value
+  uint32_t value = 1;
+  buf[pos++] = (value >> 24) & 0xFF;
+  buf[pos++] = (value >> 16) & 0xFF;
+  buf[pos++] = (value >> 8) & 0xFF;
+  buf[pos++] = (value) & 0xFF;
+
+  http_connection_write(connection, buf, buf_length);
+}
+
 static void http_emit_ping_ack(const http_connection_t * const connection, uint8_t * opaque_data)
 {
   size_t buf_length = FRAME_HEADER_SIZE;
@@ -1181,6 +1210,102 @@ static bool http_trigger_request(http_connection_t * const connection, http_stre
   return true;
 }
 
+#define GZIP_CHUNK 16384
+
+static uint8_t * gzip_inflate_data(uint8_t * in, size_t in_length, size_t * out_length)
+{
+
+  size_t out_space = GZIP_CHUNK;
+  uint8_t * out = malloc(sizeof(uint8_t) * out_space);
+
+  if (!out) {
+    log_error("Could not allocate space for inflated data");
+    return NULL;
+  }
+
+  int ret;
+  z_stream strm;
+  uint8_t out_chunk[GZIP_CHUNK];
+  size_t out_index = 0;
+
+  /* allocate inflate state */
+  strm.zalloc = Z_NULL;
+  strm.zfree = Z_NULL;
+  strm.opaque = Z_NULL;
+  strm.avail_in = in_length;
+  strm.next_in = in;
+  ret = inflateInit2(&strm, MAX_WBITS + 16); // +16 for gzip
+
+  if (ret != Z_OK) {
+    log_error("Inflate initialisation failed: %d", ret);
+    free(out);
+    return NULL;
+  }
+
+  /* run inflate() on input until output buffer not full */
+  do {
+
+    strm.avail_out = GZIP_CHUNK;
+    strm.next_out = out_chunk;
+
+    ret = inflate(&strm, Z_NO_FLUSH);
+
+    /* check state not clobbered */
+    if (ret == Z_STREAM_ERROR) {
+      (void)inflateEnd(&strm);
+      log_error("Inflate returned stream error: Z_STREAM_ERROR");
+      free(out);
+      return NULL;
+    }
+
+    switch (ret) {
+      case Z_NEED_DICT:
+        ret = Z_DATA_ERROR;     /* and fall through */
+
+      case Z_DATA_ERROR:
+      case Z_MEM_ERROR:
+        (void)inflateEnd(&strm);
+        log_error("Inflate returned stream error: %d", ret);
+        free(out);
+        return NULL;
+    }
+
+    size_t chunk_length = GZIP_CHUNK - strm.avail_out;
+
+    if (out_index + chunk_length > out_space) {
+      do {
+        out_space += GZIP_CHUNK;
+      } while (out_index + chunk_length > out_space);
+
+      uint8_t * new_out = realloc(out, out_space);
+
+      if (!new_out) {
+        log_error("Could not allocate space for inflated data");
+        free(out);
+        return NULL;
+      }
+
+      out = new_out;
+    }
+
+    memcpy(out + out_index, out_chunk, chunk_length);
+    out_index += chunk_length;
+
+  } while (strm.avail_out == 0);
+
+  *out_length = out_index;
+
+  /* clean up and return */
+  (void)inflateEnd(&strm);
+
+  if (ret == Z_STREAM_END) {
+    return out;
+  } else {
+    free(out);
+    return NULL;
+  }
+}
+
 static bool http_parse_frame_data(http_connection_t * const connection, const http_frame_data_t * const frame)
 {
   if (!connection->data_handler) {
@@ -1191,21 +1316,41 @@ static bool http_parse_frame_data(http_connection_t * const connection, const ht
     abort();
   }
 
-  uint8_t * pos = connection->buffer + connection->buffer_position;
-
   http_stream_t * stream = http_stream_get(connection, frame->stream_id);
 
   if (!stream) {
-    return false;
+    emit_error_and_close(connection, stream->id, HTTP_ERROR_PROTOCOL_ERROR,
+                         "Unable to find stream #%d", stream->id);
+    return true;
   }
+
+  // pass on to application
+  uint8_t * buf = connection->buffer + connection->buffer_position;
+  bool last_data_frame = FRAME_FLAG(frame, FLAG_END_STREAM);
 
   // TODO handle padding
 
-  // pass on to application
-  bool last_data_frame = FRAME_FLAG(frame, FLAG_END_STREAM);
+  if (FRAME_FLAG(frame, FLAG_COMPRESSED)) {
+    // handle decompression
 
-  connection->data_handler(stream->request, stream->response,
-                           pos, frame->length, last_data_frame);
+    size_t inflated_length;
+    uint8_t * inflated = gzip_inflate_data(buf, frame->length, &inflated_length);
+
+    if (!buf) {
+      emit_error_and_close(connection, stream->id, HTTP_ERROR_INTERNAL_ERROR,
+                           "Unable to decompress data frame for stream #%d", stream->id);
+      // we can't continute to process this frame, but other frames should continue
+      return true;
+    }
+
+    log_trace("Inflated data frame from %ld octets to %ld octets", frame->length, inflated_length);
+
+    connection->data_handler(stream->request, stream->response, inflated, inflated_length, last_data_frame, true);
+  } else {
+
+    connection->data_handler(stream->request, stream->response, buf, frame->length, last_data_frame, false);
+
+  }
 
   // adjust window sizes
   connection->incoming_window_size -= frame->length;
@@ -1248,6 +1393,7 @@ static void http_stream_add_header_fragment(http_stream_t * const stream, const 
   fragment->buffer = malloc(length);
 
   if (!fragment->buffer) {
+    // TODO make this return false/null
     abort();
   }
 
@@ -1348,8 +1494,8 @@ static bool http_parse_frame_headers(http_connection_t * const connection, const
     stream->priority_weight = get_bits8(pos + 4, 0xFF) + 1;
 
     log_trace("Stream #%d priority: exclusive: %s, dependency: %d, weight: %d",
-        stream->id, stream->priority_exclusive ? "yes" : "no", stream->priority_dependency,
-        stream->priority_weight);
+              stream->id, stream->priority_exclusive ? "yes" : "no", stream->priority_dependency,
+              stream->priority_weight);
 
     pos += 5;
     header_block_fragment_size -= 5;
@@ -1400,18 +1546,20 @@ static bool http_parse_frame_settings(http_connection_t * const connection, cons
 {
   bool ack = FRAME_FLAG(frame, FLAG_ACK);
 
-  if (ack && frame->length != 0) {
-    emit_error_and_close(connection, 0, HTTP_ERROR_FRAME_SIZE_ERROR, "Non-zero frame size for ACK settings frame: %ld",
-                         frame->length);
-  }
-
   if (ack) {
-    // TODO mark the settings frame we sent as acknowledged
+    if (frame->length != 0) {
+      emit_error_and_close(connection, 0, HTTP_ERROR_FRAME_SIZE_ERROR, "Non-zero frame size for ACK settings frame: %ld",
+                           frame->length);
+    }
+
     if (LOG_TRACE) {
       log_trace("Received settings ACK");
     }
 
-    abort();
+    // Mark the settings frame we sent as acknowledged.
+    // We currently don't send any settings that require
+    // synchonization
+
   } else {
     uint8_t * pos = connection->buffer + connection->buffer_position;
     size_t setting_size = 5;
@@ -1543,14 +1691,15 @@ static bool http_parse_frame_priority(http_connection_t * const connection, http
   http_stream_t * stream = http_stream_get(connection, frame->stream_id);
 
   if (!stream) {
-    emit_error_and_close(connection, frame->stream_id, HTTP_ERROR_PROTOCOL_ERROR, "Unknown stream id: %d", frame->stream_id);
+    emit_error_and_close(connection, frame->stream_id, HTTP_ERROR_PROTOCOL_ERROR, "Unknown stream id: %d",
+                         frame->stream_id);
     return true;
   }
 
   stream->priority_exclusive = get_bit(buf, 0);
   stream->priority_dependency = get_bits32(buf, 0x7FFFFFFF);
   // add 1 to get a value between 1 and 256
-  stream->priority_weight = get_bits8(buf+ 4, 0xFF) + 1;
+  stream->priority_weight = get_bits8(buf + 4, 0xFF) + 1;
 
   return true;
 }
@@ -1569,12 +1718,12 @@ static bool http_parse_frame_goaway(http_connection_t * const connection, http_f
 
   if (frame->error_code == HTTP_ERROR_NO_ERROR) {
     log_trace("Received goaway, last stream: %d, error code: %s (%d), debug_data: %s",
-                               frame->last_stream_id, http_connection_errors[frame->error_code],
-                               frame->error_code, frame->debug_data);
+              frame->last_stream_id, http_connection_errors[frame->error_code],
+              frame->error_code, frame->debug_data);
   } else {
     log_error("Received goaway, last stream: %d, error code: %s (%d), debug_data: %s",
-                               frame->last_stream_id, http_connection_errors[frame->error_code],
-                               frame->error_code, frame->debug_data);
+              frame->last_stream_id, http_connection_errors[frame->error_code],
+              frame->error_code, frame->debug_data);
   }
 
   frame->debug_data = NULL;
@@ -1765,6 +1914,11 @@ static bool http_connection_add_from_buffer(http_connection_t * const connection
     if (!connection->received_settings && frame->type != FRAME_TYPE_SETTINGS) {
       emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR, "Expected Settings frame as first frame");
     } else {
+      /**
+       * The http_parse_frame_xxx functions should return true if the next frame should be allowed to
+       * continue to be processed. Connection errors usually prevent the rest of the frames from
+       * being processed.
+       */
       switch (frame->type) {
         case FRAME_TYPE_DATA:
           success = http_parse_frame_data(connection, (http_frame_data_t *) frame);
@@ -1870,6 +2024,8 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
       if (LOG_TRACE) {
         log_trace("Found HTTP2 connection");
       }
+
+      http_emit_settings_default(connection);
     } else {
       if (LOG_WARN) {
         log_warning("Found non-HTTP2 connection, closing connection");
