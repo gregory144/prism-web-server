@@ -989,7 +989,7 @@ static bool http_emit_settings_ack(const http_connection_t * const connection)
   return http_connection_write(connection, buf, buf_length);
 }
 
-static void http_emit_settings_default(const http_connection_t * const connection)
+static bool http_emit_settings_default(const http_connection_t * const connection)
 {
   size_t single_setting_length = 5;
   size_t buf_length = FRAME_HEADER_SIZE + single_setting_length;
@@ -1011,7 +1011,7 @@ static void http_emit_settings_default(const http_connection_t * const connectio
   buf[pos++] = (value >> 8) & 0xFF;
   buf[pos++] = (value) & 0xFF;
 
-  http_connection_write(connection, buf, buf_length);
+  return http_connection_write(connection, buf, buf_length);
 }
 
 static bool http_emit_ping_ack(const http_connection_t * const connection, uint8_t * opaque_data)
@@ -1995,6 +1995,7 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
 
     if (!connection->buffer) {
       emit_error_and_close(connection, 0, HTTP_ERROR_INTERNAL_ERROR, "Unable to allocate memory for reading full frame");
+      free(buffer);
       return;
     }
 
@@ -2014,7 +2015,12 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
 
       log_trace("Found HTTP2 connection");
 
-      http_emit_settings_default(connection);
+      if (!http_emit_settings_default(connection)) {
+        log_error("Unable to emit default settings frame");
+
+        http_connection_close(connection);
+        return;
+      }
     } else {
       log_warning("Found non-HTTP2 connection, closing connection");
 
@@ -2031,7 +2037,8 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
 
   if (connection->buffer_position > connection->buffer_length) {
     // buffer overflow
-    abort();
+    emit_error_and_close(connection, 0, HTTP_ERROR_INTERNAL_ERROR, NULL);
+    return;
   }
 
   // if there is still unprocessed data in the buffer, save it for when we
