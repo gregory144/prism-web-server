@@ -816,7 +816,7 @@ static void http_stream_trigger_send_data(http_connection_t * const connection, 
 
     } else {
       log_warning("Wanted to send %ld octets, but connection window is %ld and stream window is %ld", frame_payload_size,
-                connection->outgoing_window_size, stream->outgoing_window_size);
+                  connection->outgoing_window_size, stream->outgoing_window_size);
 
       http_emit_blocked(connection, stream);
 
@@ -877,13 +877,15 @@ static void http_trigger_send_data(http_connection_t * const connection, http_st
 }
 
 static http_queued_frame_t * http_queue_data_frame(http_stream_t * const stream, uint8_t * buf, const size_t buf_length,
-                                  const bool end_stream, void * const buf_begin)
+    const bool end_stream, void * const buf_begin)
 {
   http_queued_frame_t * new_frame = malloc(sizeof(http_queued_frame_t));
+
   if (!new_frame) {
     log_error("Unable to allocate space for new data frame");
     return NULL;
   }
+
   new_frame->buf = buf;
   new_frame->buf_length = buf_length;
   new_frame->end_stream = end_stream;
@@ -901,6 +903,7 @@ static http_queued_frame_t * http_queue_data_frame(http_stream_t * const stream,
 
     curr->next = new_frame;
   }
+
   return new_frame;
 }
 
@@ -926,9 +929,11 @@ static bool http_emit_data(http_connection_t * const connection, http_stream_t *
         last_per_call = true;
       }
 
-      if (!http_queue_data_frame(stream, per_frame_text, per_frame_length, last && last_per_call, last_per_call ? text : NULL)) {
+      if (!http_queue_data_frame(stream, per_frame_text, per_frame_length, last
+                                 && last_per_call, last_per_call ? text : NULL)) {
         return false;
       }
+
       remaining_length -= per_frame_length;
       per_frame_text += per_frame_length;
     }
@@ -1629,7 +1634,7 @@ static bool http_parse_frame_window_update(http_connection_t * const connection,
   }
 
   log_trace("Received window update, stream: %d, increment: %ld",
-                             frame->stream_id, frame->increment);
+            frame->stream_id, frame->increment);
 
   return success;
 }
@@ -2044,6 +2049,7 @@ bool http_response_write(http_response_t * const response, uint8_t * data, const
 
     http_stream_mark_closing(connection, stream);
   }
+
   return true;
 }
 
