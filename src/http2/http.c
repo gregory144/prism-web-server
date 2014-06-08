@@ -768,7 +768,7 @@ static void http_emit_push_promise(http_connection_t * const connection, const h
   http_connection_write(connection, buf, buf_length);
 }
 
-static void http_emit_data_frame(const http_connection_t * const connection, const http_stream_t * const stream,
+static bool http_emit_data_frame(const http_connection_t * const connection, const http_stream_t * const stream,
                                  const http_queued_frame_t * const frame)
 {
   // buffer data frames per connection? - only trigger connection->writer after all emit_data_frames have been written
@@ -783,14 +783,16 @@ static void http_emit_data_frame(const http_connection_t * const connection, con
   }
 
   http_frame_header_write(header_buf, frame->buf_length, FRAME_TYPE_DATA, flags, stream->id);
-  http_connection_write(connection, header_buf, header_length);
+  if (!http_connection_write(connection, header_buf, header_length)) {
+    return false;
+  }
 
   log_debug("Writing data frame: stream %d, %ld octets", stream->id, frame->buf_length);
 
-  http_connection_write(connection, frame->buf, frame->buf_length);
+  return http_connection_write(connection, frame->buf, frame->buf_length);
 }
 
-static void http_stream_trigger_send_data(http_connection_t * const connection, http_stream_t * const stream)
+static bool http_stream_trigger_send_data(http_connection_t * const connection, http_stream_t * const stream)
 {
 
   while (stream->queued_data_frames) {
@@ -801,10 +803,11 @@ static void http_stream_trigger_send_data(http_connection_t * const connection, 
 
     if ((long)frame_payload_size <= connection->outgoing_window_size &&
         (long)frame_payload_size <= stream->outgoing_window_size) {
-      http_emit_data_frame(connection, stream, frame);
-
-      connection->outgoing_window_size -= frame_payload_size;
-      stream->outgoing_window_size -= frame_payload_size;
+      bool success = http_emit_data_frame(connection, stream, frame);
+      if (success) {
+        connection->outgoing_window_size -= frame_payload_size;
+        stream->outgoing_window_size -= frame_payload_size;
+      }
 
       stream->queued_data_frames = frame->next;
 
@@ -813,6 +816,10 @@ static void http_stream_trigger_send_data(http_connection_t * const connection, 
       }
 
       free(frame);
+
+      if (!success) {
+        return false;
+      }
 
     } else {
       log_warning("Wanted to send %ld octets, but connection window is %ld and stream window is %ld", frame_payload_size,
@@ -827,17 +834,21 @@ static void http_stream_trigger_send_data(http_connection_t * const connection, 
 
   log_trace("Connection window size: %ld, stream window: %ld", connection->outgoing_window_size,
             stream->outgoing_window_size);
+
+  return true;
 }
 
-static void http_trigger_send_data(http_connection_t * const connection, http_stream_t * stream)
+static bool http_trigger_send_data(http_connection_t * const connection, http_stream_t * stream)
 {
 
   if (stream) {
 
-    http_stream_trigger_send_data(connection, stream);
+    bool success = http_stream_trigger_send_data(connection, stream);
 
     log_trace("Connection window size: %ld, stream window: %ld", connection->outgoing_window_size,
               stream->outgoing_window_size);
+
+    return success;
 
   } else {
 
@@ -859,7 +870,9 @@ static void http_trigger_send_data(http_connection_t * const connection, http_st
 
       if (stream->state != STREAM_STATE_CLOSED) {
 
-        http_stream_trigger_send_data(connection, stream);
+        if (!http_stream_trigger_send_data(connection, stream)) {
+          return false;
+        }
 
         prev = stream;
 
@@ -872,6 +885,8 @@ static void http_trigger_send_data(http_connection_t * const connection, http_st
     }
 
     log_trace("Connection window size: %ld", connection->outgoing_window_size);
+
+    return true;
   }
 
 }
@@ -943,8 +958,7 @@ static bool http_emit_data(http_connection_t * const connection, http_stream_t *
     }
   }
 
-  http_trigger_send_data(connection, stream);
-  return true;
+  return http_trigger_send_data(connection, stream);
 }
 
 static void http_emit_settings_ack(const http_connection_t * const connection)
@@ -1593,30 +1607,34 @@ static bool http_increment_connection_window_size(http_connection_t * const conn
 
   log_trace("Connection window size incremented to: %ld", connection->outgoing_window_size);
 
-  http_trigger_send_data(connection, NULL);
-
-  return true;
+  return http_trigger_send_data(connection, NULL);
 }
 
 static bool http_increment_stream_window_size(http_connection_t * const connection, const uint32_t stream_id,
     const uint32_t increment)
 {
+
   http_stream_t * stream = http_stream_get(connection, stream_id);
 
   if (stream) {
+
     stream->outgoing_window_size += increment;
 
     log_trace("Stream window size incremented to: %ld", stream->outgoing_window_size);
 
-    http_trigger_send_data(connection, stream);
+    return http_trigger_send_data(connection, stream);
+
   } else {
+
     if (!http_stream_closed(connection, stream_id)) {
       emit_error_and_close(connection, stream_id, HTTP_ERROR_PROTOCOL_ERROR,
                            "Could not find stream #%d to update it's window size", stream_id);
     }
+
+    return true;
+
   }
 
-  return true;
 }
 
 static bool http_parse_frame_window_update(http_connection_t * const connection,
