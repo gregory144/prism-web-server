@@ -1036,7 +1036,7 @@ static bool http_emit_ping_ack(const http_connection_t * const connection, uint8
   return http_connection_write(connection, buf, buf_length);
 }
 
-static void http_emit_window_update(const http_connection_t * const connection, const uint32_t stream_id,
+static bool http_emit_window_update(const http_connection_t * const connection, const uint32_t stream_id,
                                     const size_t increment)
 {
 
@@ -1058,7 +1058,7 @@ static void http_emit_window_update(const http_connection_t * const connection, 
 
   log_debug("Writing window update frame");
 
-  http_connection_write(connection, buf, buf_length);
+  return http_connection_write(connection, buf, buf_length);
 }
 
 #define FRAME_FLAG(frame, mask) \
@@ -1341,11 +1341,16 @@ static bool http_parse_frame_data(http_connection_t * const connection, const ht
     return true;
   }
 
+  // adjust window sizes
+  connection->incoming_window_size -= frame->length;
+  stream->incoming_window_size -= frame->length;
+
   // pass on to application
   uint8_t * buf = connection->buffer + connection->buffer_position;
   bool last_data_frame = FRAME_FLAG(frame, FLAG_END_STREAM);
 
   // TODO handle padding
+
 
   if (FRAME_FLAG(frame, FLAG_COMPRESSED)) {
     // handle decompression
@@ -1369,9 +1374,7 @@ static bool http_parse_frame_data(http_connection_t * const connection, const ht
 
   }
 
-  // adjust window sizes
-  connection->incoming_window_size -= frame->length;
-
+  // do we need to send WINDOW_UPDATE?
   if (connection->incoming_window_size < 0) {
 
     emit_error_and_close(connection, 0, HTTP_ERROR_FLOW_CONTROL_ERROR, "Connection window size is less than 0: %ld",
@@ -1380,12 +1383,13 @@ static bool http_parse_frame_data(http_connection_t * const connection, const ht
   } else if (connection->incoming_window_size < 0.75 * DEFAULT_INITIAL_WINDOW_SIZE) {
 
     size_t increment = DEFAULT_INITIAL_WINDOW_SIZE - connection->incoming_window_size;
-    http_emit_window_update(connection, 0, increment);
+    if (!http_emit_window_update(connection, 0, increment)) {
+      emit_error_and_close(connection, 0, HTTP_ERROR_INTERNAL_ERROR, "Unable to emit window update frame");
+      return false;
+    }
     connection->incoming_window_size += increment;
 
   }
-
-  stream->incoming_window_size -= frame->length;
 
   if (stream->incoming_window_size < 0) {
 
@@ -1395,8 +1399,12 @@ static bool http_parse_frame_data(http_connection_t * const connection, const ht
   } else if (!last_data_frame && (stream->incoming_window_size < 0.75 * DEFAULT_INITIAL_WINDOW_SIZE)) {
 
     size_t increment = DEFAULT_INITIAL_WINDOW_SIZE - stream->incoming_window_size;
-    http_emit_window_update(connection, stream->id, increment);
-    stream->incoming_window_size += increment;
+    if (!http_emit_window_update(connection, stream->id, increment)) {
+      emit_error_and_close(connection, stream->id, HTTP_ERROR_INTERNAL_ERROR, "Unable to emit window update frame");
+      // don't return false - the connection is still OK
+    } else {
+      stream->incoming_window_size += increment;
+    }
 
   }
 
