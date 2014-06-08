@@ -1336,8 +1336,8 @@ static bool http_parse_frame_data(http_connection_t * const connection, const ht
   http_stream_t * stream = http_stream_get(connection, frame->stream_id);
 
   if (!stream) {
-    emit_error_and_close(connection, stream->id, HTTP_ERROR_PROTOCOL_ERROR,
-                         "Unable to find stream #%d", stream->id);
+    emit_error_and_close(connection, frame->stream_id, HTTP_ERROR_PROTOCOL_ERROR,
+                         "Unable to find stream #%d", frame->stream_id);
     return true;
   }
 
@@ -1355,7 +1355,7 @@ static bool http_parse_frame_data(http_connection_t * const connection, const ht
   if (FRAME_FLAG(frame, FLAG_COMPRESSED)) {
     // handle decompression
 
-    size_t inflated_length;
+    size_t inflated_length = 0;
     uint8_t * inflated = gzip_inflate_data(buf, frame->length, &inflated_length);
 
     if (!buf) {
@@ -1423,6 +1423,7 @@ static bool http_stream_add_header_fragment(http_stream_t * const stream, const 
   fragment->buffer = malloc(length);
   if (!fragment->buffer) {
     log_error("Unable to allocate space for header fragment");
+    free(fragment);
     return false;
   }
 
