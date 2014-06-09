@@ -1310,6 +1310,33 @@ static bool http_trigger_request(http_connection_t * const connection, http_stre
   return true;
 }
 
+static bool strip_padding(uint8_t ** payload, size_t * payload_length, bool pad_low_on, bool pad_high_on)
+{
+  if (!pad_low_on && pad_high_on) {
+    // error - pad high can't be set if pad low is not set
+    log_error("PAD_HIGH set but PAD_LOW unset");
+    return false;
+  } else if (pad_low_on) {
+    size_t padding = 0;
+    if (pad_high_on) {
+      uint8_t pad_high = get_bits8(*payload, 0xFF);
+      padding += (256 * pad_high);
+
+      (*payload_length)--;
+      (*payload)++;
+    }
+    uint8_t pad_low = get_bits8(*payload, 0xFF);
+    padding += pad_low;
+
+    (*payload_length)--;
+    (*payload)++;
+    *payload_length -= padding;
+    log_trace("Stripped %ld octets of padding from frame", padding);
+  }
+
+  return true;
+}
+
 static bool http_parse_frame_data(http_connection_t * const connection, const http_frame_data_t * const frame)
 {
   if (!connection->data_handler) {
@@ -1332,15 +1359,22 @@ static bool http_parse_frame_data(http_connection_t * const connection, const ht
 
   // pass on to application
   uint8_t * buf = connection->buffer + connection->buffer_position;
+  size_t buf_length = frame->length;
   bool last_data_frame = FRAME_FLAG(frame, FLAG_END_STREAM);
 
-  // TODO handle padding
+  bool pad_low = FRAME_FLAG(frame, FLAG_PAD_LOW);
+  bool pad_high = FRAME_FLAG(frame, FLAG_PAD_HIGH);
+  if (!strip_padding(&buf, &buf_length, pad_low, pad_high)) {
+    emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR,
+                         "Problem with padding on data frame");
+    return false;
+  }
 
   if (FRAME_FLAG(frame, FLAG_COMPRESSED)) {
     // handle decompression
 
     size_t inflated_length = 0;
-    uint8_t * inflated = gzip_decompress(buf, frame->length, &inflated_length);
+    uint8_t * inflated = gzip_decompress(buf, buf_length, &inflated_length);
 
     if (!inflated) {
       emit_error_and_close(connection, stream->id, HTTP_ERROR_INTERNAL_ERROR,
@@ -1349,12 +1383,12 @@ static bool http_parse_frame_data(http_connection_t * const connection, const ht
       return true;
     }
 
-    log_trace("Inflated data frame from %ld octets to %ld octets", frame->length, inflated_length);
+    log_trace("Inflated data frame from %ld octets to %ld octets", buf_length, inflated_length);
 
     connection->data_handler(stream->request, stream->response, inflated, inflated_length, last_data_frame, true);
   } else {
 
-    connection->data_handler(stream->request, stream->response, buf, frame->length, last_data_frame, false);
+    connection->data_handler(stream->request, stream->response, buf, buf_length, last_data_frame, false);
 
   }
 
@@ -1493,30 +1527,38 @@ static bool http_parse_header_fragments(http_connection_t * const connection, ht
 
 static bool http_parse_frame_headers(http_connection_t * const connection, const http_frame_headers_t * const frame)
 {
-  uint8_t * pos = connection->buffer + connection->buffer_position;
-  size_t header_block_fragment_size = frame->length;
+  uint8_t * buf = connection->buffer + connection->buffer_position;
+  size_t buf_length = frame->length;
   http_stream_t * stream = http_stream_init(connection, frame->stream_id);
 
   if (!stream) {
     return false;
   }
 
+  bool pad_low = FRAME_FLAG(frame, FLAG_PAD_LOW);
+  bool pad_high = FRAME_FLAG(frame, FLAG_PAD_HIGH);
+  if (!strip_padding(&buf, &buf_length, pad_low, pad_high)) {
+    emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR,
+                         "Problem with padding on header frame");
+    return false;
+  }
+
   if (FRAME_FLAG(frame, FLAG_PRIORITY)) {
 
-    stream->priority_exclusive = get_bit(pos, 0);
-    stream->priority_dependency = get_bits32(pos, 0x7FFFFFFF);
+    stream->priority_exclusive = get_bit(buf, 0);
+    stream->priority_dependency = get_bits32(buf, 0x7FFFFFFF);
     // add 1 to get a value between 1 and 256
-    stream->priority_weight = get_bits8(pos + 4, 0xFF) + 1;
+    stream->priority_weight = get_bits8(buf+ 4, 0xFF) + 1;
 
     log_trace("Stream #%d priority: exclusive: %s, dependency: %d, weight: %d",
               stream->id, stream->priority_exclusive ? "yes" : "no", stream->priority_dependency,
               stream->priority_weight);
 
-    pos += 5;
-    header_block_fragment_size -= 5;
+    buf += 5;
+    buf_length -= 5;
   }
 
-  if (!http_stream_add_header_fragment(stream, pos, header_block_fragment_size)) {
+  if (!http_stream_add_header_fragment(stream, buf, buf_length)) {
     return false;
   }
 
@@ -1539,11 +1581,19 @@ static bool http_parse_frame_headers(http_connection_t * const connection, const
 static bool http_parse_frame_continuation(http_connection_t * const connection,
     const http_frame_continuation_t * const frame)
 {
-  uint8_t * pos = connection->buffer + connection->buffer_position;
-  size_t header_block_fragment_size = frame->length;
+  uint8_t * buf = connection->buffer + connection->buffer_position;
+  size_t buf_length = frame->length;
   http_stream_t * stream = http_stream_get(connection, frame->stream_id);
 
-  if (!http_stream_add_header_fragment(stream, pos, header_block_fragment_size)) {
+  bool pad_low = FRAME_FLAG(frame, FLAG_PAD_LOW);
+  bool pad_high = FRAME_FLAG(frame, FLAG_PAD_HIGH);
+  if (!strip_padding(&buf, &buf_length, pad_low, pad_high)) {
+    emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR,
+                         "Problem with padding on data frame");
+    return false;
+  }
+
+  if (!http_stream_add_header_fragment(stream, buf, buf_length)) {
     return false;
   }
 
