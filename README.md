@@ -15,8 +15,9 @@
 * better hpack encoding algorithm - use indexing
 * stream priority
 * data frame padding
-* gzip compression
+* improve gzip compression to use deflateBound to predict size of output
 * runtime configuration
 * dynamically load request/data handler from shared library
 * TLS support
 * upgrade from 1.1
+* handle request in thread pool
