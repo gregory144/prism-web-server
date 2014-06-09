@@ -14,6 +14,7 @@ gzip_context_t * gzip_compress_init(gzip_context_t * context)
 {
   if (!context) {
     context = malloc(sizeof(gzip_context_t));
+
     if (!context) {
       log_error("Unable to allocate space for gzip context");
       return NULL;
@@ -40,7 +41,7 @@ gzip_context_t * gzip_compress_init(gzip_context_t * context)
 
   if (!context->initialized) {
     int ret = deflateInit2(&context->stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, GZIP_WINDOW_BITS, GZIP_MEM_LEVEL,
-                       Z_DEFAULT_STRATEGY);
+                           Z_DEFAULT_STRATEGY);
 
     if (ret != Z_OK) {
       log_error("Could not initialize deflate routine: %d", ret);
@@ -131,6 +132,7 @@ void gzip_compress_free(gzip_context_t * const context)
   if (context->initialized) {
     (void)deflateEnd(&context->stream);
   }
+
   free(context);
 }
 

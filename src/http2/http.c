@@ -452,6 +452,7 @@ void http_connection_free(http_connection_t * const connection)
   hpack_context_free(connection->encoding_context);
   hpack_context_free(connection->decoding_context);
   binary_buffer_free(connection->write_buffer);
+
   if (connection->gzip_context) {
     gzip_compress_free(connection->gzip_context);
   }
@@ -1002,10 +1003,12 @@ static bool http_emit_data(http_connection_t * const connection, http_stream_t *
     if (connection->enable_compress_data && curr_frame_length > GZIP_MIN_SIZE) {
       // gzip it
       connection->gzip_context = gzip_compress_init(connection->gzip_context);
+
       if (!connection->gzip_context) {
         free(in);
         return NULL;
       }
+
       connection->gzip_context->in = curr_frame_data;
       connection->gzip_context->in_length = curr_frame_length;
 
@@ -1318,6 +1321,7 @@ static bool strip_padding(uint8_t ** payload, size_t * payload_length, bool pad_
     return false;
   } else if (pad_low_on) {
     size_t padding = 0;
+
     if (pad_high_on) {
       uint8_t pad_high = get_bits8(*payload, 0xFF);
       padding += (256 * pad_high);
@@ -1325,6 +1329,7 @@ static bool strip_padding(uint8_t ** payload, size_t * payload_length, bool pad_
       (*payload_length)--;
       (*payload)++;
     }
+
     uint8_t pad_low = get_bits8(*payload, 0xFF);
     padding += pad_low;
 
@@ -1364,6 +1369,7 @@ static bool http_parse_frame_data(http_connection_t * const connection, const ht
 
   bool pad_low = FRAME_FLAG(frame, FLAG_PAD_LOW);
   bool pad_high = FRAME_FLAG(frame, FLAG_PAD_HIGH);
+
   if (!strip_padding(&buf, &buf_length, pad_low, pad_high)) {
     emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR,
                          "Problem with padding on data frame");
@@ -1537,6 +1543,7 @@ static bool http_parse_frame_headers(http_connection_t * const connection, const
 
   bool pad_low = FRAME_FLAG(frame, FLAG_PAD_LOW);
   bool pad_high = FRAME_FLAG(frame, FLAG_PAD_HIGH);
+
   if (!strip_padding(&buf, &buf_length, pad_low, pad_high)) {
     emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR,
                          "Problem with padding on header frame");
@@ -1548,7 +1555,7 @@ static bool http_parse_frame_headers(http_connection_t * const connection, const
     stream->priority_exclusive = get_bit(buf, 0);
     stream->priority_dependency = get_bits32(buf, 0x7FFFFFFF);
     // add 1 to get a value between 1 and 256
-    stream->priority_weight = get_bits8(buf+ 4, 0xFF) + 1;
+    stream->priority_weight = get_bits8(buf + 4, 0xFF) + 1;
 
     log_trace("Stream #%d priority: exclusive: %s, dependency: %d, weight: %d",
               stream->id, stream->priority_exclusive ? "yes" : "no", stream->priority_dependency,
@@ -1587,6 +1594,7 @@ static bool http_parse_frame_continuation(http_connection_t * const connection,
 
   bool pad_low = FRAME_FLAG(frame, FLAG_PAD_LOW);
   bool pad_high = FRAME_FLAG(frame, FLAG_PAD_HIGH);
+
   if (!strip_padding(&buf, &buf_length, pad_low, pad_high)) {
     emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR,
                          "Problem with padding on data frame");
