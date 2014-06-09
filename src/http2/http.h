@@ -8,6 +8,7 @@
 #include "request.h"
 #include "response.h"
 #include "hash_table.h"
+#include "gzip.h"
 
 #define PUSH_ENABLED false
 
@@ -409,6 +410,8 @@ typedef struct {
 
   hpack_context_t * encoding_context;
   hpack_context_t * decoding_context;
+
+  gzip_context_t * gzip_context;
 } http_connection_t;
 
 http_connection_t * http_connection_init(void * const data, const request_cb request_handler,

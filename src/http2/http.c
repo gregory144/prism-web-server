@@ -4,8 +4,6 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <zlib.h>
-
 #include "../util/util.h"
 #include "../util/binary_buffer.h"
 
@@ -13,6 +11,7 @@
 #include "request.h"
 #include "response.h"
 #include "hash_table.h"
+#include "gzip.h"
 
 #define FRAME_HEADER_SIZE 8 // octets
 #define DEFAULT_STREAM_EXCLUSIVE_FLAG 0
@@ -24,11 +23,6 @@
 #define MAX_CONNECTION_BUFFER_SIZE 0x1000000 // 2^24
 
 #define PING_OPAQUE_DATA_LENGTH 8
-
-#define GZIP_CHUNK 16384
-#define GZIP_WINDOW_BITS (MAX_WBITS + 16)
-#define GZIP_MEM_LEVEL 8
-#define GZIP_MIN_SIZE 0x400
 
 const char * HTTP_CONNECTION_PREFACE = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 const size_t HTTP_CONNECTION_PREFACE_LENGTH = 24;
@@ -364,6 +358,7 @@ http_connection_t * http_connection_init(void * const data, const request_cb req
   connection->decoding_context = NULL;
   connection->streams = NULL;
   connection->write_buffer = NULL;
+  connection->gzip_context = NULL;
 
   connection->encoding_context = hpack_context_init(DEFAULT_HEADER_TABLE_SIZE);
 
@@ -457,6 +452,9 @@ void http_connection_free(http_connection_t * const connection)
   hpack_context_free(connection->encoding_context);
   hpack_context_free(connection->decoding_context);
   binary_buffer_free(connection->write_buffer);
+  if (connection->gzip_context) {
+    gzip_compress_free(connection->gzip_context);
+  }
 
   free(connection);
 }
@@ -967,77 +965,6 @@ static http_queued_frame_t * http_queue_data_frame(http_stream_t * const stream,
   return new_frame;
 }
 
-static uint8_t * gzip_compress_data(uint8_t * in, size_t in_length, size_t * out_length)
-{
-
-  uint8_t * out = malloc(sizeof(uint8_t) * in_length);
-  size_t out_index = 0;
-
-  if (!out) {
-    log_error("Could not allocate space for gzip'd data");
-    return NULL;
-  }
-
-  int ret;
-  z_stream strm;
-  uint8_t out_chunk[GZIP_CHUNK];
-  size_t out_chunk_length;
-
-  /* allocate deflate state */
-  strm.zalloc = Z_NULL;
-  strm.zfree = Z_NULL;
-  strm.opaque = Z_NULL;
-  ret = deflateInit2(&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED, GZIP_WINDOW_BITS, GZIP_MEM_LEVEL, Z_DEFAULT_STRATEGY);
-
-  if (ret != Z_OK) {
-    log_error("Could not initialize deflate routine: %d", ret);
-    return NULL;
-  }
-
-  strm.next_in = in;
-  strm.avail_in = in_length;
-
-  /* run deflate() on input until output buffer not full, finish
-     compression if all of source has been read in */
-  do {
-
-    strm.avail_out = GZIP_CHUNK;
-    strm.next_out = out_chunk;
-    ret = deflate(&strm, Z_FINISH);
-
-    if (ret != Z_OK && ret != Z_STREAM_END) {
-      (void)deflateEnd(&strm);
-      log_error("Deflation failed: %d", ret);
-      return NULL;
-    }
-
-    out_chunk_length = GZIP_CHUNK - strm.avail_out;
-
-    if (out_index + out_chunk_length > in_length) {
-      (void)deflateEnd(&strm);
-      log_trace("Deflation output would be larger than input");
-      return NULL;
-    }
-
-    memcpy(out + out_index, out_chunk, out_chunk_length);
-    out_index += out_chunk_length;
-
-  } while (strm.avail_out == 0);
-
-  if (strm.avail_in != 0) {
-    (void)deflateEnd(&strm);
-    log_error("Data left over after deflation: %ld", strm.avail_in);
-    return NULL;
-  }
-
-  *out_length = out_index;
-
-  /* clean up and return */
-  (void)deflateEnd(&strm);
-  return out;
-
-}
-
 static bool http_emit_data(http_connection_t * const connection, http_stream_t * const stream, uint8_t * in,
                            const size_t in_length, bool last_in)
 {
@@ -1074,13 +1001,19 @@ static bool http_emit_data(http_connection_t * const connection, http_stream_t *
 
     if (connection->enable_compress_data && curr_frame_length > GZIP_MIN_SIZE) {
       // gzip it
-      size_t gzip_length = 0;
-      uint8_t * gzip_data = gzip_compress_data(curr_frame_data, curr_frame_length, &gzip_length);
+      connection->gzip_context = gzip_compress_init(connection->gzip_context);
+      if (!connection->gzip_context) {
+        free(in);
+        return NULL;
+      }
+      connection->gzip_context->in = curr_frame_data;
+      connection->gzip_context->in_length = curr_frame_length;
 
-      if (gzip_data) {
+      if (gzip_compress(connection->gzip_context)) {
+
         compressed = true;
-        curr_frame_data = gzip_data;
-        curr_frame_length = gzip_length;
+        curr_frame_data = connection->gzip_context->out;
+        curr_frame_length = connection->gzip_context->out_length;
       }
 
     }
@@ -1105,11 +1038,16 @@ static bool http_emit_data(http_connection_t * const connection, http_stream_t *
     per_frame_data += per_frame_length;
   }
 
+  bool success = http_trigger_send_data(connection, stream);
+
+  // use after free possible - if a frame in the middle doesn't get compressed (possibly due to the output being bigger than the
+  // input, which is unlikely), we will free the input here, but it may be needed afterwards
   if (!in_freed) {
     free(in);
   }
 
-  return http_trigger_send_data(connection, stream);
+  return success;
+
 }
 
 static bool http_emit_settings_ack(const http_connection_t * const connection)
@@ -1372,89 +1310,6 @@ static bool http_trigger_request(http_connection_t * const connection, http_stre
   return true;
 }
 
-static uint8_t * gzip_inflate_data(uint8_t * in, size_t in_length, size_t * out_length)
-{
-
-  size_t out_space = GZIP_CHUNK;
-  uint8_t * out = malloc(sizeof(uint8_t) * out_space);
-
-  if (!out) {
-    log_error("Could not allocate space for inflated data");
-    return NULL;
-  }
-
-  int ret;
-  z_stream strm;
-  uint8_t out_chunk[GZIP_CHUNK];
-  size_t out_index = 0;
-
-  /* allocate inflate state */
-  strm.zalloc = Z_NULL;
-  strm.zfree = Z_NULL;
-  strm.opaque = Z_NULL;
-  strm.avail_in = in_length;
-  strm.next_in = in;
-  ret = inflateInit2(&strm, GZIP_WINDOW_BITS);
-
-  if (ret != Z_OK) {
-    log_error("Inflate initialization failed: %d", ret);
-    free(out);
-    return NULL;
-  }
-
-  /* run inflate() on input until output buffer not full */
-  do {
-
-    strm.avail_out = GZIP_CHUNK;
-    strm.next_out = out_chunk;
-
-    ret = inflate(&strm, Z_NO_FLUSH);
-    printf("inflate() ret: %d\n", ret);
-
-    if (ret != Z_OK && ret != Z_STREAM_END) {
-      (void)inflateEnd(&strm);
-      log_error("Inflate returned stream error: %d", ret);
-      free(out);
-      return NULL;
-    }
-
-    size_t chunk_length = GZIP_CHUNK - strm.avail_out;
-
-    if (out_index + chunk_length > out_space) {
-      do {
-        out_space += GZIP_CHUNK;
-      } while (out_index + chunk_length > out_space);
-
-      uint8_t * new_out = realloc(out, out_space);
-
-      if (!new_out) {
-        log_error("Could not allocate space for inflated data");
-        free(out);
-        return NULL;
-      }
-
-      out = new_out;
-    }
-
-    memcpy(out + out_index, out_chunk, chunk_length);
-    out_index += chunk_length;
-
-  } while (strm.avail_out == 0 || ret != Z_STREAM_END);
-
-  *out_length = out_index;
-
-  /* clean up and return */
-  (void)inflateEnd(&strm);
-
-  if (ret == Z_STREAM_END) {
-    return out;
-  } else {
-    log_error("Unable to inflate data, Not at stream end: %d", ret);
-    free(out);
-    return NULL;
-  }
-}
-
 static bool http_parse_frame_data(http_connection_t * const connection, const http_frame_data_t * const frame)
 {
   if (!connection->data_handler) {
@@ -1481,14 +1336,13 @@ static bool http_parse_frame_data(http_connection_t * const connection, const ht
 
   // TODO handle padding
 
-
   if (FRAME_FLAG(frame, FLAG_COMPRESSED)) {
     // handle decompression
 
     size_t inflated_length = 0;
-    uint8_t * inflated = gzip_inflate_data(buf, frame->length, &inflated_length);
+    uint8_t * inflated = gzip_decompress(buf, frame->length, &inflated_length);
 
-    if (!buf) {
+    if (!inflated) {
       emit_error_and_close(connection, stream->id, HTTP_ERROR_INTERNAL_ERROR,
                            "Unable to decompress data frame for stream #%d", stream->id);
       // we can't continute to process this frame, but other frames should continue
