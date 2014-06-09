@@ -6,10 +6,13 @@
 circular_buffer_t * circular_buffer_init(const size_t capacity)
 {
   circular_buffer_t * buf = malloc(sizeof(circular_buffer_t));
+
   if (!buf) {
     return NULL;
   }
+
   buf->entries = malloc(sizeof(void *) * capacity);
+
   if (!buf->entries) {
     free(buf);
     return NULL;
@@ -41,6 +44,7 @@ static circular_buffer_t * circular_buffer_grow(circular_buffer_t * const buf)
 
   if (shift + length > capacity) {
     void ** new_entries = malloc(sizeof(void *) * buf->capacity * 2);
+
     if (!new_entries) {
       return NULL;
     }
@@ -54,6 +58,7 @@ static circular_buffer_t * circular_buffer_grow(circular_buffer_t * const buf)
     buf->shift = 0;
   } else {
     buf->entries = realloc(buf->entries, sizeof(void *) * buf->capacity * 2);
+
     if (!buf->entries) {
       return NULL;
     }

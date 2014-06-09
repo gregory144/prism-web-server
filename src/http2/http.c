@@ -631,6 +631,7 @@ static bool emit_error_and_close(http_connection_t * const connection, uint32_t 
   if (stream_id > 0) {
 
     bool success = http_emit_rst_stream(connection, stream_id, error_code);
+
     if (!success) {
       log_error("Unable to emit reset stream frame");
     }
@@ -639,6 +640,7 @@ static bool emit_error_and_close(http_connection_t * const connection, uint32_t 
 
   } else {
     bool success = http_emit_goaway(connection, error_code, format ? buf : NULL);
+
     if (!success) {
       log_error("Unable to emit goaway frame");
     }
@@ -806,6 +808,7 @@ static bool http_emit_data_frame(const http_connection_t * const connection, con
   }
 
   http_frame_header_write(header_buf, frame->buf_length, FRAME_TYPE_DATA, flags, stream->id);
+
   if (!http_connection_write(connection, header_buf, header_length)) {
     return false;
   }
@@ -826,8 +829,10 @@ static bool http_stream_trigger_send_data(http_connection_t * const connection, 
 
     bool connection_window_open = (long)frame_payload_size <= connection->outgoing_window_size;
     bool stream_window_open = (long)frame_payload_size <= stream->outgoing_window_size;
+
     if (connection_window_open && stream_window_open) {
       bool success = http_emit_data_frame(connection, stream, frame);
+
       if (success) {
         connection->outgoing_window_size -= frame_payload_size;
         stream->outgoing_window_size -= frame_payload_size;
@@ -962,10 +967,12 @@ static http_queued_frame_t * http_queue_data_frame(http_stream_t * const stream,
   return new_frame;
 }
 
-static uint8_t * gzip_compress_data(uint8_t * in, size_t in_length, size_t * out_length) {
+static uint8_t * gzip_compress_data(uint8_t * in, size_t in_length, size_t * out_length)
+{
 
   uint8_t * out = malloc(sizeof(uint8_t) * in_length);
   size_t out_index = 0;
+
   if (!out) {
     log_error("Could not allocate space for gzip'd data");
     return NULL;
@@ -981,6 +988,7 @@ static uint8_t * gzip_compress_data(uint8_t * in, size_t in_length, size_t * out
   strm.zfree = Z_NULL;
   strm.opaque = Z_NULL;
   ret = deflateInit2(&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED, GZIP_WINDOW_BITS, GZIP_MEM_LEVEL, Z_DEFAULT_STRATEGY);
+
   if (ret != Z_OK) {
     log_error("Could not initialize deflate routine: %d", ret);
     return NULL;
@@ -996,11 +1004,13 @@ static uint8_t * gzip_compress_data(uint8_t * in, size_t in_length, size_t * out
     strm.avail_out = GZIP_CHUNK;
     strm.next_out = out_chunk;
     ret = deflate(&strm, Z_FINISH);
+
     if (ret != Z_OK && ret != Z_STREAM_END) {
       (void)deflateEnd(&strm);
       log_error("Deflation failed: %d", ret);
       return NULL;
     }
+
     out_chunk_length = GZIP_CHUNK - strm.avail_out;
 
     if (out_index + out_chunk_length > in_length) {
@@ -1038,6 +1048,7 @@ static bool http_emit_data(http_connection_t * const connection, http_stream_t *
       free(in);
       return false;
     }
+
     return http_trigger_send_data(connection, stream);
   }
 
@@ -1060,10 +1071,12 @@ static bool http_emit_data(http_connection_t * const connection, http_stream_t *
     uint8_t * curr_frame_data = per_frame_data;
     size_t curr_frame_length = per_frame_length;
     bool compressed = false;
+
     if (connection->enable_compress_data && curr_frame_length > GZIP_MIN_SIZE) {
       // gzip it
       size_t gzip_length = 0;
       uint8_t * gzip_data = gzip_compress_data(curr_frame_data, curr_frame_length, &gzip_length);
+
       if (gzip_data) {
         compressed = true;
         curr_frame_data = gzip_data;
@@ -1073,9 +1086,11 @@ static bool http_emit_data(http_connection_t * const connection, http_stream_t *
     }
 
     uint8_t * buf_begin = compressed ? curr_frame_data : (last_frame ? in : NULL);
+
     if (buf_begin == in) {
       in_freed = true;
     }
+
     if (!http_queue_data_frame(stream, curr_frame_data, curr_frame_length, compressed, last_in && last_frame, buf_begin)) {
 
       if (compressed) {
@@ -1397,10 +1412,10 @@ static uint8_t * gzip_inflate_data(uint8_t * in, size_t in_length, size_t * out_
     printf("inflate() ret: %d\n", ret);
 
     if (ret != Z_OK && ret != Z_STREAM_END) {
-        (void)inflateEnd(&strm);
-        log_error("Inflate returned stream error: %d", ret);
-        free(out);
-        return NULL;
+      (void)inflateEnd(&strm);
+      log_error("Inflate returned stream error: %d", ret);
+      free(out);
+      return NULL;
     }
 
     size_t chunk_length = GZIP_CHUNK - strm.avail_out;
@@ -1498,10 +1513,12 @@ static bool http_parse_frame_data(http_connection_t * const connection, const ht
   } else if (connection->incoming_window_size < 0.75 * DEFAULT_INITIAL_WINDOW_SIZE) {
 
     size_t increment = DEFAULT_INITIAL_WINDOW_SIZE - connection->incoming_window_size;
+
     if (!http_emit_window_update(connection, 0, increment)) {
       emit_error_and_close(connection, 0, HTTP_ERROR_INTERNAL_ERROR, "Unable to emit window update frame");
       return false;
     }
+
     connection->incoming_window_size += increment;
 
   }
@@ -1514,6 +1531,7 @@ static bool http_parse_frame_data(http_connection_t * const connection, const ht
   } else if (!last_data_frame && (stream->incoming_window_size < 0.75 * DEFAULT_INITIAL_WINDOW_SIZE)) {
 
     size_t increment = DEFAULT_INITIAL_WINDOW_SIZE - stream->incoming_window_size;
+
     if (!http_emit_window_update(connection, stream->id, increment)) {
       emit_error_and_close(connection, stream->id, HTTP_ERROR_INTERNAL_ERROR, "Unable to emit window update frame");
       // don't return false - the connection is still OK
@@ -1530,12 +1548,14 @@ static bool http_stream_add_header_fragment(http_stream_t * const stream, const 
     const size_t length)
 {
   http_header_fragment_t * fragment = malloc(sizeof(http_header_fragment_t));
+
   if (!fragment) {
     log_error("Unable to allocate space for header fragment");
     return false;
   }
 
   fragment->buffer = malloc(length);
+
   if (!fragment->buffer) {
     log_error("Unable to allocate space for header fragment");
     free(fragment);
@@ -1668,6 +1688,7 @@ static bool http_parse_frame_continuation(http_connection_t * const connection,
   uint8_t * pos = connection->buffer + connection->buffer_position;
   size_t header_block_fragment_size = frame->length;
   http_stream_t * stream = http_stream_get(connection, frame->stream_id);
+
   if (!http_stream_add_header_fragment(stream, pos, header_block_fragment_size)) {
     return false;
   }
