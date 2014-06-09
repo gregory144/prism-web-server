@@ -25,6 +25,11 @@
 
 #define PING_OPAQUE_DATA_LENGTH 8
 
+#define GZIP_CHUNK 16384
+#define GZIP_WINDOW_BITS (MAX_WBITS + 16)
+#define GZIP_MEM_LEVEL 8
+#define GZIP_MIN_SIZE 0x400
+
 const char * HTTP_CONNECTION_PREFACE = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 const size_t HTTP_CONNECTION_PREFACE_LENGTH = 24;
 
@@ -796,6 +801,10 @@ static bool http_emit_data_frame(const http_connection_t * const connection, con
     flags |= FLAG_END_STREAM;
   }
 
+  if (frame->compressed) {
+    flags |= FLAG_COMPRESSED;
+  }
+
   http_frame_header_write(header_buf, frame->buf_length, FRAME_TYPE_DATA, flags, stream->id);
   if (!http_connection_write(connection, header_buf, header_length)) {
     return false;
@@ -922,7 +931,7 @@ static bool http_trigger_send_data(http_connection_t * const connection, http_st
 }
 
 static http_queued_frame_t * http_queue_data_frame(http_stream_t * const stream, uint8_t * buf, const size_t buf_length,
-    const bool end_stream, void * const buf_begin)
+    const bool compressed, const bool end_stream, void * const buf_begin)
 {
   http_queued_frame_t * new_frame = malloc(sizeof(http_queued_frame_t));
 
@@ -935,6 +944,7 @@ static http_queued_frame_t * http_queue_data_frame(http_stream_t * const stream,
   new_frame->buf_length = buf_length;
   new_frame->end_stream = end_stream;
   new_frame->buf_begin = buf_begin;
+  new_frame->compressed = compressed;
   new_frame->next = NULL;
 
   if (!stream->queued_data_frames) {
@@ -952,40 +962,136 @@ static http_queued_frame_t * http_queue_data_frame(http_stream_t * const stream,
   return new_frame;
 }
 
-static bool http_emit_data(http_connection_t * const connection, http_stream_t * const stream, uint8_t * text,
-                           const size_t text_length, bool last)
+static uint8_t * gzip_compress_data(uint8_t * in, size_t in_length, size_t * out_length) {
+
+  uint8_t * out = malloc(sizeof(uint8_t) * in_length);
+  size_t out_index = 0;
+  if (!out) {
+    log_error("Could not allocate space for gzip'd data");
+    return NULL;
+  }
+
+  int ret;
+  z_stream strm;
+  uint8_t out_chunk[GZIP_CHUNK];
+  size_t out_chunk_length;
+
+  /* allocate deflate state */
+  strm.zalloc = Z_NULL;
+  strm.zfree = Z_NULL;
+  strm.opaque = Z_NULL;
+  ret = deflateInit2(&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED, GZIP_WINDOW_BITS, GZIP_MEM_LEVEL, Z_DEFAULT_STRATEGY);
+  if (ret != Z_OK) {
+    log_error("Could not initialize deflate routine: %d", ret);
+    return NULL;
+  }
+
+  strm.next_in = in;
+  strm.avail_in = in_length;
+
+  /* run deflate() on input until output buffer not full, finish
+     compression if all of source has been read in */
+  do {
+
+    strm.avail_out = GZIP_CHUNK;
+    strm.next_out = out_chunk;
+    ret = deflate(&strm, Z_FINISH);
+    if (ret != Z_OK && ret != Z_STREAM_END) {
+      (void)deflateEnd(&strm);
+      log_error("Deflation failed: %d", ret);
+      return NULL;
+    }
+    out_chunk_length = GZIP_CHUNK - strm.avail_out;
+
+    if (out_index + out_chunk_length > in_length) {
+      (void)deflateEnd(&strm);
+      log_trace("Deflation output would be larger than input");
+      return NULL;
+    }
+
+    memcpy(out + out_index, out_chunk, out_chunk_length);
+    out_index += out_chunk_length;
+
+  } while (strm.avail_out == 0);
+
+  if (strm.avail_in != 0) {
+    (void)deflateEnd(&strm);
+    log_error("Data left over after deflation: %ld", strm.avail_in);
+    return NULL;
+  }
+
+  *out_length = out_index;
+
+  /* clean up and return */
+  (void)deflateEnd(&strm);
+  return out;
+
+}
+
+static bool http_emit_data(http_connection_t * const connection, http_stream_t * const stream, uint8_t * in,
+                           const size_t in_length, bool last_in)
 {
   // TODO support padding?
 
-  size_t frame_payload_size = text_length;
-
-  if (frame_payload_size > MAX_FRAME_SIZE) {
-    size_t remaining_length = text_length;
-    size_t per_frame_length;
-    uint8_t * per_frame_text = text;
-    bool last_per_call = false;
-
-    while (remaining_length > 0) {
-      if (remaining_length > MAX_FRAME_SIZE) {
-        per_frame_length = MAX_FRAME_SIZE;
-        last_per_call = false;
-      } else {
-        per_frame_length = remaining_length;
-        last_per_call = true;
-      }
-
-      if (!http_queue_data_frame(stream, per_frame_text, per_frame_length, last
-                                 && last_per_call, last_per_call ? text : NULL)) {
-        return false;
-      }
-
-      remaining_length -= per_frame_length;
-      per_frame_text += per_frame_length;
-    }
-  } else {
-    if (!http_queue_data_frame(stream, text, text_length, last, text)) {
+  if (in_length == 0) {
+    if (!http_queue_data_frame(stream, in, in_length, false, last_in, in)) {
+      free(in);
       return false;
     }
+    return http_trigger_send_data(connection, stream);
+  }
+
+  size_t remaining_length = in_length;
+  size_t per_frame_length;
+  uint8_t * per_frame_data = in;
+  bool last_frame = false;
+
+  bool in_freed = false;
+
+  while (remaining_length > 0) {
+    if (remaining_length > MAX_FRAME_SIZE) {
+      per_frame_length = MAX_FRAME_SIZE;
+      last_frame = false;
+    } else {
+      per_frame_length = remaining_length;
+      last_frame = true;
+    }
+
+    uint8_t * curr_frame_data = per_frame_data;
+    size_t curr_frame_length = per_frame_length;
+    bool compressed = false;
+    if (connection->enable_compress_data && curr_frame_length > GZIP_MIN_SIZE) {
+      // gzip it
+      size_t gzip_length = 0;
+      uint8_t * gzip_data = gzip_compress_data(curr_frame_data, curr_frame_length, &gzip_length);
+      if (gzip_data) {
+        compressed = true;
+        curr_frame_data = gzip_data;
+        curr_frame_length = gzip_length;
+      }
+
+    }
+
+    uint8_t * buf_begin = compressed ? curr_frame_data : (last_frame ? in : NULL);
+    if (buf_begin == in) {
+      in_freed = true;
+    }
+    if (!http_queue_data_frame(stream, curr_frame_data, curr_frame_length, compressed, last_in && last_frame, buf_begin)) {
+
+      if (compressed) {
+        free(curr_frame_data);
+      }
+
+      free(in);
+      return false;
+    }
+
+    remaining_length -= per_frame_length;
+    per_frame_data += per_frame_length;
+  }
+
+  if (!in_freed) {
+    free(in);
   }
 
   return http_trigger_send_data(connection, stream);
@@ -1251,8 +1357,6 @@ static bool http_trigger_request(http_connection_t * const connection, http_stre
   return true;
 }
 
-#define GZIP_CHUNK 16384
-
 static uint8_t * gzip_inflate_data(uint8_t * in, size_t in_length, size_t * out_length)
 {
 
@@ -1275,10 +1379,10 @@ static uint8_t * gzip_inflate_data(uint8_t * in, size_t in_length, size_t * out_
   strm.opaque = Z_NULL;
   strm.avail_in = in_length;
   strm.next_in = in;
-  ret = inflateInit2(&strm, MAX_WBITS + 16); // +16 for gzip
+  ret = inflateInit2(&strm, GZIP_WINDOW_BITS);
 
   if (ret != Z_OK) {
-    log_error("Inflate initialisation failed: %d", ret);
+    log_error("Inflate initialization failed: %d", ret);
     free(out);
     return NULL;
   }
@@ -1290,21 +1394,9 @@ static uint8_t * gzip_inflate_data(uint8_t * in, size_t in_length, size_t * out_
     strm.next_out = out_chunk;
 
     ret = inflate(&strm, Z_NO_FLUSH);
+    printf("inflate() ret: %d\n", ret);
 
-    /* check state not clobbered */
-    if (ret == Z_STREAM_ERROR) {
-      (void)inflateEnd(&strm);
-      log_error("Inflate returned stream error: Z_STREAM_ERROR");
-      free(out);
-      return NULL;
-    }
-
-    switch (ret) {
-      case Z_NEED_DICT:
-        ret = Z_DATA_ERROR;     /* and fall through */
-
-      case Z_DATA_ERROR:
-      case Z_MEM_ERROR:
+    if (ret != Z_OK && ret != Z_STREAM_END) {
         (void)inflateEnd(&strm);
         log_error("Inflate returned stream error: %d", ret);
         free(out);
@@ -1332,7 +1424,7 @@ static uint8_t * gzip_inflate_data(uint8_t * in, size_t in_length, size_t * out_
     memcpy(out + out_index, out_chunk, chunk_length);
     out_index += chunk_length;
 
-  } while (strm.avail_out == 0);
+  } while (strm.avail_out == 0 || ret != Z_STREAM_END);
 
   *out_length = out_index;
 
@@ -1342,6 +1434,7 @@ static uint8_t * gzip_inflate_data(uint8_t * in, size_t in_length, size_t * out_
   if (ret == Z_STREAM_END) {
     return out;
   } else {
+    log_error("Unable to inflate data, Not at stream end: %d", ret);
     free(out);
     return NULL;
   }
@@ -1723,8 +1816,8 @@ static bool http_parse_frame_rst_stream(http_connection_t * const connection, ht
   uint8_t * buf = connection->buffer + connection->buffer_position;
   frame->error_code = get_bits32(buf, 0xFFFFFFFF);
 
-  log_warning("Received reset stream: stream #%d, error code: %d",
-              frame->stream_id, frame->error_code);
+  log_warning("Received reset stream: stream #%d, error code: %s (%d)",
+              frame->stream_id, http_connection_errors[frame->error_code], frame->error_code);
 
   http_stream_t * stream = http_stream_get(connection, frame->stream_id);
 

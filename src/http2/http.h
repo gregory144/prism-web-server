@@ -289,6 +289,7 @@ typedef struct http_queued_frame_s {
    */
   void * buf_begin;
 
+  bool compressed;
   bool continuation;
   bool end_stream;
 
