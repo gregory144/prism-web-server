@@ -2150,8 +2150,8 @@ http_request_t * http_push_init(http_request_t * const original_request)
               connection->max_concurrent_streams, stream->id);
     return NULL;
   } else {
-    printf("Push #%ld for stream: stream #%d\n",
-           connection->outgoing_concurrent_streams, stream->id);
+    log_debug("Push #%ld for stream: stream #%d\n",
+              connection->outgoing_concurrent_streams, stream->id);
   }
 
   http_stream_t * pushed_stream = http_stream_init(connection, connection->current_stream_id);
