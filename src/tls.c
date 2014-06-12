@@ -141,10 +141,35 @@ static int next_proto_cb(SSL * ssl, const unsigned char ** data, unsigned int * 
   UNUSED(ssl);
   UNUSED(arg);
 
+  log_trace("Selecting protocol [NPN]");
   // 'wire' format: length prefixed, non-empty 8-bit characters
   unsigned char protos[] = { 5, 'h', '2', '-', '1', '2' };
   *data = protos;
   *len = 6;
+
+  return SSL_TLSEXT_ERR_OK;
+}
+
+static int alpn_cb(SSL * ssl, const unsigned char ** out, unsigned char * outlen, const unsigned char * in, unsigned int inlen, void * arg)
+{
+  UNUSED(ssl);
+  UNUSED(arg);
+  UNUSED(out);
+  UNUSED(outlen);
+  UNUSED(in);
+  UNUSED(inlen);
+
+  // 'wire' format: length prefixed, non-empty 8-bit characters
+  unsigned char protos[] = { 5, 'h', '2', '-', '1', '2' };
+  unsigned char protos_length = 6;
+
+  log_error("*******************************************************");
+  log_error("Selecting protocol [ALPN]: %d", inlen);
+  if (SSL_select_next_proto((unsigned char**) out, outlen, protos, protos_length, in, inlen) !=
+      OPENSSL_NPN_NEGOTIATED)
+  {
+    return SSL_TLSEXT_ERR_NOACK;
+  }
 
   return SSL_TLSEXT_ERR_OK;
 }
@@ -162,6 +187,7 @@ tls_server_ctx_t * tls_server_init()
   SSL_CTX_use_PrivateKey_file(ssl_ctx, "key.pem", SSL_FILETYPE_PEM);
 
   SSL_CTX_set_next_protos_advertised_cb(ssl_ctx, next_proto_cb, NULL);
+  SSL_CTX_set_alpn_select_cb(ssl_ctx, alpn_cb, NULL);
 
   tls_server_ctx_t * tls_server_ctx = malloc(sizeof(tls_server_ctx_t));
   tls_server_ctx->ssl_ctx = ssl_ctx;

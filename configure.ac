@@ -28,15 +28,15 @@ LT_INIT
 # suggested by libtoolize
 AC_CONFIG_MACRO_DIR([m4])
 
+# check for 'check' executable
+PKG_CHECK_MODULES([CHECK], [check >= 0.9.4])
+
 AC_CHECK_LIB(uv, uv_run)
 # require pthread for libuv
 AC_CHECK_LIB(pthread, pthread_create)
-AC_CHECK_LIB(ssl, SSL_CTX_new)
-AC_CHECK_LIB(crypto, X509_STORE_CTX_get_error_depth)
+AC_CHECK_LIB(crypto, BIO_new, , [AC_MSG_ERROR(library crypto not found)])
+AC_CHECK_LIB(ssl, SSL_CTX_new, , [AC_MSG_ERROR(library ssl not found)])
 AC_CHECK_LIB(z, zlibVersion)
-
-# check for 'check' executable
-PKG_CHECK_MODULES([CHECK], [check >= 0.9.4])
 
 # required for 'check'
 AM_PROG_CC_C_O
