@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include <uv.h>
-#include <assert.h>
 
 #include "config.h"
 
@@ -219,7 +219,9 @@ void server_alloc_buffer(uv_handle_t * handle, size_t suggested_size, uv_buf_t *
 
 void server_write(uv_write_t * req, int status)
 {
-  assert(req != NULL);
+  if (req == NULL) {
+    abort();
+  }
 
   http_write_req_data_t * write_req_data = req->data;
   http_client_data_t * client_data = write_req_data->stream->data;
@@ -324,14 +326,20 @@ void server_read(uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
     return;
   }
 
-  server_parse(stream, (uint8_t *)buf->base, nread);
+  http_client_data_t * client_data = stream->data;
+  tls_client_ctx_t * tls_client_ctx = client_data->tls_ctx;
+
+  tls_read_from_network(tls_client_ctx, (uint8_t *)buf->base, nread);
 
   reads++;
 
 }
 
-void server_http_write(void * stream, uint8_t * buf, size_t len)
+bool server_write_to_network(void * data, uint8_t * buf, size_t len)
 {
+  http_client_data_t * client_data = data;
+  uv_stream_t * stream = client_data->stream;
+
   uv_write_t * write_req = malloc(sizeof(uv_write_t));
   http_write_req_data_t * write_req_data = malloc(sizeof(http_write_req_data_t));
   write_req_data->stream = stream;
@@ -355,11 +363,58 @@ void server_http_write(void * stream, uint8_t * buf, size_t len)
   }
 
   uv_write(write_req, stream, write_req_data->buf, 1, server_write);
+
+  return true;
 }
 
-void server_http_close(void * stream)
+void server_http_close(void * data)
 {
-  server_stream_shutdown(stream);
+  http_client_data_t * client_data = data;
+  server_stream_shutdown(client_data->stream);
+}
+
+// pass the decrypted data on to the application
+bool server_read_from_network(void * data, uint8_t * buf, size_t length) {
+
+  http_client_data_t * client_data = data;
+  uv_stream_t * stream = client_data->stream;
+
+  log_warning("Parsing decrypted data");
+  server_parse(stream, (uint8_t *)buf, length);
+
+  return true;
+}
+
+bool server_write_from_app(void * data, uint8_t * buf, size_t length) {
+  log_warning("Encrypting data");
+
+  http_client_data_t * client_data = data;
+
+  return tls_read_from_app(client_data->tls_ctx, buf, length);
+
+  /*uv_write_t * write_req = malloc(sizeof(uv_write_t));*/
+  /*http_write_req_data_t * write_req_data = malloc(sizeof(http_write_req_data_t));*/
+  /*write_req_data->stream = stream;*/
+  /*write_req->data = write_req_data;*/
+
+  /*// copy bytes to write to new buffer*/
+  /*uv_buf_t * write_buf = malloc(sizeof(uv_buf_t));*/
+  /*write_buf->base = malloc(sizeof(char) * length);*/
+  /*memcpy(write_buf->base, buf, length);*/
+  /*write_buf->len = length;*/
+  /*// keep track of the buffer so we can free it later*/
+  /*write_req_data->buf = write_buf;*/
+
+  /*if (LOG_DATA) {*/
+    /*log_trace("uv_write: %s, %ld", buf, length);*/
+    /*size_t i;*/
+
+    /*for (i = 0; i < length; i++) {*/
+      /*log_trace("%02x", (uint8_t)buf[i]);*/
+    /*}*/
+  /*}*/
+
+  /*uv_write(write_req, stream, write_req_data->buf, 1, server_write);*/
 }
 
 void server_connection_start(uv_stream_t * server, int status)
@@ -373,20 +428,27 @@ void server_connection_start(uv_stream_t * server, int status)
 
   uv_tcp_t * client = malloc(sizeof(uv_tcp_t));
   client->close_cb = server_connection_close;
+
   http_client_data_t * client_data = malloc(sizeof(http_client_data_t));
   client_data->bytes_read = 0;
   client_data->bytes_written = 0;
   client_data->uv_read_count = 0;
   client_data->stream = (uv_stream_t *) client;
-  client_data->connection = http_connection_init(client, handle_request, handle_data, server_http_write,
+  client_data->server_data = server_data;
+  client_data->connection = http_connection_init(client_data, handle_request, handle_data, server_write_from_app,
                             server_http_close);
+
   client->data = client_data;
+
   uv_tcp_init(server_data->loop, client);
 
   if (uv_accept(server, (uv_stream_t *) client) == 0) {
+
+    client_data->tls_ctx = tls_client_init(server_data->tls_ctx, client_data, server_write_to_network, server_read_from_network);
+
     int err = uv_read_start((uv_stream_t *) client, server_alloc_buffer, server_read);
 
-    if (err < 0 && LOG_ERROR) {
+    if (err < 0) {
       log_error("Read error: %s", uv_strerror(err));
     }
   } else {
@@ -396,20 +458,26 @@ void server_connection_start(uv_stream_t * server, int status)
 
 int server_start()
 {
+
+  tls_init_static();
+
   uv_loop_t * loop = uv_default_loop();
 
-  uv_tcp_t server;
   http_server_data_t server_data;
+  server_data.tls_ctx = tls_server_init();
   server_data.loop = loop;
+
+  uv_tcp_t server;
   server.data = &server_data;
+
   uv_tcp_init(loop, &server);
 
   struct sockaddr_in bind_addr;
-  uv_ip4_addr("0.0.0.0", 7000, &bind_addr);
+  uv_ip4_addr(SERVER_HOSTNAME, SERVER_PORT, &bind_addr);
   uv_tcp_bind(&server, (struct sockaddr *)&bind_addr, 0);
   int err = uv_listen((uv_stream_t *) &server, 128, server_connection_start);
 
-  if (err < 0 && LOG_ERROR) {
+  if (err < 0) {
     log_error("Listen error: %s", uv_strerror(err));
     return 1;
   }

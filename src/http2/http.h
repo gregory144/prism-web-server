@@ -352,7 +352,7 @@ typedef void (*request_cb)(http_request_t * request, http_response_t * response)
 typedef void (*data_cb)(http_request_t * request, http_response_t * response, uint8_t * buf, size_t len, bool last,
                         bool free_buf);
 
-typedef void (*write_cb)(void * data, uint8_t * buf, size_t len);
+typedef bool (*write_cb)(void * data, uint8_t * buf, size_t len);
 
 typedef void (*close_cb)(void * data);
 

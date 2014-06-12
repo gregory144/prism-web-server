@@ -31,6 +31,8 @@ AC_CONFIG_MACRO_DIR([m4])
 AC_CHECK_LIB(uv, uv_run)
 # require pthread for libuv
 AC_CHECK_LIB(pthread, pthread_create)
+AC_CHECK_LIB(ssl, SSL_CTX_new)
+AC_CHECK_LIB(crypto, X509_STORE_CTX_get_error_depth)
 AC_CHECK_LIB(z, zlibVersion)
 
 # check for 'check' executable
