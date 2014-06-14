@@ -12,6 +12,9 @@
 typedef struct {
   uv_loop_t * loop;
   tls_server_ctx_t * tls_ctx;
+
+  int port;
+  bool use_tls;
 } http_server_data_t;
 
 typedef struct {
@@ -41,7 +44,7 @@ typedef struct {
   uv_stream_t * stream;
 } http_shutdown_data_t;
 
-http_server_data_t * server_init();
+http_server_data_t * server_init(int port, bool use_tls, char * key_file, char * cert_file);
 
 int server_start(http_server_data_t * server_data);
 

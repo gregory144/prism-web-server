@@ -127,7 +127,7 @@ static int alpn_cb(SSL * ssl, const unsigned char ** out, unsigned char * outlen
   return SSL_TLSEXT_ERR_OK;
 }
 
-tls_server_ctx_t * tls_server_init()
+tls_server_ctx_t * tls_server_init(char * key_file, char * cert_file)
 {
   SSL_CTX * ssl_ctx = SSL_CTX_new(TLSv1_2_server_method());
 
@@ -135,8 +135,8 @@ tls_server_ctx_t * tls_server_init()
   SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_NONE, NULL);
 
   // set certificates
-  SSL_CTX_use_certificate_file(ssl_ctx, "cert.pem", SSL_FILETYPE_PEM);
-  SSL_CTX_use_PrivateKey_file(ssl_ctx, "key.pem", SSL_FILETYPE_PEM);
+  SSL_CTX_use_certificate_file(ssl_ctx, cert_file, SSL_FILETYPE_PEM);
+  SSL_CTX_use_PrivateKey_file(ssl_ctx, key_file, SSL_FILETYPE_PEM);
 
   // set up protocol negotiation callbacks
   SSL_CTX_set_next_protos_advertised_cb(ssl_ctx, next_proto_cb, NULL);

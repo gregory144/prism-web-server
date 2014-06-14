@@ -48,7 +48,7 @@ typedef struct {
 
 bool tls_init();
 
-tls_server_ctx_t * tls_server_init();
+tls_server_ctx_t * tls_server_init(char * key_file, char * cert_file);
 
 bool tls_server_free(tls_server_ctx_t * server_ctx);
 

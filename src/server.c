@@ -252,7 +252,11 @@ void server_connection_close(uv_handle_t * handle)
 
   free(client_data->stream);
   http_connection_free(client_data->connection);
-  tls_client_free(client_data->tls_ctx);
+
+  if (client_data->tls_ctx) {
+    tls_client_free(client_data->tls_ctx);
+  }
+
   free(client_data);
 }
 
@@ -295,6 +299,7 @@ void server_stream_shutdown(uv_stream_t * stream)
     log_trace("shutting down... (%ld)", client_data->uv_read_count);
   }
 
+  // TODO error handling
   uv_shutdown_t * shutdown_req = malloc(sizeof(uv_shutdown_t));
   http_shutdown_data_t * shutdown_data = malloc(sizeof(http_shutdown_data_t));
   shutdown_data->stream = stream;
@@ -324,11 +329,21 @@ void server_read(uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
   }
 
   http_client_data_t * client_data = stream->data;
-  tls_client_ctx_t * tls_client_ctx = client_data->tls_ctx;
+  http_server_data_t * server_data = client_data->server_data;
 
-  log_trace("Passing %ld octets of data from network to TLS handler", nread);
-  tls_decrypt_data_and_pass_to_app(tls_client_ctx, (uint8_t *)buf->base, nread);
-  log_trace("Passed %ld octets of data from network to TLS handler", nread);
+  if (server_data->use_tls) {
+
+    tls_client_ctx_t * tls_client_ctx = client_data->tls_ctx;
+
+    log_trace("Passing %ld octets of data from network to TLS handler", nread);
+    tls_decrypt_data_and_pass_to_app(tls_client_ctx, (uint8_t *)buf->base, nread);
+    log_trace("Passed %ld octets of data from network to TLS handler", nread);
+
+  } else {
+
+    server_parse(stream, (uint8_t *)buf->base, nread);
+
+  }
 
   reads++;
 
@@ -389,11 +404,16 @@ bool server_write_to_app(void * data, uint8_t * buf, size_t length)
 bool server_write_from_app(void * data, uint8_t * buf, size_t length)
 {
   http_client_data_t * client_data = data;
+  http_server_data_t * server_data = client_data->server_data;
 
-  log_trace("Passing %ld octets of data from application to TLS handler", length);
-  bool ret = tls_encrypt_data_and_pass_to_network(client_data->tls_ctx, buf, length);
-  log_trace("Passed %ld octets of data from application to TLS handler", length);
-  return ret;
+  if (server_data->use_tls) {
+    log_trace("Passing %ld octets of data from application to TLS handler", length);
+    bool ret = tls_encrypt_data_and_pass_to_network(client_data->tls_ctx, buf, length);
+    log_trace("Passed %ld octets of data from application to TLS handler", length);
+    return ret;
+  } else {
+    return server_write_to_network(client_data, buf, length);
+  }
 }
 
 void server_connection_start(uv_stream_t * server, int status)
@@ -409,6 +429,7 @@ void server_connection_start(uv_stream_t * server, int status)
   client->close_cb = server_connection_close;
 
   http_client_data_t * client_data = malloc(sizeof(http_client_data_t));
+  client_data->tls_ctx = NULL;
   client_data->bytes_read = 0;
   client_data->bytes_written = 0;
   client_data->uv_read_count = 0;
@@ -423,8 +444,10 @@ void server_connection_start(uv_stream_t * server, int status)
 
   if (uv_accept(server, (uv_stream_t *) client) == 0) {
 
-    client_data->tls_ctx = tls_client_init(server_data->tls_ctx, client_data, server_write_to_network,
-                                           server_write_to_app);
+    if (server_data->use_tls) {
+      client_data->tls_ctx = tls_client_init(server_data->tls_ctx, client_data, server_write_to_network,
+                                             server_write_to_app);
+    }
 
     int err = uv_read_start((uv_stream_t *) client, server_alloc_buffer, server_read);
 
@@ -436,21 +459,27 @@ void server_connection_start(uv_stream_t * server, int status)
   }
 }
 
-http_server_data_t * server_init()
+http_server_data_t * server_init(int port, bool use_tls, char * key_file, char * cert_file)
 {
 
-  tls_init();
+  if (use_tls) {
+    tls_init();
+  }
 
   http_server_data_t * server_data = malloc(sizeof(http_server_data_t));
   ASSERT_OR_RETURN_NULL(server_data);
   server_data->tls_ctx = NULL;
   server_data->loop = NULL;
+  server_data->port = port;
+  server_data->use_tls = use_tls;
 
-  server_data->tls_ctx = tls_server_init();
+  if (use_tls) {
+    server_data->tls_ctx = tls_server_init(key_file, cert_file);
 
-  if (!server_data->tls_ctx) {
-    free(server_data);
-    return NULL;
+    if (!server_data->tls_ctx) {
+      free(server_data);
+      return NULL;
+    }
   }
 
   server_data->loop = uv_default_loop();
@@ -473,7 +502,7 @@ int server_start(http_server_data_t * server_data)
   uv_tcp_init(server_data->loop, &server);
 
   struct sockaddr_in bind_addr;
-  uv_ip4_addr(SERVER_HOSTNAME, SERVER_PORT, &bind_addr);
+  uv_ip4_addr(SERVER_HOSTNAME, server_data->port, &bind_addr);
   uv_tcp_bind(&server, (struct sockaddr *)&bind_addr, 0);
 
   int err = uv_listen((uv_stream_t *) &server, 128, server_connection_start);
@@ -483,7 +512,7 @@ int server_start(http_server_data_t * server_data)
     return 1;
   }
 
-  log_info("Server starting on %s:%d", SERVER_HOSTNAME, SERVER_PORT);
+  log_info("Server starting on %s:%d", SERVER_HOSTNAME, server_data->port);
 
   return uv_run(server_data->loop, UV_RUN_DEFAULT);
 
@@ -492,6 +521,7 @@ int server_start(http_server_data_t * server_data)
 void server_stop(http_server_data_t * server_data)
 {
   log_info("Server shutting down...");
+
   if (server_data) {
 
     if (server_data->tls_ctx) {
