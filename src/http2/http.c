@@ -315,7 +315,7 @@ static void http_stream_free(void * value)
   free(stream);
 }
 
-http_connection_t * http_connection_init(void * const data, const request_cb request_handler,
+http_connection_t * http_connection_init(void * const data, const bool enable_compression, const request_cb request_handler,
     const data_cb data_handler, const write_cb writer, const close_cb closer)
 {
   http_connection_t * connection = malloc(sizeof(http_connection_t));
@@ -348,7 +348,8 @@ http_connection_t * http_connection_init(void * const data, const request_cb req
   connection->enable_push = DEFAULT_ENABLE_PUSH;
   connection->max_concurrent_streams = DEFAULT_MAX_CONNCURRENT_STREAMS;
   connection->initial_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
-  connection->enable_compress_data = DEFAULT_COMPRESS_DATA;
+  connection->enable_compress_data = enable_compression;
+  connection->setting_compress_data = DEFAULT_COMPRESS_DATA;
 
   /**
    * Set these to NULL, http_connection_free requires the values to be set
@@ -998,7 +999,7 @@ static bool http_emit_data(http_connection_t * const connection, http_stream_t *
     size_t curr_frame_length = per_frame_length;
     bool compressed = false;
 
-    if (connection->enable_compress_data && curr_frame_length > GZIP_MIN_SIZE) {
+    if (connection->enable_compress_data && connection->setting_compress_data && curr_frame_length > GZIP_MIN_SIZE) {
       // gzip it
       connection->gzip_context = gzip_compress_init(connection->gzip_context);
 
@@ -1215,7 +1216,7 @@ static bool http_setting_set(http_connection_t * const connection, const enum se
     case SETTINGS_COMPRESS_DATA:
       log_trace("Settings: Enable compressed data? %s", value ? "yes" : "no");
 
-      connection->enable_compress_data = value;
+      connection->setting_compress_data = value;
       break;
 
     default:

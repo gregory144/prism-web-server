@@ -41,6 +41,7 @@ int main(int argc, char ** argv)
   sigact_int.sa_handler = catcher;
   sigaction(SIGINT, &sigact_int, NULL);
 
+  bool enable_compression = 1;
   bool use_tls = 1;
   long port = SERVER_PORT;
   char * private_key_file = "key.pem";
@@ -49,7 +50,7 @@ int main(int argc, char ** argv)
 
   opterr = 0;
 
-  while ((c = getopt(argc, argv, "p:k:c:i")) != -1) {
+  while ((c = getopt(argc, argv, "p:k:c:ig")) != -1) {
     switch (c) {
       case 'p':
         port = strtol(optarg, NULL, 10);
@@ -65,6 +66,10 @@ int main(int argc, char ** argv)
 
       case 'i': // insecure
         use_tls = 0;
+        break;
+
+      case 'g': // no gzip
+        enable_compression = 0;
         break;
 
       case '?':
@@ -88,7 +93,7 @@ int main(int argc, char ** argv)
     exit(EXIT_FAILURE);
   }
 
-  server_data = server_init(port, use_tls, private_key_file, cert_key_file);
+  server_data = server_init(port, enable_compression, use_tls, private_key_file, cert_key_file);
 
   if (!server_data) {
     exit(EXIT_FAILURE);

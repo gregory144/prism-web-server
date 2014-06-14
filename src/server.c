@@ -435,7 +435,7 @@ void server_connection_start(uv_stream_t * server, int status)
   client_data->uv_read_count = 0;
   client_data->stream = (uv_stream_t *) client;
   client_data->server_data = server_data;
-  client_data->connection = http_connection_init(client_data, handle_request, handle_data, server_write_from_app,
+  client_data->connection = http_connection_init(client_data, server_data->enable_compression, handle_request, handle_data, server_write_from_app,
                             server_http_close);
 
   client->data = client_data;
@@ -459,7 +459,7 @@ void server_connection_start(uv_stream_t * server, int status)
   }
 }
 
-http_server_data_t * server_init(int port, bool use_tls, char * key_file, char * cert_file)
+http_server_data_t * server_init(int port, bool enable_compression, bool use_tls, char * key_file, char * cert_file)
 {
 
   if (use_tls) {
@@ -472,6 +472,7 @@ http_server_data_t * server_init(int port, bool use_tls, char * key_file, char *
   server_data->loop = NULL;
   server_data->port = port;
   server_data->use_tls = use_tls;
+  server_data->enable_compression = enable_compression;
 
   if (use_tls) {
     server_data->tls_ctx = tls_server_init(key_file, cert_file);

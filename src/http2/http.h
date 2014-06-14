@@ -404,7 +404,16 @@ typedef struct {
   bool enable_push;
   size_t max_concurrent_streams;
   size_t initial_window_size;
+
+  /**
+   * Was the server started with compression enabled?
+   */
   bool enable_compress_data;
+
+  /**
+   * Did the client specify that we can compress data frames?
+   */
+  bool setting_compress_data;
 
   hash_table_t * streams;
 
@@ -414,7 +423,7 @@ typedef struct {
   gzip_context_t * gzip_context;
 } http_connection_t;
 
-http_connection_t * http_connection_init(void * const data, const request_cb request_handler,
+http_connection_t * http_connection_init(void * const data, bool enable_compression, const request_cb request_handler,
     const data_cb data_handler, const write_cb writer, const close_cb closer);
 
 void http_connection_free(http_connection_t * const connection);
