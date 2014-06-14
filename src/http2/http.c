@@ -500,9 +500,7 @@ static bool http_connection_write(const http_connection_t * const connection, ui
   // if the given buffer's size is greater than MAX_CONNECTION_BUFFER_SIZE
   // then just write it directly - don't add it to the write buffer
   if (buf_length > MAX_CONNECTION_BUFFER_SIZE) {
-    connection->writer(connection->data, buf, buf_length);
-
-    return true;
+    return connection->writer(connection->data, buf, buf_length);
   }
 
   ASSERT_OR_RETURN_FALSE(
@@ -1158,9 +1156,10 @@ static bool http_frame_flag_get(const http_frame_t * const frame, int mask)
 static bool http_connection_recognize_connection_preface(http_connection_t * const connection)
 {
   if (connection->buffer_length >= HTTP_CONNECTION_PREFACE_LENGTH) {
-    connection->buffer_position = HTTP_CONNECTION_PREFACE_LENGTH;
-    return memcmp(connection->buffer, HTTP_CONNECTION_PREFACE,
-                  HTTP_CONNECTION_PREFACE_LENGTH) == 0;
+    if (memcmp(connection->buffer, HTTP_CONNECTION_PREFACE, HTTP_CONNECTION_PREFACE_LENGTH) == 0) {
+      connection->buffer_position = HTTP_CONNECTION_PREFACE_LENGTH;
+      return true;
+    }
   }
 
   return false;
@@ -2064,6 +2063,7 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
   size_t unprocessed_bytes = connection->buffer_length;
 
   if (unprocessed_bytes > 0) {
+    log_trace("Appending new data to uncprocessed bytes %ld + %ld = %ld", unprocessed_bytes, len, unprocessed_bytes + len);
     // there are still unprocessed bytes
     connection->buffer = realloc(connection->buffer, unprocessed_bytes + len);
 
@@ -2120,10 +2120,12 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
   unprocessed_bytes = connection->buffer_length - connection->buffer_position;
 
   if (!connection->closing && unprocessed_bytes > 0) {
+    log_trace("Unable to process last %ld bytes", unprocessed_bytes);
     // use memmove because it might overlap
     memmove(connection->buffer, connection->buffer + connection->buffer_position, unprocessed_bytes);
     connection->buffer = realloc(connection->buffer, unprocessed_bytes);
     connection->buffer_length = unprocessed_bytes;
+    connection->buffer_position = 0;
   } else {
     free(connection->buffer);
     connection->buffer = NULL;
