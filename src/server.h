@@ -41,9 +41,10 @@ typedef struct {
   uv_stream_t * stream;
 } http_shutdown_data_t;
 
-/**
- * Starts the server
- */
-int server_start();
+http_server_data_t * server_init();
+
+int server_start(http_server_data_t * server_data);
+
+void server_stop(http_server_data_t * server_data);
 
 #endif

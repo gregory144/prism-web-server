@@ -436,27 +436,46 @@ void server_connection_start(uv_stream_t * server, int status)
   }
 }
 
-int server_start()
+http_server_data_t * server_init()
 {
 
-  log_trace("Starting server");
-  tls_init_static();
+  tls_init();
 
-  uv_loop_t * loop = uv_default_loop();
+  http_server_data_t * server_data = malloc(sizeof(http_server_data_t));
+  ASSERT_OR_RETURN_NULL(server_data);
+  server_data->tls_ctx = NULL;
+  server_data->loop = NULL;
 
-  http_server_data_t server_data;
-  server_data.tls_ctx = tls_server_init();
-  log_trace("TLS Server init");
-  server_data.loop = loop;
+  server_data->tls_ctx = tls_server_init();
+
+  if (!server_data->tls_ctx) {
+    free(server_data);
+    return NULL;
+  }
+
+  server_data->loop = uv_default_loop();
+
+  if (!server_data->loop) {
+    free(server_data);
+    return NULL;
+  }
+
+  return server_data;
+
+}
+
+int server_start(http_server_data_t * server_data)
+{
 
   uv_tcp_t server;
-  server.data = &server_data;
+  server.data = server_data;
 
-  uv_tcp_init(loop, &server);
+  uv_tcp_init(server_data->loop, &server);
 
   struct sockaddr_in bind_addr;
   uv_ip4_addr(SERVER_HOSTNAME, SERVER_PORT, &bind_addr);
   uv_tcp_bind(&server, (struct sockaddr *)&bind_addr, 0);
+
   int err = uv_listen((uv_stream_t *) &server, 128, server_connection_start);
 
   if (err < 0) {
@@ -464,8 +483,23 @@ int server_start()
     return 1;
   }
 
-  int ret = uv_run(loop, UV_RUN_DEFAULT);
-  uv_loop_delete(loop);
-  return ret;
+  log_info("Server starting on %s:%d", SERVER_HOSTNAME, SERVER_PORT);
+
+  return uv_run(server_data->loop, UV_RUN_DEFAULT);
+
 }
 
+void server_stop(http_server_data_t * server_data)
+{
+  log_info("Server shutting down...");
+  if (server_data) {
+
+    if (server_data->tls_ctx) {
+      tls_server_free(server_data->tls_ctx);
+    }
+
+    uv_loop_close(server_data->loop);
+    free(server_data);
+
+  }
+}

@@ -46,7 +46,7 @@ typedef struct {
 
 } tls_client_ctx_t;
 
-bool tls_init_static();
+bool tls_init();
 
 tls_server_ctx_t * tls_server_init();
 

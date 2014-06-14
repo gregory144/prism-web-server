@@ -16,7 +16,7 @@
 const unsigned char supported_protocols[] = { 5, 'h', '2', '-', '1', '2' };
 const unsigned char supported_protocols_length = 6;
 
-bool tls_init_static()
+bool tls_init()
 {
   SSL_library_init();
   SSL_load_error_strings();
