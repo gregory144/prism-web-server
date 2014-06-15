@@ -46,6 +46,7 @@ int main(int argc, char ** argv)
   long port = SERVER_PORT;
   char * private_key_file = "key.pem";
   char * cert_key_file = "cert.pem";
+
   int c;
 
   opterr = 0;

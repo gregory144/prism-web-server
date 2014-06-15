@@ -435,7 +435,8 @@ void server_connection_start(uv_stream_t * server, int status)
   client_data->uv_read_count = 0;
   client_data->stream = (uv_stream_t *) client;
   client_data->server_data = server_data;
-  client_data->connection = http_connection_init(client_data, server_data->enable_compression, handle_request, handle_data, server_write_from_app,
+  client_data->connection = http_connection_init(client_data, server_data->enable_compression, handle_request,
+                            handle_data, server_write_from_app,
                             server_http_close);
 
   client->data = client_data;

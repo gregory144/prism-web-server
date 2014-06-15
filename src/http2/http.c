@@ -315,7 +315,8 @@ static void http_stream_free(void * value)
   free(stream);
 }
 
-http_connection_t * http_connection_init(void * const data, const bool enable_compression, const request_cb request_handler,
+http_connection_t * http_connection_init(void * const data, const bool enable_compression,
+    const request_cb request_handler,
     const data_cb data_handler, const write_cb writer, const close_cb closer)
 {
   http_connection_t * connection = malloc(sizeof(http_connection_t));
