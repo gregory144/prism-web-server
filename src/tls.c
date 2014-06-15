@@ -8,6 +8,7 @@
 
 #include "util/util.h"
 #include "tls.h"
+#include "config.h"
 
 #define TLS_BUF_LENGTH 0x4000
 
@@ -98,7 +99,7 @@ static bool tls_debug_error(const SSL * const ssl, int retval, char * prefix)
 }
 
 // handles NPN negotiation
-static int next_proto_cb(SSL * ssl, const unsigned char ** data, unsigned int * len, void * arg)
+static int next_proto_callback(SSL * ssl, const unsigned char ** data, unsigned int * len, void * arg)
 {
   UNUSED(ssl);
   UNUSED(arg);
@@ -110,9 +111,11 @@ static int next_proto_cb(SSL * ssl, const unsigned char ** data, unsigned int * 
   return SSL_TLSEXT_ERR_OK;
 }
 
+#ifdef HAVE_ALPN
+
 // handles ALPN negotiation
-static int alpn_cb(SSL * ssl, const unsigned char ** out, unsigned char * outlen, const unsigned char * in,
-                   unsigned int inlen, void * arg)
+static int alpn_callback(SSL * ssl, const unsigned char ** out, unsigned char * outlen, const unsigned char * in,
+                         unsigned int inlen, void * arg)
 {
   UNUSED(ssl);
   UNUSED(arg);
@@ -127,6 +130,8 @@ static int alpn_cb(SSL * ssl, const unsigned char ** out, unsigned char * outlen
   return SSL_TLSEXT_ERR_OK;
 }
 
+#endif
+
 tls_server_ctx_t * tls_server_init(char * key_file, char * cert_file)
 {
   SSL_CTX * ssl_ctx = SSL_CTX_new(TLSv1_2_server_method());
@@ -139,8 +144,11 @@ tls_server_ctx_t * tls_server_init(char * key_file, char * cert_file)
   SSL_CTX_use_PrivateKey_file(ssl_ctx, key_file, SSL_FILETYPE_PEM);
 
   // set up protocol negotiation callbacks
-  SSL_CTX_set_next_protos_advertised_cb(ssl_ctx, next_proto_cb, NULL);
-  SSL_CTX_set_alpn_select_cb(ssl_ctx, alpn_cb, NULL);
+  SSL_CTX_set_next_protos_advertised_cb(ssl_ctx, next_proto_callback, NULL);
+
+#ifdef HAVE_ALPN
+  SSL_CTX_set_alpn_select_cb(ssl_ctx, alpn_callback, NULL);
+#endif
 
   tls_server_ctx_t * tls_server_ctx = malloc(sizeof(tls_server_ctx_t));
   tls_server_ctx->ssl_ctx = ssl_ctx;

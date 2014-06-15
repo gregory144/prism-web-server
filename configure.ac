@@ -36,6 +36,7 @@ AC_CHECK_LIB(uv, uv_run)
 AC_CHECK_LIB(pthread, pthread_create)
 AC_CHECK_LIB(crypto, BIO_new, , [AC_MSG_ERROR(library crypto not found)])
 AC_CHECK_LIB(ssl, SSL_CTX_new, , [AC_MSG_ERROR(library ssl not found)])
+AC_CHECK_LIB(ssl, SSL_CTX_set_alpn_select_cb, [AC_DEFINE(HAVE_ALPN, [1], [Define if ALPN support exists])], [AC_MSG_WARN(ALPN support missing)])
 AC_CHECK_LIB(z, zlibVersion)
 
 # required for 'check'
