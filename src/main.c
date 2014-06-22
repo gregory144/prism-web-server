@@ -10,13 +10,17 @@
 #define MIN_PORT 1
 #define MAX_PORT 0xFFFF
 
-http_server_data_t * server_data = NULL;
+static bool server_stopped = false;
+static server_t * server = NULL;
 
 void catcher(int sig)
 {
   log_error("Caught signal: %d", sig);
 
-  server_stop(server_data);
+  if (!server_stopped) {
+    server_stop(server);
+    server_stopped = true;
+  }
 
   exit(EXIT_SUCCESS);
 }
@@ -94,15 +98,15 @@ int main(int argc, char ** argv)
     exit(EXIT_FAILURE);
   }
 
-  server_data = server_init(port, enable_compression, use_tls, private_key_file, cert_key_file);
+  server = server_init(port, enable_compression, use_tls, private_key_file, cert_key_file);
 
-  if (!server_data) {
+  if (!server) {
     exit(EXIT_FAILURE);
   }
 
-  server_start(server_data);
+  server_start(server);
 
-  server_stop(server_data);
+  server_stop(server);
 
   exit(EXIT_SUCCESS);
 }

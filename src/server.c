@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
 
 #include <uv.h>
 
@@ -12,9 +14,14 @@
 
 #include "server.h"
 
-static long reads = 0;
-static long writes = 0;
-static long requests = 0;
+#include "worker.c"
+
+#define NUM_WORKERS 4
+#define MAX_CLIENTS 0x4000
+
+/*static long requests = 0;*/
+static size_t client_ids = 1;
+static client_t * clients[MAX_CLIENTS];
 
 static void handle_request(http_request_t * request, http_response_t * response)
 {
@@ -56,13 +63,13 @@ static void handle_request(http_request_t * request, http_response_t * response)
     }
 
     http_response_header_add(response, "server", PACKAGE_STRING);
-    size_t date_buf_length = RFC1123_TIME_LEN + 1;
-    char date_buf[date_buf_length];
-    char * date = date_rfc1123(date_buf, date_buf_length);
+    /*size_t date_buf_length = RFC1123_TIME_LEN + 1;*/
+    /*char date_buf[date_buf_length];*/
+    /*char * date = date_rfc1123(date_buf, date_buf_length);*/
 
-    if (date) {
-      http_response_header_add(response, "date", date);
-    }
+    /*if (date) {*/
+      /*http_response_header_add(response, "date", date);*/
+    /*}*/
 
     http_response_write(response, NULL, 0, false);
 
@@ -133,13 +140,13 @@ static void handle_request(http_request_t * request, http_response_t * response)
   http_response_header_add(response, "content-length", content_length_s);
 
   http_response_header_add(response, "server", PACKAGE_STRING);
-  size_t date_buf_length = RFC1123_TIME_LEN + 1;
-  char date_buf[date_buf_length];
-  char * date = date_rfc1123(date_buf, date_buf_length);
+  /*size_t date_buf_length = RFC1123_TIME_LEN + 1;*/
+  /*char date_buf[date_buf_length];*/
+  /*char * date = date_rfc1123(date_buf, date_buf_length);*/
 
-  if (date) {
-    http_response_header_add(response, "date", date);
-  }
+  /*if (date) {*/
+    /*http_response_header_add(response, "date", date);*/
+  /*}*/
 
   http_request_t * pushed_request = http_push_init(request);
 
@@ -154,8 +161,11 @@ static void handle_request(http_request_t * request, http_response_t * response)
       http_response_t * pushed_response = http_push_response_get(pushed_request);
       http_response_status_set(pushed_response, 200);
 
+      /*char push_text[256];*/
+      /*snprintf(push_text, 255, "Pushed Response at %s\n", date);*/
+
       char push_text[256];
-      snprintf(push_text, 255, "Pushed Response at %s\n", date);
+      snprintf(push_text, 255, "Pushed Response at x date\n");
 
       size_t push_content_length = strlen(push_text);
 
@@ -165,9 +175,9 @@ static void handle_request(http_request_t * request, http_response_t * response)
 
       http_response_header_add(pushed_response, "server", PACKAGE_STRING);
 
-      if (date) {
-        http_response_header_add(pushed_response, "date", date);
-      }
+      /*if (date) {*/
+        /*http_response_header_add(pushed_response, "date", date);*/
+      /*}*/
 
       http_response_write(pushed_response, (uint8_t *) strdup(push_text), push_content_length, true);
     }
@@ -176,13 +186,12 @@ static void handle_request(http_request_t * request, http_response_t * response)
 
   http_response_write(response, (uint8_t *) resp_text, content_length, true);
 
-  if (LOG_INFO) {
-    requests++;
+  /*requests++;*/
 
-    if (requests % 1000 == 0) {
-      log_info("Request #%ld", requests);
-    }
-  }
+  /*if (requests % 1000 == 0) {*/
+    /*log_info("Request #%ld", requests);*/
+  /*}*/
+  /*log_info("Request #%ld", requests);*/
 }
 
 static void handle_data(http_request_t * request, http_response_t * response, uint8_t * buf, size_t length, bool last,
@@ -210,30 +219,24 @@ static void handle_data(http_request_t * request, http_response_t * response, ui
 
 }
 
-void server_alloc_buffer(uv_handle_t * handle, size_t suggested_size, uv_buf_t * buf)
+static void uv_cb_alloc_buffer(uv_handle_t * handle, size_t suggested_size, uv_buf_t * buf)
 {
   UNUSED(handle);
   buf->len = suggested_size;
   buf->base = malloc(suggested_size);
 }
 
-void server_write(uv_write_t * req, int status)
+static void uv_cb_write(uv_write_t * req, int status)
 {
   if (req == NULL) {
     abort();
   }
 
   http_write_req_data_t * write_req_data = req->data;
-  http_client_data_t * client_data = write_req_data->stream->data;
+  client_t * client = write_req_data->stream->data;
 
   if (status < 0) {
-    if (LOG_ERROR) {
-      log_error("Write error: %s, %ld", uv_strerror(status), client_data->uv_write_count);
-    }
-  } else {
-    client_data->uv_write_count++;
-    client_data->bytes_written += write_req_data->buf->len;
-    writes++;
+    log_error("Write error: %s, client #%ld", uv_strerror(status), client->id);
   }
 
   free(write_req_data->buf->base);
@@ -242,296 +245,343 @@ void server_write(uv_write_t * req, int status)
   free(req);
 }
 
-void server_connection_close(uv_handle_t * handle)
+static void null_close_cb(uv_handle_t * handle)
 {
-  http_client_data_t * client_data = handle->data;
+  UNUSED(handle);
 
-  log_trace("Closing connection: reads = %ld octets, writes = %ld octets",
-            client_data->bytes_read, client_data->bytes_written);
-  log_trace("Total reads: %ld, total writes: %ld", reads, writes);
+  free(handle);
 
-  free(client_data->stream);
-  http_connection_free(client_data->connection);
-
-  if (client_data->tls_ctx) {
-    tls_client_free(client_data->tls_ctx);
-  }
-
-  free(client_data);
+  // noop
 }
 
-void server_connection_shutdown(uv_shutdown_t * shutdown_req, int status)
+static void server_uv_async_cb_write(uv_async_t * async_handle)
+{
+  client_t * client = async_handle->data;
+  while (true) {
+    worker_buffer_t * worker_buffer = blocking_queue_try_pop(client->write_queue);
+    if (!worker_buffer) {
+      break;
+    }
+
+    log_info("Writing for client: #%ld", client->id);
+    uv_stream_t * stream = client->stream;
+
+    uv_write_t * write_req = malloc(sizeof(uv_write_t));
+    http_write_req_data_t * write_req_data = malloc(sizeof(http_write_req_data_t));
+    write_req_data->stream = stream;
+    write_req->data = write_req_data;
+
+    uv_buf_t * write_buf = malloc(sizeof(uv_buf_t));
+    write_buf->base = (char *) worker_buffer->buffer;
+    write_buf->len = worker_buffer->length;
+    // keep track of the buffer so we can free it later
+    write_req_data->buf = write_buf;
+
+    if (LOG_DATA) {
+      log_trace("uv_write: %s, %ld", worker_buffer->buffer, worker_buffer->length);
+      size_t i;
+
+      for (i = 0; i < worker_buffer->length; i++) {
+        log_trace("%02x", worker_buffer->buffer[i]);
+      }
+    }
+
+    uv_write(write_req, stream, write_req_data->buf, 1, uv_cb_write);
+
+    free(worker_buffer);
+  }
+
+}
+
+static void uv_cb_close_connection(uv_handle_t * handle)
+{
+
+  client_t * client = handle->data;
+
+  log_info("Closing client: #%ld", client->id);
+
+  /*log_trace("Closing connection: reads = %ld octets, writes = %ld octets",*/
+            /*client->octets_read, client->octets_written);*/
+
+  free(client->stream);
+  http_connection_free(client->connection);
+
+  if (client->tls_ctx) {
+    tls_client_free(client->tls_ctx);
+  }
+
+  uv_close((uv_handle_t *) client->write_handle, null_close_cb);
+  uv_close((uv_handle_t *) client->close_handle, null_close_cb);
+
+  //free(client);
+  client->closed = true;
+}
+
+static void uv_cb_shutdown(uv_shutdown_t * shutdown_req, int status)
 {
   http_shutdown_data_t * shutdown_data = shutdown_req->data;
 
   if (status) {
-    if (LOG_ERROR) {
-      log_error("Shutdown error: %s", uv_strerror(status));
-    }
+    log_error("Shutdown error: %s", uv_strerror(status));
 
-    server_connection_close((uv_handle_t *)shutdown_data->stream);
+    uv_cb_close_connection((uv_handle_t *)shutdown_data->stream);
   } else {
-    uv_close((uv_handle_t *)shutdown_data->stream, server_connection_close);
+    uv_close((uv_handle_t *)shutdown_data->stream, uv_cb_close_connection);
   }
 
   free(shutdown_data);
   free(shutdown_req);
+  log_info("uv_cb_shutdown called");
 }
 
-void server_parse(uv_stream_t * client, uint8_t * buffer, size_t len)
+static void server_connection_close(uv_stream_t * stream)
 {
-  http_client_data_t * client_data = client->data;
-  client_data->bytes_read += len;
-  client_data->uv_read_count++;
-
-  if (LOG_TRACE) {
-    log_trace("Read #%ld (%ld octets)", client_data->uv_read_count, len);
-  }
-
-  http_connection_t * connection = client_data->connection;
-  http_connection_read(connection, buffer, len);
-}
-
-void server_stream_shutdown(uv_stream_t * stream)
-{
-  if (LOG_TRACE) {
-    http_client_data_t * client_data = stream->data;
-    log_trace("shutting down... (%ld)", client_data->uv_read_count);
-  }
+  client_t * client = stream->data;
+  log_info("Shutting down client #%ld", client->id);
 
   // TODO error handling
   uv_shutdown_t * shutdown_req = malloc(sizeof(uv_shutdown_t));
   http_shutdown_data_t * shutdown_data = malloc(sizeof(http_shutdown_data_t));
   shutdown_data->stream = stream;
   shutdown_req->data = shutdown_data;
-  uv_shutdown(shutdown_req, stream, server_connection_shutdown);
+  uv_shutdown(shutdown_req, stream, uv_cb_shutdown);
 }
 
-void server_read(uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
+static void uv_cb_read(uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf)
 {
+
+  client_t * client = stream->data;
 
   if (nread == UV_EOF) {
     free(buf->base);
 
-    server_stream_shutdown(stream);
+    log_error("Shutting down from EOF, client: %ld", client->id);
+
+    server_connection_close(stream);
 
     return;
   } else if (nread < 0) {
     free(buf->base);
 
-    if (LOG_ERROR) {
-      log_error("Read error: %s", uv_strerror(nread));
-    }
+    log_error("Read error: %s", uv_strerror(nread));
 
-    uv_close((uv_handle_t *)stream, server_connection_close);
+    uv_close((uv_handle_t *)stream, uv_cb_close_connection);
 
     return;
   }
 
-  http_client_data_t * client_data = stream->data;
-  http_server_data_t * server_data = client_data->server_data;
-
-  if (server_data->use_tls) {
-
-    tls_client_ctx_t * tls_client_ctx = client_data->tls_ctx;
-
-    log_trace("Passing %ld octets of data from network to TLS handler", nread);
-    tls_decrypt_data_and_pass_to_app(tls_client_ctx, (uint8_t *)buf->base, nread);
-    log_trace("Passed %ld octets of data from network to TLS handler", nread);
-
-  } else {
-
-    server_parse(stream, (uint8_t *)buf->base, nread);
-
-  }
-
-  reads++;
+  log_info("Queueing from client: #%ld", client->id);
+  worker_queue(client, (uint8_t *) buf->base, nread);
 
 }
 
-bool server_write_to_network(void * data, uint8_t * buf, size_t len)
+static void server_uv_async_cb_close(uv_async_t * async_handle)
 {
-  http_client_data_t * client_data = data;
-  uv_stream_t * stream = client_data->stream;
-
-  uv_write_t * write_req = malloc(sizeof(uv_write_t));
-  http_write_req_data_t * write_req_data = malloc(sizeof(http_write_req_data_t));
-  write_req_data->stream = stream;
-  write_req->data = write_req_data;
-
-  // copy bytes to write to new buffer
-  uv_buf_t * write_buf = malloc(sizeof(uv_buf_t));
-  write_buf->base = malloc(sizeof(char) * len);
-  memcpy(write_buf->base, buf, len);
-  write_buf->len = len;
-  // keep track of the buffer so we can free it later
-  write_req_data->buf = write_buf;
-
-  if (LOG_DATA) {
-    log_trace("uv_write: %s, %ld", buf, len);
-    size_t i;
-
-    for (i = 0; i < len; i++) {
-      log_trace("%02x", (uint8_t)buf[i]);
-    }
-  }
-
-  uv_write(write_req, stream, write_req_data->buf, 1, server_write);
-
-  return true;
-}
-
-void server_http_close(void * data)
-{
-  http_client_data_t * client_data = data;
-  server_stream_shutdown(client_data->stream);
+  client_t * client = async_handle->data;
+  server_connection_close(client->stream);
 }
 
 // pass the decrypted data on to the application
-bool server_write_to_app(void * data, uint8_t * buf, size_t length)
+static bool tls_cb_write_to_app(void * data, uint8_t * buf, size_t length)
 {
-
-  http_client_data_t * client_data = data;
-  uv_stream_t * stream = client_data->stream;
+  client_t * client = data;
 
   log_trace("Passing %ld octets of data from TLS handler to application", length);
-  server_parse(stream, (uint8_t *)buf, length);
+  worker_parse(client, (uint8_t *)buf, length);
   log_trace("Passed %ld octets of data from TLS handler to application", length);
 
   return true;
 }
 
-bool server_write_from_app(void * data, uint8_t * buf, size_t length)
+static void uv_work_finished_cb(uv_work_t * work, int status)
 {
-  http_client_data_t * client_data = data;
-  http_server_data_t * server_data = client_data->server_data;
+  UNUSED(work);
 
-  if (server_data->use_tls) {
-    log_trace("Passing %ld octets of data from application to TLS handler", length);
-    bool ret = tls_encrypt_data_and_pass_to_network(client_data->tls_ctx, buf, length);
-    log_trace("Passed %ld octets of data from application to TLS handler", length);
-    return ret;
-  } else {
-    return server_write_to_network(client_data, buf, length);
+  log_error("Worker finished: %d", status);
+
+  worker_t * worker = work->data;
+  server_t * server = worker->server;
+
+  server->num_workers_terminated++;
+
+  worker_free(worker);
+
+  if (server->num_workers_terminated == server->num_workers) {
+    free(server->workers);
+
+    if (server->tls_ctx) {
+      tls_server_free(server->tls_ctx);
+    }
+
+    uv_loop_close(server->loop);
+    free(server);
   }
 }
 
-void server_connection_start(uv_stream_t * server, int status)
+static void uv_cb_listen(uv_stream_t * tcp_server, int status)
 {
   if (status == -1) {
     // error!
     return;
   }
 
-  http_server_data_t * server_data = server->data;
+  server_t * server = tcp_server->data;
 
-  uv_tcp_t * client = malloc(sizeof(uv_tcp_t));
-  client->close_cb = server_connection_close;
+  // TODO error handling
+  uv_tcp_t * tcp_client = malloc(sizeof(uv_tcp_t));
+  tcp_client->close_cb = uv_cb_close_connection;
 
-  http_client_data_t * client_data = malloc(sizeof(http_client_data_t));
-  client_data->tls_ctx = NULL;
-  client_data->bytes_read = 0;
-  client_data->bytes_written = 0;
-  client_data->uv_read_count = 0;
-  client_data->stream = (uv_stream_t *) client;
-  client_data->server_data = server_data;
-  client_data->connection = http_connection_init(client_data, server_data->enable_compression, handle_request,
-                            handle_data, server_write_from_app,
-                            server_http_close);
+  client_t * client = malloc(sizeof(client_t));
+  client->id = client_ids++;
+  clients[client->id - 1] = client;
+  client->closed = false;
+  client->tls_ctx = NULL;
+  client->octets_written = 0;
+  client->octets_read = 0;
+  client->stream = (uv_stream_t *) tcp_client;
+  client->worker_index = SIZE_MAX;
 
-  client->data = client_data;
+  client->write_queue = blocking_queue_init();
 
-  uv_tcp_init(server_data->loop, client);
+  uv_mutex_init(&client->async_mutex);
+  uv_mutex_lock(&client->async_mutex);
 
-  if (uv_accept(server, (uv_stream_t *) client) == 0) {
+  client->write_handle = malloc(sizeof(uv_async_t));
+  uv_async_init(server->loop, client->write_handle, server_uv_async_cb_write);
+  client->write_handle->data = client;
 
-    if (server_data->use_tls) {
-      client_data->tls_ctx = tls_client_init(server_data->tls_ctx, client_data, server_write_to_network,
-                                             server_write_to_app);
+  client->close_handle = malloc(sizeof(uv_async_t));
+  uv_async_init(server->loop, client->close_handle, server_uv_async_cb_close);
+  client->close_handle->data = client;
+
+  uv_mutex_unlock(&client->async_mutex);
+
+  client->server = server;
+  client->connection = http_connection_init(client, server->enable_compression, handle_request,
+                       handle_data, worker_http_cb_write, worker_http_cb_close_connection);
+
+  tcp_client->data = client;
+
+  uv_tcp_init(server->loop, tcp_client);
+
+  if (uv_accept(tcp_server, (uv_stream_t *) tcp_client) == 0) {
+
+    if (server->use_tls) {
+      client->tls_ctx = tls_client_init(server->tls_ctx, client, worker_write_to_network,
+                                        tls_cb_write_to_app);
     }
 
-    int err = uv_read_start((uv_stream_t *) client, server_alloc_buffer, server_read);
+    int err = uv_read_start((uv_stream_t *) tcp_client, uv_cb_alloc_buffer, uv_cb_read);
 
     if (err < 0) {
       log_error("Read error: %s", uv_strerror(err));
     }
   } else {
-    uv_close((uv_handle_t *) client, server_connection_close);
+    uv_close((uv_handle_t *) client, uv_cb_close_connection);
   }
 }
 
-http_server_data_t * server_init(int port, bool enable_compression, bool use_tls, char * key_file, char * cert_file)
+server_t * server_init(int port, bool enable_compression, bool use_tls, char * key_file, char * cert_file)
 {
 
   if (use_tls) {
     tls_init();
   }
 
-  http_server_data_t * server_data = malloc(sizeof(http_server_data_t));
-  ASSERT_OR_RETURN_NULL(server_data);
-  server_data->tls_ctx = NULL;
-  server_data->loop = NULL;
-  server_data->port = port;
-  server_data->use_tls = use_tls;
-  server_data->enable_compression = enable_compression;
+  server_t * server = malloc(sizeof(server_t));
+  ASSERT_OR_RETURN_NULL(server);
+  server->tls_ctx = NULL;
+  server->loop = NULL;
+  server->port = port;
+  server->use_tls = use_tls;
+  server->enable_compression = enable_compression;
+  server->num_workers = NUM_WORKERS;
+  server->num_workers_terminated = 0;
 
   if (use_tls) {
-    server_data->tls_ctx = tls_server_init(key_file, cert_file);
+    server->tls_ctx = tls_server_init(key_file, cert_file);
 
-    if (!server_data->tls_ctx) {
-      free(server_data);
+    if (!server->tls_ctx) {
+      free(server);
       return NULL;
     }
   }
 
-  server_data->loop = uv_default_loop();
+  server->loop = uv_default_loop();
 
-  if (!server_data->loop) {
-    free(server_data);
+  if (!server->loop) {
+    free(server);
     return NULL;
   }
 
-  return server_data;
+  return server;
 
 }
 
-int server_start(http_server_data_t * server_data)
+int server_start(server_t * server)
 {
+  // set up workers
+  size_t i;
+  server->workers = malloc(sizeof(worker_t *) * server->num_workers);
 
-  uv_tcp_t server;
-  server.data = server_data;
+  for (i = 0; i < server->num_workers; i++) {
+    worker_t * worker = worker_init();
+    worker->server = server;
 
-  uv_tcp_init(server_data->loop, &server);
+    worker->work_req.data = worker;
+    uv_queue_work(server->loop, &worker->work_req, worker_work, uv_work_finished_cb);
+
+    *(server->workers + i) = worker;
+  }
+
+  // set up connection listener
+  uv_tcp_t tcp_server;
+  tcp_server.data = server;
+
+  uv_tcp_init(server->loop, &tcp_server);
 
   struct sockaddr_in bind_addr;
-  uv_ip4_addr(SERVER_HOSTNAME, server_data->port, &bind_addr);
-  uv_tcp_bind(&server, (struct sockaddr *)&bind_addr, 0);
+  uv_ip4_addr(SERVER_HOSTNAME, server->port, &bind_addr);
+  uv_tcp_bind(&tcp_server, (struct sockaddr *)&bind_addr, 0);
 
-  int err = uv_listen((uv_stream_t *) &server, 128, server_connection_start);
+  int err = uv_listen((uv_stream_t *) &tcp_server, 128, uv_cb_listen);
 
   if (err < 0) {
     log_error("Listen error: %s", uv_strerror(err));
     return 1;
   }
 
-  log_info("Server starting on %s:%d", SERVER_HOSTNAME, server_data->port);
+  log_info("Server starting on %s:%d", SERVER_HOSTNAME, server->port);
 
-  return uv_run(server_data->loop, UV_RUN_DEFAULT);
+  return uv_run(server->loop, UV_RUN_DEFAULT);
 
 }
 
-void server_stop(http_server_data_t * server_data)
+void server_stop(server_t * server)
 {
   log_info("Server shutting down...");
 
-  if (server_data) {
+  size_t i;
 
-    if (server_data->tls_ctx) {
-      tls_server_free(server_data->tls_ctx);
+  for (i = 0; i < client_ids - 2; i++) {
+    client_t * client = clients[i];
+    if (!client->closed) {
+      log_info("Client remains open: %ld (read: %ld, write: %ld, requests: %ld)",
+          client->id, client->octets_read, client->octets_written, client->connection->num_requests);
     }
 
-    uv_loop_close(server_data->loop);
-    free(server_data);
-
   }
+
+  for (i = 0; i < server->num_workers; i++) {
+    worker_t * worker = server->workers[i];
+
+    uv_cancel((uv_req_t *) &worker->work_req); // ignore if it fails
+
+    log_info("Closing worker with %ld assigned reads (pushes: %ld, pops: %ld, length: %ld)",
+        worker->assigned_reads, worker->read_queue->num_pushes, worker->read_queue->num_pops,
+        worker->read_queue->length);
+
+    worker->terminated = true;
+  }
+
 }

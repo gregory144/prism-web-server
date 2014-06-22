@@ -390,6 +390,8 @@ http_connection_t * http_connection_init(void * const data, const bool enable_co
     return NULL;
   }
 
+  connection->num_requests = 0;
+
   return connection;
 }
 
@@ -1311,6 +1313,8 @@ static bool http_trigger_request(http_connection_t * const connection, http_stre
 
   connection->request_handler(request, response);
 
+  connection->num_requests++;
+
   return true;
 }
 
@@ -1496,7 +1500,7 @@ static bool http_parse_header_fragments(http_connection_t * const connection, ht
   current = stream->header_fragments;
 
   while (current) {
-    log_trace("Appending header fragment: %s (%ld)", current->buffer, current->length);
+    log_trace("Appending header fragment (%ld octets)", current->length);
 
     memcpy(header_appender, current->buffer, current->length);
     header_appender += current->length;
@@ -1508,7 +1512,7 @@ static bool http_parse_header_fragments(http_connection_t * const connection, ht
 
   *header_appender = '\0';
 
-  log_trace("Got headers: %s (%ld), decoding", headers, headers_length);
+  log_trace("Got headers: (%ld octets), decoding", headers, headers_length);
 
   stream->headers = hpack_decode(connection->decoding_context, headers, headers_length);
 
@@ -1782,6 +1786,9 @@ static bool http_parse_frame_priority(http_connection_t * const connection, http
 
 static bool http_parse_frame_goaway(http_connection_t * const connection, http_frame_goaway_t * const frame)
 {
+
+  log_info("Received goaway: ");
+
   uint8_t * buf = connection->buffer + connection->buffer_position;
   frame->last_stream_id = get_bits32(buf, 0x7FFFFFFF);
   frame->error_code = get_bits32(buf + 4, 0xFFFFFFFF);

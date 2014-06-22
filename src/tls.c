@@ -6,6 +6,8 @@
 #include <openssl/bio.h>
 #include <openssl/err.h>
 
+#include <uv.h>
+
 #include "util/util.h"
 #include "tls.h"
 #include "config.h"
@@ -28,7 +30,7 @@ bool tls_init()
   return true;
 }
 
-static bool tls_wants_read(const SSL * const ssl, int retval)
+static bool tls_ssl_wants_read(const SSL * const ssl, int retval)
 {
   int err = SSL_get_error(ssl, retval);
 
@@ -40,7 +42,7 @@ static bool tls_wants_read(const SSL * const ssl, int retval)
   return false;
 }
 
-static bool tls_wants_write(const SSL * const ssl, int retval)
+static bool tls_ssl_wants_write(const SSL * const ssl, int retval)
 {
   int err = SSL_get_error(ssl, retval);
 
@@ -132,6 +134,86 @@ static int alpn_callback(SSL * ssl, const unsigned char ** out, unsigned char * 
 
 #endif
 
+#define OPENSSL_THREAD_DEFINES
+#include <openssl/opensslconf.h>
+#if defined(OPENSSL_THREADS)
+
+// openssl thread support enabled
+
+static uv_mutex_t * lock_cs;
+static long * lock_count;
+
+static void tls_locking_cb(int mode, int type, char * file, int line)
+{
+  UNUSED(file);
+  UNUSED(line);
+
+  if (mode & CRYPTO_LOCK) {
+    uv_mutex_lock(&(lock_cs[type]));
+    lock_count[type]++;
+  } else {
+    uv_mutex_unlock(&(lock_cs[type]));
+  }
+}
+
+static unsigned long tls_thread_id_cb(void)
+{
+  unsigned long ret;
+
+  ret = (unsigned long)uv_thread_self();
+  return (ret);
+}
+
+static void tls_thread_setup(void)
+{
+  int i;
+
+  lock_cs = OPENSSL_malloc(CRYPTO_num_locks() * sizeof(uv_mutex_t));
+  lock_count = OPENSSL_malloc(CRYPTO_num_locks() * sizeof(long));
+
+  for (i = 0; i < CRYPTO_num_locks(); i++) {
+    lock_count[i] = 0;
+    uv_mutex_init(&(lock_cs[i]));
+  }
+
+  CRYPTO_set_id_callback((unsigned long( *)())tls_thread_id_cb);
+  CRYPTO_set_locking_callback((void ( *)())tls_locking_cb);
+}
+
+static void tls_thread_cleanup(void)
+{
+  int i;
+
+  CRYPTO_set_locking_callback(NULL);
+  fprintf(stderr, "cleanup\n");
+
+  for (i = 0; i < CRYPTO_num_locks(); i++) {
+    uv_mutex_destroy(&(lock_cs[i]));
+    fprintf(stderr, "%8ld:%s\n", lock_count[i],
+            CRYPTO_get_lock_name(i));
+  }
+
+  OPENSSL_free(lock_cs);
+  OPENSSL_free(lock_count);
+
+  fprintf(stderr, "done cleanup\n");
+}
+
+#else
+
+
+static void tls_thread_setup(void)
+{
+  // noop
+}
+
+static void tls_thread_cleanup(void)
+{
+  // noop
+}
+
+#endif
+
 tls_server_ctx_t * tls_server_init(char * key_file, char * cert_file)
 {
   SSL_CTX * ssl_ctx = SSL_CTX_new(TLSv1_2_server_method());
@@ -150,6 +232,8 @@ tls_server_ctx_t * tls_server_init(char * key_file, char * cert_file)
   SSL_CTX_set_alpn_select_cb(ssl_ctx, alpn_callback, NULL);
 #endif
 
+  tls_thread_setup();
+
   tls_server_ctx_t * tls_server_ctx = malloc(sizeof(tls_server_ctx_t));
   tls_server_ctx->ssl_ctx = ssl_ctx;
 
@@ -158,6 +242,8 @@ tls_server_ctx_t * tls_server_init(char * key_file, char * cert_file)
 
 bool tls_server_free(tls_server_ctx_t * server_ctx)
 {
+
+  tls_thread_cleanup();
 
   SSL_CTX_free(server_ctx->ssl_ctx);
   free(server_ctx);
@@ -210,7 +296,7 @@ static bool tls_read_decrypted_data_and_pass_to_app(tls_client_ctx_t * client_ct
 {
   if (client_ctx->writing_to_app) {
     // we're already in the process of writing to the app -
-    // don't do again it until we're finished
+    // don't do it again until we're finished
     return true;
   }
 
@@ -232,11 +318,11 @@ static bool tls_read_decrypted_data_and_pass_to_app(tls_client_ctx_t * client_ct
       }
 
       client_ctx->writing_to_app = false;
-    } else if (tls_wants_read(client_ctx->ssl, retval)) {
+    } else if (tls_ssl_wants_read(client_ctx->ssl, retval)) {
       log_trace("SSL_read: wants read");
       free(read_buf);
       break; // continue
-    } else if (tls_wants_write(client_ctx->ssl, retval)) {
+    } else if (tls_ssl_wants_write(client_ctx->ssl, retval)) {
       log_trace("SSL_read: wants write");
       free(read_buf);
       break; // continue
@@ -346,9 +432,9 @@ bool tls_decrypt_data_and_pass_to_app(tls_client_ctx_t * client_ctx, uint8_t * b
       // success
       client_ctx->handshake_complete = true;
       log_trace("Handshake complete");
-    } else if (tls_wants_read(client_ctx->ssl, retval)) {
+    } else if (tls_ssl_wants_read(client_ctx->ssl, retval)) {
       log_trace("Handshake not yet complete, should read");
-    } else if (tls_wants_write(client_ctx->ssl, retval)) {
+    } else if (tls_ssl_wants_write(client_ctx->ssl, retval)) {
       log_trace("Handshake not yet complete, should write");
     } else {
       tls_debug_error(client_ctx->ssl, retval, "Handshake failed");
@@ -373,7 +459,7 @@ bool tls_encrypt_data_and_pass_to_network(tls_client_ctx_t * client_ctx, uint8_t
     if (retval > 0) {
       log_trace("SSL_write returned: %ld", retval);
       written += retval;
-    } else if (tls_wants_read(client_ctx->ssl, retval)) {
+    } else if (tls_ssl_wants_read(client_ctx->ssl, retval)) {
       log_trace("SSL_write: wants read with %ld bytes remaining", remaining_length);
 
       // the ssl write buffer may be full, try to clear it out by
@@ -383,9 +469,10 @@ bool tls_encrypt_data_and_pass_to_network(tls_client_ctx_t * client_ctx, uint8_t
       }
 
       // try again
-    } else if (tls_wants_write(client_ctx->ssl, retval)) {
+    } else if (tls_ssl_wants_write(client_ctx->ssl, retval)) {
       log_warning("SSL_write: wants write with %ld bytes remaining", remaining_length);
       free(buf);
+      abort();
       return false;
     } else {
       tls_debug_error(client_ctx->ssl, retval, "SSL_write");

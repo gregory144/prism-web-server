@@ -421,6 +421,8 @@ typedef struct {
   hpack_context_t * decoding_context;
 
   gzip_context_t * gzip_context;
+
+  size_t num_requests;
 } http_connection_t;
 
 http_connection_t * http_connection_init(void * const data, bool enable_compression, const request_cb request_handler,
