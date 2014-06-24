@@ -1787,8 +1787,6 @@ static bool http_parse_frame_priority(http_connection_t * const connection, http
 static bool http_parse_frame_goaway(http_connection_t * const connection, http_frame_goaway_t * const frame)
 {
 
-  log_info("Received goaway: ");
-
   uint8_t * buf = connection->buffer + connection->buffer_position;
   frame->last_stream_id = get_bits32(buf, 0x7FFFFFFF);
   frame->error_code = get_bits32(buf + 4, 0xFFFFFFFF);

@@ -43,7 +43,8 @@ void blocking_queue_push(blocking_queue_t * q, void * data)
 
 }
 
-static blocking_queue_node_t * blocking_queue_pop_internal(blocking_queue_t * q) {
+static blocking_queue_node_t * blocking_queue_pop_internal(blocking_queue_t * q)
+{
   blocking_queue_node_t * head = q->head;
   blocking_queue_node_t * next = head->next;
   q->head = next;
@@ -64,6 +65,7 @@ void * blocking_queue_timed_pop(blocking_queue_t * q, uint64_t timeout_in_ns)
 
   while (q->length == 0) {
     int ret = uv_cond_timedwait(&q->nonempty, &q->mutex, timeout_in_ns);
+
     if (ret == UV_ETIMEDOUT) {
       uv_mutex_unlock(&q->mutex);
       return NULL;

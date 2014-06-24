@@ -7,23 +7,39 @@
 #include "tls.h"
 #include "blocking_queue.h"
 
-#define SERVER_HOSTNAME "0.0.0.0"
-#define SERVER_PORT 7000
-
 struct worker_s;
 
 typedef struct {
 
-  uv_loop_t * loop;
-  tls_server_ctx_t * tls_ctx;
-
-  int port;
+  long port;
+  char * hostname;
   bool use_tls;
   bool enable_compression;
 
-  struct worker_s ** workers;
   size_t num_workers;
-  size_t num_workers_terminated;
+
+  char * cert_file;
+  char * private_key_file;
+
+} server_config_t;
+
+typedef struct {
+
+  server_config_t * config;
+
+  uv_loop_t loop;
+
+  uv_signal_t sigpipe_handler;
+  uv_signal_t sigint_handler;
+  uv_tcp_t tcp_handler;
+
+  tls_server_ctx_t * tls_ctx;
+
+  struct worker_s ** workers;
+
+  bool terminate;
+
+  size_t client_ids;
 
 } server_t;
 
@@ -63,13 +79,16 @@ typedef struct worker_s {
 
   size_t assigned_reads;
 
-  uv_work_t work_req;
+  uv_thread_t thread;
+  uv_loop_t loop;
 
-  uv_mutex_t * mutex;
+  uv_async_t async_handle;
+  uv_async_t stop_handle;
+
+  uv_mutex_t terminate_mutex;
+  bool terminate;
 
   blocking_queue_t * read_queue;
-
-  bool terminated;
 
 } worker_t;
 
@@ -95,7 +114,7 @@ typedef struct {
   uv_stream_t * stream;
 } http_shutdown_data_t;
 
-server_t * server_init(int port, bool enable_compression, bool use_tls, char * key_file, char * cert_file);
+server_t * server_init(server_config_t * config);
 
 int server_start(server_t * server);
 

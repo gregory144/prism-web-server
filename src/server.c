@@ -16,12 +16,7 @@
 
 #include "worker.c"
 
-#define NUM_WORKERS 4
 #define MAX_CLIENTS 0x4000
-
-/*static long requests = 0;*/
-static size_t client_ids = 1;
-static client_t * clients[MAX_CLIENTS];
 
 static void handle_request(http_request_t * request, http_response_t * response)
 {
@@ -63,13 +58,13 @@ static void handle_request(http_request_t * request, http_response_t * response)
     }
 
     http_response_header_add(response, "server", PACKAGE_STRING);
-    /*size_t date_buf_length = RFC1123_TIME_LEN + 1;*/
-    /*char date_buf[date_buf_length];*/
-    /*char * date = date_rfc1123(date_buf, date_buf_length);*/
+    size_t date_buf_length = RFC1123_TIME_LEN + 1;
+    char date_buf[date_buf_length];
+    char * date = date_rfc1123(date_buf, date_buf_length);
 
-    /*if (date) {*/
-      /*http_response_header_add(response, "date", date);*/
-    /*}*/
+    if (date) {
+      http_response_header_add(response, "date", date);
+    }
 
     http_response_write(response, NULL, 0, false);
 
@@ -140,13 +135,14 @@ static void handle_request(http_request_t * request, http_response_t * response)
   http_response_header_add(response, "content-length", content_length_s);
 
   http_response_header_add(response, "server", PACKAGE_STRING);
-  /*size_t date_buf_length = RFC1123_TIME_LEN + 1;*/
-  /*char date_buf[date_buf_length];*/
-  /*char * date = date_rfc1123(date_buf, date_buf_length);*/
 
-  /*if (date) {*/
-    /*http_response_header_add(response, "date", date);*/
-  /*}*/
+  size_t date_buf_length = RFC1123_TIME_LEN + 1;
+  char date_buf[date_buf_length];
+  char * date = date_rfc1123(date_buf, date_buf_length);
+
+  if (date) {
+    http_response_header_add(response, "date", date);
+  }
 
   http_request_t * pushed_request = http_push_init(request);
 
@@ -161,11 +157,8 @@ static void handle_request(http_request_t * request, http_response_t * response)
       http_response_t * pushed_response = http_push_response_get(pushed_request);
       http_response_status_set(pushed_response, 200);
 
-      /*char push_text[256];*/
-      /*snprintf(push_text, 255, "Pushed Response at %s\n", date);*/
-
       char push_text[256];
-      snprintf(push_text, 255, "Pushed Response at x date\n");
+      snprintf(push_text, 255, "Pushed Response at %s\n", date);
 
       size_t push_content_length = strlen(push_text);
 
@@ -175,9 +168,9 @@ static void handle_request(http_request_t * request, http_response_t * response)
 
       http_response_header_add(pushed_response, "server", PACKAGE_STRING);
 
-      /*if (date) {*/
-        /*http_response_header_add(pushed_response, "date", date);*/
-      /*}*/
+      if (date) {
+        http_response_header_add(pushed_response, "date", date);
+      }
 
       http_response_write(pushed_response, (uint8_t *) strdup(push_text), push_content_length, true);
     }
@@ -185,13 +178,6 @@ static void handle_request(http_request_t * request, http_response_t * response)
   }
 
   http_response_write(response, (uint8_t *) resp_text, content_length, true);
-
-  /*requests++;*/
-
-  /*if (requests % 1000 == 0) {*/
-    /*log_info("Request #%ld", requests);*/
-  /*}*/
-  /*log_info("Request #%ld", requests);*/
 }
 
 static void handle_data(http_request_t * request, http_response_t * response, uint8_t * buf, size_t length, bool last,
@@ -217,6 +203,27 @@ static void handle_data(http_request_t * request, http_response_t * response, ui
     free(buf);
   }
 
+}
+
+static void server_sigpipe_handler(uv_signal_t * sigpipe_handler, int signum)
+{
+  log_warning("Caught SIGPIPE: %d", signum);
+
+  uv_signal_stop(sigpipe_handler);
+}
+
+static void server_sigint_handler(uv_signal_t * sigint_handler, int signum)
+{
+  log_info("Caught SIGINT: %d", signum);
+
+  server_t * server = sigint_handler->data;
+
+  if (!server->terminate) {
+    server_stop(server);
+    server->terminate = true;
+  }
+
+  uv_signal_stop(sigint_handler);
 }
 
 static void uv_cb_alloc_buffer(uv_handle_t * handle, size_t suggested_size, uv_buf_t * buf)
@@ -257,13 +264,15 @@ static void null_close_cb(uv_handle_t * handle)
 static void server_uv_async_cb_write(uv_async_t * async_handle)
 {
   client_t * client = async_handle->data;
+
   while (true) {
     worker_buffer_t * worker_buffer = blocking_queue_try_pop(client->write_queue);
+
     if (!worker_buffer) {
       break;
     }
 
-    log_info("Writing for client: #%ld", client->id);
+    log_debug("Writing for client: #%ld", client->id);
     uv_stream_t * stream = client->stream;
 
     uv_write_t * write_req = malloc(sizeof(uv_write_t));
@@ -298,10 +307,8 @@ static void uv_cb_close_connection(uv_handle_t * handle)
 
   client_t * client = handle->data;
 
-  log_info("Closing client: #%ld", client->id);
-
-  /*log_trace("Closing connection: reads = %ld octets, writes = %ld octets",*/
-            /*client->octets_read, client->octets_written);*/
+  log_debug("Closing connection: reads = %ld octets, writes = %ld octets",
+            client->octets_read, client->octets_written);
 
   free(client->stream);
   http_connection_free(client->connection);
@@ -310,11 +317,15 @@ static void uv_cb_close_connection(uv_handle_t * handle)
     tls_client_free(client->tls_ctx);
   }
 
+  uv_mutex_lock(&client->async_mutex);
+
   uv_close((uv_handle_t *) client->write_handle, null_close_cb);
   uv_close((uv_handle_t *) client->close_handle, null_close_cb);
 
-  //free(client);
-  client->closed = true;
+  uv_mutex_unlock(&client->async_mutex);
+  uv_mutex_destroy(&client->async_mutex);
+
+  free(client);
 }
 
 static void uv_cb_shutdown(uv_shutdown_t * shutdown_req, int status)
@@ -331,14 +342,10 @@ static void uv_cb_shutdown(uv_shutdown_t * shutdown_req, int status)
 
   free(shutdown_data);
   free(shutdown_req);
-  log_info("uv_cb_shutdown called");
 }
 
 static void server_connection_close(uv_stream_t * stream)
 {
-  client_t * client = stream->data;
-  log_info("Shutting down client #%ld", client->id);
-
   // TODO error handling
   uv_shutdown_t * shutdown_req = malloc(sizeof(uv_shutdown_t));
   http_shutdown_data_t * shutdown_data = malloc(sizeof(http_shutdown_data_t));
@@ -355,7 +362,7 @@ static void uv_cb_read(uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf
   if (nread == UV_EOF) {
     free(buf->base);
 
-    log_error("Shutting down from EOF, client: %ld", client->id);
+    log_debug("Shutting down from EOF, client: %ld", client->id);
 
     server_connection_close(stream);
 
@@ -370,7 +377,7 @@ static void uv_cb_read(uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf
     return;
   }
 
-  log_info("Queueing from client: #%ld", client->id);
+  log_debug("Queueing from client: #%ld", client->id);
   worker_queue(client, (uint8_t *) buf->base, nread);
 
 }
@@ -393,34 +400,10 @@ static bool tls_cb_write_to_app(void * data, uint8_t * buf, size_t length)
   return true;
 }
 
-static void uv_work_finished_cb(uv_work_t * work, int status)
-{
-  UNUSED(work);
-
-  log_error("Worker finished: %d", status);
-
-  worker_t * worker = work->data;
-  server_t * server = worker->server;
-
-  server->num_workers_terminated++;
-
-  worker_free(worker);
-
-  if (server->num_workers_terminated == server->num_workers) {
-    free(server->workers);
-
-    if (server->tls_ctx) {
-      tls_server_free(server->tls_ctx);
-    }
-
-    uv_loop_close(server->loop);
-    free(server);
-  }
-}
-
 static void uv_cb_listen(uv_stream_t * tcp_server, int status)
 {
   if (status == -1) {
+    log_error("Listen failed: %d", status);
     // error!
     return;
   }
@@ -432,8 +415,7 @@ static void uv_cb_listen(uv_stream_t * tcp_server, int status)
   tcp_client->close_cb = uv_cb_close_connection;
 
   client_t * client = malloc(sizeof(client_t));
-  client->id = client_ids++;
-  clients[client->id - 1] = client;
+  client->id = server->client_ids++;
   client->closed = false;
   client->tls_ctx = NULL;
   client->octets_written = 0;
@@ -447,26 +429,26 @@ static void uv_cb_listen(uv_stream_t * tcp_server, int status)
   uv_mutex_lock(&client->async_mutex);
 
   client->write_handle = malloc(sizeof(uv_async_t));
-  uv_async_init(server->loop, client->write_handle, server_uv_async_cb_write);
+  uv_async_init(&server->loop, client->write_handle, server_uv_async_cb_write);
   client->write_handle->data = client;
 
   client->close_handle = malloc(sizeof(uv_async_t));
-  uv_async_init(server->loop, client->close_handle, server_uv_async_cb_close);
+  uv_async_init(&server->loop, client->close_handle, server_uv_async_cb_close);
   client->close_handle->data = client;
 
   uv_mutex_unlock(&client->async_mutex);
 
   client->server = server;
-  client->connection = http_connection_init(client, server->enable_compression, handle_request,
+  client->connection = http_connection_init(client, server->config->enable_compression, handle_request,
                        handle_data, worker_http_cb_write, worker_http_cb_close_connection);
 
   tcp_client->data = client;
 
-  uv_tcp_init(server->loop, tcp_client);
+  uv_tcp_init(&server->loop, tcp_client);
 
   if (uv_accept(tcp_server, (uv_stream_t *) tcp_client) == 0) {
 
-    if (server->use_tls) {
+    if (server->config->use_tls) {
       client->tls_ctx = tls_client_init(server->tls_ctx, client, worker_write_to_network,
                                         tls_cb_write_to_app);
     }
@@ -481,25 +463,23 @@ static void uv_cb_listen(uv_stream_t * tcp_server, int status)
   }
 }
 
-server_t * server_init(int port, bool enable_compression, bool use_tls, char * key_file, char * cert_file)
+server_t * server_init(server_config_t * config)
 {
 
-  if (use_tls) {
+  if (config->use_tls) {
     tls_init();
   }
 
   server_t * server = malloc(sizeof(server_t));
   ASSERT_OR_RETURN_NULL(server);
   server->tls_ctx = NULL;
-  server->loop = NULL;
-  server->port = port;
-  server->use_tls = use_tls;
-  server->enable_compression = enable_compression;
-  server->num_workers = NUM_WORKERS;
-  server->num_workers_terminated = 0;
+  server->config = config;
+  server->client_ids = 0;
 
-  if (use_tls) {
-    server->tls_ctx = tls_server_init(key_file, cert_file);
+  server->terminate = false;
+
+  if (config->use_tls) {
+    server->tls_ctx = tls_server_init(config->private_key_file, config->cert_file);
 
     if (!server->tls_ctx) {
       free(server);
@@ -507,14 +487,38 @@ server_t * server_init(int port, bool enable_compression, bool use_tls, char * k
     }
   }
 
-  server->loop = uv_default_loop();
+  uv_loop_init(&server->loop);
 
-  if (!server->loop) {
-    free(server);
-    return NULL;
-  }
+  uv_signal_init(&server->loop, &server->sigpipe_handler);
+  uv_signal_init(&server->loop, &server->sigint_handler);
+  server->sigint_handler.data = server;
 
   return server;
+
+}
+
+static void server_free(server_t * server)
+{
+  size_t i;
+
+  for (i = 0; i < server->config->num_workers; i++) {
+    worker_t * worker = server->workers[i];
+    worker_free(worker);
+  }
+
+  free(server->workers);
+
+  if (server->tls_ctx) {
+    tls_server_free(server->tls_ctx);
+  }
+
+  uv_close((uv_handle_t *)&server->sigint_handler, null_close_cb);
+  uv_close((uv_handle_t *)&server->sigpipe_handler, null_close_cb);
+  uv_close((uv_handle_t *)&server->tcp_handler, null_close_cb);
+
+  uv_loop_close(&server->loop);
+
+  free(server);
 
 }
 
@@ -522,38 +526,43 @@ int server_start(server_t * server)
 {
   // set up workers
   size_t i;
-  server->workers = malloc(sizeof(worker_t *) * server->num_workers);
+  server->workers = malloc(sizeof(worker_t *) * server->config->num_workers);
 
-  for (i = 0; i < server->num_workers; i++) {
+  for (i = 0; i < server->config->num_workers; i++) {
     worker_t * worker = worker_init();
     worker->server = server;
 
-    worker->work_req.data = worker;
-    uv_queue_work(server->loop, &worker->work_req, worker_work, uv_work_finished_cb);
+    uv_thread_create(&worker->thread, worker_work, worker);
 
     *(server->workers + i) = worker;
   }
 
   // set up connection listener
-  uv_tcp_t tcp_server;
-  tcp_server.data = server;
+  server->tcp_handler.data = server;
 
-  uv_tcp_init(server->loop, &tcp_server);
+  uv_tcp_init(&server->loop, &server->tcp_handler);
 
   struct sockaddr_in bind_addr;
-  uv_ip4_addr(SERVER_HOSTNAME, server->port, &bind_addr);
-  uv_tcp_bind(&tcp_server, (struct sockaddr *)&bind_addr, 0);
+  uv_ip4_addr(server->config->hostname, server->config->port, &bind_addr);
+  uv_tcp_bind(&server->tcp_handler, (struct sockaddr *)&bind_addr, 0);
 
-  int err = uv_listen((uv_stream_t *) &tcp_server, 128, uv_cb_listen);
+  int err = uv_listen((uv_stream_t *) &server->tcp_handler, 128, uv_cb_listen);
 
   if (err < 0) {
     log_error("Listen error: %s", uv_strerror(err));
     return 1;
   }
 
-  log_info("Server starting on %s:%d", SERVER_HOSTNAME, server->port);
+  log_info("Server starting on %s:%d", server->config->hostname, server->config->port);
 
-  return uv_run(server->loop, UV_RUN_DEFAULT);
+  uv_signal_start(&server->sigpipe_handler, server_sigpipe_handler, SIGPIPE);
+  uv_signal_start(&server->sigint_handler, server_sigint_handler, SIGINT);
+
+  int ret = uv_run(&server->loop, UV_RUN_DEFAULT);
+
+  server_free(server);
+
+  return ret;
 
 }
 
@@ -561,27 +570,27 @@ void server_stop(server_t * server)
 {
   log_info("Server shutting down...");
 
+  log_debug("Closing %ld workers", server->config->num_workers);
+
+  // tell the workers to stop
   size_t i;
 
-  for (i = 0; i < client_ids - 2; i++) {
-    client_t * client = clients[i];
-    if (!client->closed) {
-      log_info("Client remains open: %ld (read: %ld, write: %ld, requests: %ld)",
-          client->id, client->octets_read, client->octets_written, client->connection->num_requests);
-    }
-
-  }
-
-  for (i = 0; i < server->num_workers; i++) {
+  for (i = 0; i < server->config->num_workers; i++) {
     worker_t * worker = server->workers[i];
 
-    uv_cancel((uv_req_t *) &worker->work_req); // ignore if it fails
+    log_debug("Closing worker #%ld with %ld assigned reads (pushes: %ld, pops: %ld, length: %ld)",
+              i, worker->assigned_reads, worker->read_queue->num_pushes, worker->read_queue->num_pops,
+              worker->read_queue->length);
 
-    log_info("Closing worker with %ld assigned reads (pushes: %ld, pops: %ld, length: %ld)",
-        worker->assigned_reads, worker->read_queue->num_pushes, worker->read_queue->num_pops,
-        worker->read_queue->length);
-
-    worker->terminated = true;
+    uv_async_send(&worker->stop_handle);
   }
 
+  // wait until the workers stop
+  for (i = 0; i < server->config->num_workers; i++) {
+    worker_t * worker = server->workers[i];
+
+    uv_thread_join(&worker->thread);
+  }
+
+  uv_stop(&server->loop);
 }

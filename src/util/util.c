@@ -107,7 +107,7 @@ static const char * MONTH_NAMES[] = {
 
   ASSERT_OR_RETURN_NULL(date_buf);
 
-  t = time(NULL);
+  t = time(&t);
   tm = gmtime(&t);
 
   if (strftime(date_buf, buf_len, "---, %d --- %Y %H:%M:%S GMT", tm) < 1) {

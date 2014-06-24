@@ -3,82 +3,87 @@
 #include <unistd.h>
 #include <ctype.h>
 
-#include "util/util.h"
-
 #include "server.h"
+#include "config.h"
 
 #define MIN_PORT 1
 #define MAX_PORT 0xFFFF
+#define NUM_WORKERS 4
+#define SERVER_HOSTNAME "0.0.0.0"
+#define SERVER_PORT 8080
 
-static bool server_stopped = false;
 static server_t * server = NULL;
 
-void catcher(int sig)
+void print_version()
 {
-  log_error("Caught signal: %d", sig);
-
-  if (!server_stopped) {
-    server_stop(server);
-    server_stopped = true;
-  }
-
-  exit(EXIT_SUCCESS);
+  fprintf(stdout, "%s\n", PACKAGE_STRING);
 }
 
-void log_sigpipe(int sig)
+void print_help(char * cmd)
 {
-  log_error("Caught signal: %d", sig);
+  fprintf(stdout, "Usage: %s [OPTION]...\n", cmd);
+  fprintf(stdout, "Example: %s -p 8000 -n localhost -i\n\n", cmd);
+  fprintf(stdout, "  -p NUM\t port\n");
+  fprintf(stdout, "  -n HOSTNAME\t hostname\n");
+  fprintf(stdout, "  -i\t\t turn off TLS\n");
+  fprintf(stdout, "  -k FILE\t location of private key file (PEM)\n");
+  fprintf(stdout, "  -c FILE\t location of certificate file (PEM)\n");
+  fprintf(stdout, "  -g\t\t turn off gzip compression\n\n");
+
+  print_version();
 }
 
 int main(int argc, char ** argv)
 {
-  // ignore sigpipe
-  struct sigaction sigact_pipe;
-  sigemptyset(&sigact_pipe.sa_mask);
-  sigact_pipe.sa_flags = 0;
-  sigact_pipe.sa_handler = log_sigpipe;
-  sigaction(SIGPIPE, &sigact_pipe, NULL);
-
-  struct sigaction sigact_int;
-  sigemptyset(&sigact_int.sa_mask);
-  sigact_int.sa_flags = 0;
-  sigact_int.sa_handler = catcher;
-  sigaction(SIGINT, &sigact_int, NULL);
-
-  bool enable_compression = 1;
-  bool use_tls = 1;
-  long port = SERVER_PORT;
-  char * private_key_file = "key.pem";
-  char * cert_key_file = "cert.pem";
+  server_config_t * config = malloc(sizeof(server_config_t));
+  config->enable_compression = true;
+  config->use_tls = true;
+  config->port = SERVER_PORT;
+  config->hostname = SERVER_HOSTNAME;
+  config->num_workers = NUM_WORKERS;
+  config->private_key_file = "key.pem";
+  config->cert_file = "cert.pem";
 
   int c;
 
   opterr = 0;
 
-  while ((c = getopt(argc, argv, "p:k:c:ig")) != -1) {
+  while ((c = getopt(argc, argv, "p:n:k:c:ighv")) != -1) {
     switch (c) {
-      case 'p':
-        port = strtol(optarg, NULL, 10);
+      case 'p': // port
+        config->port = strtol(optarg, NULL, 10);
         break;
 
-      case 'k':
-        private_key_file = optarg;
+      case 'n': // nodename (hostname)
+        config->hostname = optarg;
         break;
 
-      case 'c':
-        cert_key_file = optarg;
+      case 'k': // private Key
+        config->private_key_file = optarg;
+        break;
+
+      case 'c': // cert file
+        config->cert_file = optarg;
         break;
 
       case 'i': // insecure
-        use_tls = 0;
+        config->use_tls = false;
         break;
 
       case 'g': // no gzip
-        enable_compression = 0;
+        config->enable_compression = false;
         break;
 
+      case 'h': // help
+        print_help(argv[0]);
+        exit(EXIT_SUCCESS);
+
+      case 'v': // version
+        print_version();
+        exit(EXIT_SUCCESS);
+
       case '?':
-        if (optopt == 'c' || optopt == 'k' || optopt == 'p') {
+        if (optopt == 'c' || optopt == 'k' || optopt == 'p' | optopt == 'n') {
           fprintf(stderr, "Option -%c requires an argument.\n", optopt);
         } else if (isprint(optopt)) {
           fprintf(stderr, "Unknown option `-%c'.\n", optopt);
@@ -93,20 +98,18 @@ int main(int argc, char ** argv)
     }
   }
 
-  if (port < MIN_PORT || port > MAX_PORT) {
-    fprintf(stderr, "Port is out of range (%d to %d): %ld", MIN_PORT, MAX_PORT, port);
+  if (config->port < MIN_PORT || config->port > MAX_PORT) {
+    fprintf(stderr, "Port is out of range (%d to %d): %ld", MIN_PORT, MAX_PORT, config->port);
     exit(EXIT_FAILURE);
   }
 
-  server = server_init(port, enable_compression, use_tls, private_key_file, cert_key_file);
+  server = server_init(config);
 
   if (!server) {
     exit(EXIT_FAILURE);
   }
 
   server_start(server);
-
-  server_stop(server);
 
   exit(EXIT_SUCCESS);
 }
