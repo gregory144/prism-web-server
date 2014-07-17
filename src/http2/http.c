@@ -1142,7 +1142,16 @@ static bool http_emit_window_update(const http_connection_t * const connection, 
 
   log_debug("Writing window update frame");
 
-  return http_connection_write(connection, buf, buf_length);
+  if (!http_connection_write(connection, buf, buf_length)) {
+    return false;
+  }
+
+  // flush the connection so that we write the window update as soon as possible
+  if (!http_connection_flush(connection, 0)) {
+    log_warning("Could not flush write buffer after window update");
+  }
+
+  return true;
 }
 
 #define FRAME_FLAG(frame, mask) \

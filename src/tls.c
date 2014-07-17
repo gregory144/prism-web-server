@@ -160,7 +160,7 @@ static unsigned long tls_thread_id_cb(void)
 {
   unsigned long ret;
 
-  ret = (unsigned long)uv_thread_self();
+  ret = uv_thread_self();
   return (ret);
 }
 
