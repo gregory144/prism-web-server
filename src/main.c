@@ -23,12 +23,13 @@ void print_help(char * cmd)
 {
   fprintf(stdout, "Usage: %s [OPTION]...\n", cmd);
   fprintf(stdout, "Example: %s -p 8000 -n localhost -i\n\n", cmd);
-  fprintf(stdout, "  -p NUM\t port\n");
-  fprintf(stdout, "  -n HOSTNAME\t hostname\n");
-  fprintf(stdout, "  -i\t\t turn off TLS\n");
-  fprintf(stdout, "  -k FILE\t location of private key file (PEM)\n");
-  fprintf(stdout, "  -c FILE\t location of certificate file (PEM)\n");
-  fprintf(stdout, "  -g\t\t turn off gzip compression\n\n");
+  fprintf(stdout, "  -p NUM\t\tport\n");
+  fprintf(stdout, "  -n HOSTNAME\t\thostname\n");
+  fprintf(stdout, "  -w NUM_WORKERS\tspecify the number of worker threads to handle requests\n");
+  fprintf(stdout, "  -i\t\t\tturn off TLS\n");
+  fprintf(stdout, "  -k FILE\t\tlocation of private key file (PEM)\n");
+  fprintf(stdout, "  -c FILE\t\tlocation of certificate file (PEM)\n");
+  fprintf(stdout, "  -g\t\t\tturn off gzip compression\n\n");
 
   print_version();
 }
@@ -48,7 +49,7 @@ int main(int argc, char ** argv)
 
   opterr = 0;
 
-  while ((c = getopt(argc, argv, "p:n:k:c:ighv")) != -1) {
+  while ((c = getopt(argc, argv, "p:n:k:c:w:ighv")) != -1) {
     switch (c) {
       case 'p': // port
         config->port = strtol(optarg, NULL, 10);
@@ -64,6 +65,10 @@ int main(int argc, char ** argv)
 
       case 'c': // cert file
         config->cert_file = optarg;
+        break;
+
+      case 'w': // num workers
+        config->num_workers = strtol(optarg, NULL, 10);
         break;
 
       case 'i': // insecure
