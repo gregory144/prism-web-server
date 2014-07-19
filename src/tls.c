@@ -54,6 +54,18 @@ static bool tls_ssl_wants_write(const SSL * const ssl, int retval)
   return false;
 }
 
+static bool tls_ssl_zero_return(const SSL * const ssl, int retval)
+{
+  int err = SSL_get_error(ssl, retval);
+
+  switch (err) {
+    case SSL_ERROR_ZERO_RETURN:
+      return true;
+  }
+
+  return false;
+}
+
 static bool tls_debug_error(const SSL * const ssl, int retval, char * prefix)
 {
   int err = SSL_get_error(ssl, retval);
@@ -302,7 +314,7 @@ static bool tls_read_decrypted_data_and_pass_to_app(tls_client_ctx_t * client_ct
 
   log_trace("Reading decrypted data from app BIO and passing to app");
 
-  do {
+  while (true) {
     // read decrypted data
     uint8_t * read_buf = malloc(sizeof(uint8_t) * TLS_BUF_LENGTH);
     int retval = SSL_read(client_ctx->ssl, read_buf, TLS_BUF_LENGTH);
@@ -326,13 +338,17 @@ static bool tls_read_decrypted_data_and_pass_to_app(tls_client_ctx_t * client_ct
       log_trace("SSL_read: wants write");
       free(read_buf);
       break; // continue
+    } else if (tls_ssl_zero_return(client_ctx->ssl, retval)) {
+      log_trace("SSL_read: eof");
+      free(read_buf);
+      break; // continue
     } else {
       free(read_buf);
       tls_debug_error(client_ctx->ssl, retval, "SSL_read");
       return false;
     }
 
-  } while (true);
+  }
 
   return true;
 
