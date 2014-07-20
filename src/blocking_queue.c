@@ -19,6 +19,17 @@ blocking_queue_t * blocking_queue_init()
   return q;
 }
 
+int blocking_queue_size(blocking_queue_t * q)
+{
+  uv_mutex_lock(&q->mutex);
+
+  int size = q->length;
+
+  uv_mutex_unlock(&q->mutex);
+
+  return size;
+}
+
 void blocking_queue_push(blocking_queue_t * q, void * data)
 {
   blocking_queue_node_t * new_node = malloc(sizeof(blocking_queue_node_t));

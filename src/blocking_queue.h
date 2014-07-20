@@ -28,6 +28,8 @@ typedef struct {
 
 blocking_queue_t * blocking_queue_init();
 
+int blocking_queue_size(blocking_queue_t * q);
+
 void blocking_queue_push(blocking_queue_t * q, void * data);
 
 void * blocking_queue_timed_pop(blocking_queue_t * q, uint64_t timeout_in_ns);
