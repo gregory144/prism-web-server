@@ -319,8 +319,8 @@ static void uv_cb_close_connection(uv_handle_t * handle)
 
   uv_mutex_lock(&client->async_mutex);
 
-  uv_close((uv_handle_t *) client->write_handle, null_close_cb);
-  uv_close((uv_handle_t *) client->close_handle, null_close_cb);
+  uv_close((uv_handle_t *) &client->write_handle, null_close_cb);
+  uv_close((uv_handle_t *) &client->close_handle, null_close_cb);
 
   uv_mutex_unlock(&client->async_mutex);
   uv_mutex_destroy(&client->async_mutex);
@@ -428,13 +428,11 @@ static void uv_cb_listen(uv_stream_t * tcp_server, int status)
   uv_mutex_init(&client->async_mutex);
   uv_mutex_lock(&client->async_mutex);
 
-  client->write_handle = malloc(sizeof(uv_async_t));
-  uv_async_init(&server->loop, client->write_handle, server_uv_async_cb_write);
-  client->write_handle->data = client;
+  uv_async_init(&server->loop, &client->write_handle, server_uv_async_cb_write);
+  client->write_handle.data = client;
 
-  client->close_handle = malloc(sizeof(uv_async_t));
-  uv_async_init(&server->loop, client->close_handle, server_uv_async_cb_close);
-  client->close_handle->data = client;
+  uv_async_init(&server->loop, &client->close_handle, server_uv_async_cb_close);
+  client->close_handle.data = client;
 
   uv_mutex_unlock(&client->async_mutex);
 

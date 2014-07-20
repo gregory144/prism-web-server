@@ -48,8 +48,14 @@ typedef struct client_s {
 
   uv_mutex_t async_mutex;
 
-  uv_async_t * write_handle;
-  uv_async_t * close_handle;
+  // used to nofity the server thread
+  // that a write has been queued
+  uv_async_t write_handle;
+
+  // used to nofity the server the client
+  // should be closed
+  uv_async_t close_handle;
+
   blocking_queue_t * write_queue;
 
   http_connection_t * connection;

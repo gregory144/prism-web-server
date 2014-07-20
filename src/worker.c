@@ -84,7 +84,7 @@ static bool worker_write_to_network(void * data, uint8_t * buffer, size_t length
 
   blocking_queue_push(client->write_queue, worker_buffer);
   uv_mutex_lock(&client->async_mutex);
-  uv_async_send(client->write_handle);
+  uv_async_send(&client->write_handle);
   uv_mutex_unlock(&client->async_mutex);
 
   return true;
@@ -95,7 +95,7 @@ static void worker_http_cb_close_connection(void * data)
   client_t * client = data;
 
   uv_mutex_lock(&client->async_mutex);
-  uv_async_send(client->close_handle);
+  uv_async_send(&client->close_handle);
   uv_mutex_unlock(&client->async_mutex);
 }
 
