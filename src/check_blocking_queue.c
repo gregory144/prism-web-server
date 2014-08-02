@@ -19,7 +19,7 @@ void teardown()
 START_TEST(test_blocking_queue_push)
 {
   blocking_queue_push(q, "100");
-  char * top = blocking_queue_pop(q);
+  char * top = blocking_queue_try_pop(q);
   ck_assert_str_eq(top, "100");
 }
 END_TEST
@@ -29,11 +29,11 @@ START_TEST(test_blocking_queue_push_multiple)
   blocking_queue_push(q, "100");
   blocking_queue_push(q, "150");
   blocking_queue_push(q, "200");
-  char * top = blocking_queue_pop(q);
+  char * top = blocking_queue_try_pop(q);
   ck_assert_str_eq(top, "100");
-  top = blocking_queue_pop(q);
+  top = blocking_queue_try_pop(q);
   ck_assert_str_eq(top, "150");
-  top = blocking_queue_pop(q);
+  top = blocking_queue_try_pop(q);
   ck_assert_str_eq(top, "200");
 }
 END_TEST
@@ -42,19 +42,19 @@ START_TEST(test_blocking_queue_push_after_pop)
 {
   blocking_queue_push(q, "100");
   blocking_queue_push(q, "150");
-  char * top = blocking_queue_pop(q);
+  char * top = blocking_queue_try_pop(q);
   ck_assert_str_eq(top, "100");
   blocking_queue_push(q, "125");
-  top = blocking_queue_pop(q);
+  top = blocking_queue_try_pop(q);
   ck_assert_str_eq(top, "150");
-  top = blocking_queue_pop(q);
+  top = blocking_queue_try_pop(q);
   ck_assert_str_eq(top, "125");
 }
 END_TEST
 
-START_TEST(test_blocking_queue_pop_empty)
+START_TEST(test_blocking_queue_try_pop_empty)
 {
-  char * top = blocking_queue_pop(q);
+  char * top = blocking_queue_try_pop(q);
   ck_assert(top == NULL);
 }
 END_TEST
@@ -70,7 +70,7 @@ Suite * blocking_queue_suite()
   tcase_add_test(tc_q, test_blocking_queue_push_multiple);
   tcase_add_test(tc_q, test_blocking_queue_push_after_pop);
 
-  tcase_add_test(tc_q, test_blocking_queue_pop_empty);
+  tcase_add_test(tc_q, test_blocking_queue_try_pop_empty);
 
   suite_add_tcase(s, tc_q);
 

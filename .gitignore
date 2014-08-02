@@ -43,6 +43,7 @@ check_*.trs
 /src/conduit
 
 /src/check_priority_queue
+/src/check_blocking_queue
 /src/hpack/check_hpack
 /src/huffman/check_huffman
 /src/huffman/huffman
