@@ -30,7 +30,7 @@ const static_entry_t static_table[] = {
   { ":status", "404" },
   { ":status", "500" },
   { "accept-charset", "" },
-  { "accept-encoding", "" },
+  { "accept-encoding", "gzip, deflate" },
   { "accept-language", "" },
   { "accept-ranges", "" },
   { "accept", "" },

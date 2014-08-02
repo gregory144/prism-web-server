@@ -33,27 +33,37 @@ void teardown()
 
 START_TEST(test_huffman_decode_single_char)
 {
-  uint8_t buf[] = { 0xed }; // 0b11101101 (66/B)
+  uint8_t buf[] = { 0xfc }; // 0b11111100 (88/X)
   huffman_result_t result;
   ck_assert(huffman_decode(buf, 1, &result));
   ck_assert_int_eq(1, result.length);
-  ck_assert_str_eq("B", (char *)result.value);
+  ck_assert_str_eq("X", (char *)result.value);
 }
 END_TEST
 
 START_TEST(test_huffman_decode_single_char_with_eos)
 {
-  uint8_t buf[] = { 0x2f }; // 0b00101111 (50/2)
+  uint8_t buf[] = { 0x83 }; // 0b10000011 (61/=)
   huffman_result_t result;
   ck_assert(huffman_decode(buf, 1, &result));
   ck_assert_int_eq(1, result.length);
-  ck_assert_str_eq("2", (char *)result.value);
+  ck_assert_str_eq("=", (char *)result.value);
 }
 END_TEST
 
 START_TEST(test_huffman_decode_two_chars)
 {
-  uint8_t buf[] = { 0xd9, 0xf6 }; // 0b1101100111110110 (78/N, 81/Q)
+  uint8_t buf[] = { 0xf9, 0xfa }; // 0b11111001 11111010 (42/*, 44/,)
+  huffman_result_t result;
+  ck_assert(huffman_decode(buf, 2, &result));
+  ck_assert_int_eq(2, result.length);
+  ck_assert_str_eq("*,", (char *)result.value);
+}
+END_TEST
+
+START_TEST(test_huffman_decode_two_chars_with_eos)
+{
+  uint8_t buf[] = { 0xd3, 0xb3 }; // 0b1101001110110011 (78/N, 81/Q)
   huffman_result_t result;
   ck_assert(huffman_decode(buf, 2, &result));
   ck_assert_int_eq(2, result.length);
@@ -61,20 +71,10 @@ START_TEST(test_huffman_decode_two_chars)
 }
 END_TEST
 
-START_TEST(test_huffman_decode_two_chars_with_eos)
-{
-  uint8_t buf[] = { 0xd3, 0xab }; // 0b1101 0011 1010 1011 (70/F, 71/G)
-  huffman_result_t result;
-  ck_assert(huffman_decode(buf, 2, &result));
-  ck_assert_int_eq(2, result.length);
-  ck_assert_str_eq("FG", (char *)result.value);
-}
-END_TEST
-
 START_TEST(test_huffman_encode_single_8bit_char)
 {
-  char buf[] = { 'E' };
-  uint8_t encoded[] = { 0xef };
+  char buf[] = { ';' };
+  uint8_t encoded[] = { 0xfb };
 
   huffman_result_t result;
   ck_assert(huffman_encode(buf, 1, &result));
@@ -85,7 +85,7 @@ END_TEST
 START_TEST(test_huffman_encode_single_5bit_char)
 {
   char buf[] = { 't' };
-  uint8_t encoded[] = { 0x77 }; // padded with 1s
+  uint8_t encoded[] = { 0x4f }; // 01001111 padded with 1s
 
   huffman_result_t result;
   ck_assert(huffman_encode(buf, 1, &result));
@@ -93,10 +93,10 @@ START_TEST(test_huffman_encode_single_5bit_char)
 }
 END_TEST
 
-START_TEST(test_huffman_encode_single_9bit_char)
+START_TEST(test_huffman_encode_single_10bit_char)
 {
-  char buf[] = { 'Z' };
-  uint8_t encoded[] = { 0xfd, 0xff }; // padded with 1s
+  char buf[] = { '?' };
+  uint8_t encoded[] = { 0xff, 0x3f }; // padded with 1s
 
   huffman_result_t result;
   ck_assert(huffman_encode(buf, 1, &result));
@@ -106,8 +106,8 @@ END_TEST
 
 START_TEST(test_huffman_encode_12bit_out)
 {
-  char buf[] = { '5', '4' };
-  uint8_t encoded[] = { 0x86, 0x0f }; // padded with 1s
+  char buf[] = { '5', '4' }; // 01101101 10101111
+  uint8_t encoded[] = { 0x6d, 0xaf }; // padded with 1s
   huffman_result_t result;
   ck_assert(huffman_encode(buf, 2, &result));
   check_encoded_val(encoded, 2, result.value, result.length);
@@ -117,26 +117,71 @@ END_TEST
 START_TEST(test_huffman_encode_longer_string)
 {
   char buf[] = "Hello World!";
+  /*'H' ( 72)  |1100011                                      63  [ 7]*/
+  /*'e' (101)  |00101                                         5  [ 5]*/
+  /*'l' (108)  |101000                                       28  [ 6]*/
+  /*'l' (108)  |101000                                       28  [ 6]*/
+  /*'o' (111)  |00111                                         7  [ 5]*/
+  /*' ' ( 32)  |010100                                       14  [ 6]*/
+  /*'W' ( 87)  |1110010                                      72  [ 7]*/
+  /*'o' (111)  |00111                                         7  [ 5]*/
+  /*'r' (114)  |101100                                       2c  [ 6]*/
+  /*'l' (108)  |101000                                       28  [ 6]*/
+  /*'d' (100)  |100100                                       24  [ 6]*/
+  /*'!' ( 33)  |11111110|00                                 3f8  [10]*/
+
+
   uint8_t encoded[] = {
-    0xf9, 0x2e, 0xcb, 0x1a, 0x6f, 0xcb, 0x70, 0xb2, 0x9f, 0xfe, 0x7f
+    0xC6, 0x5A, 0x28, 0x3A, 0x9C, 0x8F, 0x65, 0x12, 0x7F, 0x1F
   }; // padded with 1s
   huffman_result_t result;
   ck_assert(huffman_encode(buf, 12, &result));
-  check_encoded_val(encoded, 11, result.value, result.length);
+  check_encoded_val(encoded, 10, result.value, result.length);
 }
 END_TEST
 
 START_TEST(test_huffman_encode_date)
 {
+
+  /*'W' ( 87)  |1110010                                      72  [ 7]*/
+  /*'e' (101)  |00101                                         5  [ 5]*/
+  /*'d' (100)  |100100                                       24  [ 6]*/
+  /*',' ( 44)  |11111010                                     fa  [ 8]*/
+  /*' ' ( 32)  |010100                                       14  [ 6]*/
+  /*'0' ( 48)  |00000                                         0  [ 5]*/
+  /*'5' ( 53)  |011011                                       1b  [ 6]*/
+  /*' ' ( 32)  |010100                                       14  [ 6]*/
+  /*'M' ( 77)  |1101000                                      68  [ 7]*/
+  /*'a' ( 97)  |00011                                         3  [ 5]*/
+  /*'r' (114)  |101100                                       2c  [ 6]*/
+  /*' ' ( 32)  |010100                                       14  [ 6]*/
+  /*'2' ( 50)  |00010                                         2  [ 5]*/
+  /*'0' ( 48)  |00000                                         0  [ 5]*/
+  /*'1' ( 49)  |00001                                         1  [ 5]*/
+  /*'4' ( 52)  |011010                                       1a  [ 6]*/
+  /*' ' ( 32)  |010100                                       14  [ 6]*/
+  /*'0' ( 48)  |00000                                         0  [ 5]*/
+  /*'9' ( 57)  |011111                                       1f  [ 6]*/
+  /*':' ( 58)  |1011100                                      5c  [ 7]*/
+  /*'2' ( 50)  |00010                                         2  [ 5]*/
+  /*'0' ( 48)  |00000                                         0  [ 5]*/
+  /*':' ( 58)  |1011100                                      5c  [ 7]*/
+  /*'5' ( 53)  |011011                                       1b  [ 6]*/
+  /*'8' ( 56)  |011110                                       1e  [ 6]*/
+  /*' ' ( 32)  |010100                                       14  [ 6]*/
+  /*'G' ( 71)  |1100010                                      62  [ 7]*/
+  /*'M' ( 77)  |1101000                                      68  [ 7]*/
+  /*'T' ( 84)  |1101111                                      6f  [ 7]*/
+
   char buf[] = "Wed, 05 Mar 2014 09:20:58 GMT";
   uint8_t encoded[] = {
-    0xfc, 0xae, 0x9c, 0xa6, 0x08, 0x4d, 0xad, 0x38,
-    0x18, 0x80, 0x60, 0x30, 0x4b, 0x31, 0x04, 0xd0,
-    0xc8, 0x6d, 0x5a, 0xe8
+    0xE4, 0x59, 0x3E, 0x94, 0x03, 0x6A, 0x68, 0x1D,
+    0x8A, 0x08, 0x01, 0x69, 0x40, 0x3F, 0x70, 0x40,
+    0xB8, 0xDB, 0xCA, 0x62, 0xD1, 0xBF
   }; // padded with 1s
   huffman_result_t result;
   ck_assert(huffman_encode(buf, strlen(buf), &result));
-  check_encoded_val(encoded, 20, result.value, result.length);
+  check_encoded_val(encoded, 22, result.value, result.length);
 }
 END_TEST
 
@@ -154,7 +199,7 @@ Suite * suite()
 
   tcase_add_test(tc_decoder, test_huffman_encode_single_8bit_char);
   tcase_add_test(tc_decoder, test_huffman_encode_single_5bit_char);
-  tcase_add_test(tc_decoder, test_huffman_encode_single_9bit_char);
+  tcase_add_test(tc_decoder, test_huffman_encode_single_10bit_char);
   tcase_add_test(tc_decoder, test_huffman_encode_12bit_out);
   tcase_add_test(tc_decoder, test_huffman_encode_longer_string);
   tcase_add_test(tc_decoder, test_huffman_encode_date);
