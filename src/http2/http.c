@@ -337,6 +337,7 @@ http_connection_t * http_connection_init(void * const data, const bool enable_co
   connection->incoming_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
   connection->can_send_blocked_frame = true;
   connection->closing = false;
+  connection->closed = false;
 
   connection->outgoing_concurrent_streams = 0;
   connection->incoming_concurrent_streams = 0;
@@ -464,11 +465,28 @@ void http_connection_free(http_connection_t * const connection)
   free(connection);
 }
 
+static void http_connection_mark_closing(http_connection_t * const connection)
+{
+  connection->closing = true;
+}
+
 static void http_connection_close(http_connection_t * const connection)
 {
-  // TODO loop through streams + close them
-  connection->closer(connection->data);
-  connection->closing = true;
+  if (connection->closed) {
+    return;
+  }
+
+  if (connection->closing) {
+    // TODO loop through streams + close them
+    connection->closer(connection->data);
+    connection->closed = true;
+  }
+}
+
+void http_finished_writes(http_connection_t * const connection)
+{
+  log_trace("Finished write");
+  http_connection_close(connection);
 }
 
 static bool http_connection_flush(const http_connection_t * const connection, size_t new_length)
@@ -494,7 +512,7 @@ static bool http_connection_write(const http_connection_t * const connection, ui
   size_t existing_length = binary_buffer_size(connection->write_buffer);
 
   if (existing_length + buf_length >= MAX_CONNECTION_BUFFER_SIZE) {
-    // if the write buffer doesn't have enough space to accomadate the new buffer then
+    // if the write buffer doesn't have enough space to accommodate the new buffer then
     // flush the buffer
     ASSERT_OR_RETURN_FALSE(
       http_connection_flush(connection, buf_length < MAX_CONNECTION_BUFFER_SIZE ? buf_length : 0)
@@ -646,7 +664,6 @@ static bool emit_error_and_close(http_connection_t * const connection, uint32_t 
       log_error("Unable to emit goaway frame");
     }
 
-    // TODO gracefully shutdown connection
     http_connection_close(connection);
 
     return success;
@@ -1810,6 +1827,7 @@ static bool http_parse_frame_goaway(http_connection_t * const connection, http_f
     log_trace("Received goaway, last stream: %d, error code: %s (%d), debug_data: %s",
               frame->last_stream_id, http_connection_errors[frame->error_code],
               frame->error_code, frame->debug_data);
+    http_connection_mark_closing(connection);
   } else {
     log_error("Received goaway, last stream: %d, error code: %s (%d), debug_data: %s",
               frame->last_stream_id, http_connection_errors[frame->error_code],
@@ -2108,12 +2126,13 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
       if (!http_emit_settings_default(connection)) {
         log_error("Unable to emit default settings frame");
 
-        http_connection_close(connection);
+        http_connection_mark_closing(connection);
         return;
       }
     } else {
       log_warning("Found non-HTTP2 connection, closing connection");
 
+      http_connection_mark_closing(connection);
       http_connection_close(connection);
       return;
     }
@@ -2148,6 +2167,12 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
     connection->buffer_length = 0;
   }
 
+}
+
+void http_connection_eof(http_connection_t * const connection)
+{
+  http_connection_mark_closing(connection);
+  http_connection_close(connection);
 }
 
 bool http_response_write(http_response_t * const response, uint8_t * data, const size_t data_length, bool last)

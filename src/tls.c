@@ -153,7 +153,6 @@ static int alpn_callback(SSL * ssl, const unsigned char ** out, unsigned char * 
 // openssl thread support enabled
 
 static uv_mutex_t * lock_cs;
-static long * lock_count;
 
 static void tls_locking_cb(int mode, int type, char * file, int line)
 {
@@ -162,7 +161,6 @@ static void tls_locking_cb(int mode, int type, char * file, int line)
 
   if (mode & CRYPTO_LOCK) {
     uv_mutex_lock(&(lock_cs[type]));
-    lock_count[type]++;
   } else {
     uv_mutex_unlock(&(lock_cs[type]));
   }
@@ -170,21 +168,14 @@ static void tls_locking_cb(int mode, int type, char * file, int line)
 
 static unsigned long tls_thread_id_cb(void)
 {
-  unsigned long ret;
-
-  ret = uv_thread_self();
-  return (ret);
+  return uv_thread_self();
 }
 
 static void tls_thread_setup(void)
 {
-  int i;
-
   lock_cs = OPENSSL_malloc(CRYPTO_num_locks() * sizeof(uv_mutex_t));
-  lock_count = OPENSSL_malloc(CRYPTO_num_locks() * sizeof(long));
 
-  for (i = 0; i < CRYPTO_num_locks(); i++) {
-    lock_count[i] = 0;
+  for (int i = 0; i < CRYPTO_num_locks(); i++) {
     uv_mutex_init(&(lock_cs[i]));
   }
 
@@ -194,21 +185,16 @@ static void tls_thread_setup(void)
 
 static void tls_thread_cleanup(void)
 {
-  int i;
-
   CRYPTO_set_locking_callback(NULL);
-  fprintf(stderr, "cleanup\n");
+  log_debug("SSL cleanup");
 
-  for (i = 0; i < CRYPTO_num_locks(); i++) {
+  for (int i = 0; i < CRYPTO_num_locks(); i++) {
     uv_mutex_destroy(&(lock_cs[i]));
-    fprintf(stderr, "%8ld:%s\n", lock_count[i],
-            CRYPTO_get_lock_name(i));
   }
 
   OPENSSL_free(lock_cs);
-  OPENSSL_free(lock_count);
 
-  fprintf(stderr, "done cleanup\n");
+  log_debug("SSL cleanup finished");
 }
 
 #else
@@ -263,7 +249,7 @@ bool tls_server_free(tls_server_ctx_t * server_ctx)
   return true;
 }
 
-tls_client_ctx_t * tls_client_init(tls_server_ctx_t * server_ctx, void * data,
+tls_client_ctx_t * tls_client_init(tls_server_ctx_t * server_ctx, void * data, tls_can_continue_cb can_continue,
                                    tls_write_to_network_cb write_to_network, tls_write_to_app_cb write_to_app)
 {
 
@@ -274,6 +260,7 @@ tls_client_ctx_t * tls_client_init(tls_server_ctx_t * server_ctx, void * data,
   tls_client_ctx->data = data;
   tls_client_ctx->write_to_network = write_to_network;
   tls_client_ctx->write_to_app = write_to_app;
+  tls_client_ctx->can_continue = can_continue;
   tls_client_ctx->ssl = NULL;
   tls_client_ctx->app_bio = NULL;
   tls_client_ctx->network_bio = NULL;
@@ -309,6 +296,11 @@ static bool tls_read_decrypted_data_and_pass_to_app(tls_client_ctx_t * client_ct
   if (client_ctx->writing_to_app) {
     // we're already in the process of writing to the app -
     // don't do it again until we're finished
+    return true;
+  }
+
+  if (!client_ctx->can_continue(client_ctx->data)) {
+    log_debug("Requested read decrypted data and pass to app but can't continue");
     return true;
   }
 
@@ -486,7 +478,7 @@ bool tls_encrypt_data_and_pass_to_network(tls_client_ctx_t * client_ctx, uint8_t
 
       // try again
     } else if (tls_ssl_wants_write(client_ctx->ssl, retval)) {
-      log_warning("SSL_write: wants write with %ld bytes remaining", remaining_length);
+      log_debug("SSL_write: wants write with %ld bytes remaining", remaining_length);
       free(buf);
       abort();
       return false;

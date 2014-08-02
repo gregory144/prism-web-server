@@ -44,9 +44,7 @@ typedef struct {
 } server_t;
 
 typedef struct client_s {
-  uv_stream_t * stream;
-
-  uv_mutex_t async_mutex;
+  uv_tcp_t tcp;
 
   // used to nofity the server thread
   // that a write has been queued
@@ -56,6 +54,12 @@ typedef struct client_s {
   // should be closed
   uv_async_t close_handle;
 
+  // used to nofity the worker a write
+  // has succeeded
+  uv_async_t written_handle;
+
+  size_t closed_async_handle_count;
+
   blocking_queue_t * write_queue;
 
   http_connection_t * connection;
@@ -63,6 +67,12 @@ typedef struct client_s {
   server_t * server;
 
   tls_client_ctx_t * tls_ctx;
+
+  bool closing;
+  bool uv_closed;
+  bool http_closed;
+
+  bool eof;
 
   struct worker_s * worker;
 
@@ -109,16 +119,15 @@ typedef struct {
 
   size_t length;
 
+  bool eof;
+
 } worker_buffer_t;
 
 typedef struct {
   uv_stream_t * stream;
-  uv_buf_t * buf;
+  uv_buf_t buf;
+  uv_write_t req;
 } http_write_req_data_t;
-
-typedef struct {
-  uv_stream_t * stream;
-} http_shutdown_data_t;
 
 server_t * server_init(server_config_t * config);
 
