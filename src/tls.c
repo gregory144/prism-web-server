@@ -16,7 +16,7 @@
 
 // list of suported protocols
 // TLS 'wire' format: length prefixed, non-empty 8-bit characters
-const unsigned char supported_protocols[] = { 5, 'h', '2', '-', '1', '2' };
+const unsigned char supported_protocols[] = { 5, 'h', '2', '-', '1', '3' };
 const unsigned char supported_protocols_length = 6;
 
 bool tls_init()

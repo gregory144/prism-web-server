@@ -14,7 +14,6 @@ typedef struct {
   long port;
   char * hostname;
   bool use_tls;
-  bool enable_compression;
 
   size_t num_workers;
 

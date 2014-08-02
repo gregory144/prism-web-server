@@ -11,7 +11,6 @@
 #include "request.h"
 #include "response.h"
 #include "hash_table.h"
-#include "gzip.h"
 
 #define FRAME_HEADER_SIZE 8 // octets
 #define DEFAULT_STREAM_EXCLUSIVE_FLAG 0
@@ -67,9 +66,9 @@ frame_parser_definition_t frame_parser_definitions[] = {
       true, // END_STREAM 0x1
       true, // END_SEGMENT 0x2
       false,
-      true, // PAD_LOW 0x8
-      true, // PAD_HIGH 0x10
-      true, // COMPRESSED 0x20
+      true, // PADDED 0x8
+      false,
+      false,
       false,
       false
     },
@@ -86,8 +85,8 @@ frame_parser_definition_t frame_parser_definitions[] = {
       true, // END_STREAM 0x1
       true, // END_SEGMENT 0x2
       true, // END_HEADERS 0x4
-      true, // PAD_LOW 0x8
-      true, // PAD_HIGH 0x10
+      true, // PADDED 0x8
+      false,
       true, // PRIORITY 0x20
       false,
       false
@@ -162,8 +161,8 @@ frame_parser_definition_t frame_parser_definitions[] = {
       false,
       false,
       true, // END_HEADERS 0x4
-      true, // PAD_LOW 0x8
-      true, // PAD_HIGH 0x10
+      true, // PADDED 0x8
+      false,
       false,
       false,
       false
@@ -238,8 +237,8 @@ frame_parser_definition_t frame_parser_definitions[] = {
       false,
       false,
       true, // END_HEADERS 0x4
-      true, // PAD_LOW 0x8
-      true, // PAD_HIGH 0x10
+      false,
+      false,
       false,
       false,
       false
@@ -247,44 +246,6 @@ frame_parser_definition_t frame_parser_definitions[] = {
     true,
     false
   },
-
-  {
-    // ALTSVC frame
-    0x9, // length min
-    0x4000, // length max 2^14
-    0xa, // type
-    {
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false
-    },
-    false,
-    false
-  },
-
-  {
-    // BLOCKED frame
-    0x0, // length min
-    0x0, // length max
-    0xb, // type
-    {
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false
-    },
-    false,
-    false
-  }
 
 };
 
@@ -315,8 +276,7 @@ static void http_stream_free(void * value)
   free(stream);
 }
 
-http_connection_t * http_connection_init(void * const data, const bool enable_compression,
-    const request_cb request_handler,
+http_connection_t * http_connection_init(void * const data, const request_cb request_handler,
     const data_cb data_handler, const write_cb writer, const close_cb closer)
 {
   http_connection_t * connection = malloc(sizeof(http_connection_t));
@@ -335,7 +295,6 @@ http_connection_t * http_connection_init(void * const data, const bool enable_co
   connection->current_stream_id = 2;
   connection->outgoing_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
   connection->incoming_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
-  connection->can_send_blocked_frame = true;
   connection->closing = false;
   connection->closed = false;
 
@@ -350,8 +309,6 @@ http_connection_t * http_connection_init(void * const data, const bool enable_co
   connection->enable_push = DEFAULT_ENABLE_PUSH;
   connection->max_concurrent_streams = DEFAULT_MAX_CONNCURRENT_STREAMS;
   connection->initial_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
-  connection->enable_compress_data = enable_compression;
-  connection->setting_compress_data = DEFAULT_COMPRESS_DATA;
 
   /**
    * Set these to NULL, http_connection_free requires the values to be set
@@ -361,7 +318,6 @@ http_connection_t * http_connection_init(void * const data, const bool enable_co
   connection->decoding_context = NULL;
   connection->streams = NULL;
   connection->write_buffer = NULL;
-  connection->gzip_context = NULL;
 
   connection->encoding_context = hpack_context_init(DEFAULT_HEADER_TABLE_SIZE);
 
@@ -457,10 +413,6 @@ void http_connection_free(http_connection_t * const connection)
   hpack_context_free(connection->encoding_context);
   hpack_context_free(connection->decoding_context);
   binary_buffer_free(connection->write_buffer);
-
-  if (connection->gzip_context) {
-    gzip_compress_free(connection->gzip_context);
-  }
 
   free(connection);
 }
@@ -671,22 +623,6 @@ static bool emit_error_and_close(http_connection_t * const connection, uint32_t 
 
 }
 
-static bool http_emit_blocked(const http_connection_t * const connection, const http_stream_t * const stream)
-{
-
-  size_t buf_length = FRAME_HEADER_SIZE;
-
-  uint8_t buf[buf_length];
-
-  uint8_t flags = 0; // no flags
-
-  http_frame_header_write(buf, 0, FRAME_TYPE_BLOCKED, flags, stream ? stream->id : 0);
-
-  log_debug("Writing blocked frame");
-
-  return http_connection_write(connection, buf, buf_length);
-}
-
 static bool http_emit_headers(http_connection_t * const connection, const http_stream_t * const stream,
                               const multimap_t * const headers)
 {
@@ -821,10 +757,6 @@ static bool http_emit_data_frame(const http_connection_t * const connection, con
     flags |= FLAG_END_STREAM;
   }
 
-  if (frame->compressed) {
-    flags |= FLAG_COMPRESSED;
-  }
-
   http_frame_header_write(header_buf, frame->buf_length, FRAME_TYPE_DATA, flags, stream->id);
 
   if (!http_connection_write(connection, header_buf, header_length)) {
@@ -870,28 +802,10 @@ static bool http_stream_trigger_send_data(http_connection_t * const connection, 
 
     } else {
 
-      bool success = true;
+      return true;
 
-      if (connection->can_send_blocked_frame && !connection_window_open) {
-        connection->can_send_blocked_frame = false;
-
-        log_warning("Wanted to send %ld octets, but connection window is %ld and stream window is %ld", frame_payload_size,
-                    connection->outgoing_window_size, stream->outgoing_window_size);
-
-        success = http_emit_blocked(connection, NULL);
-      }
-
-      if (stream->can_send_blocked_frame && !stream_window_open) {
-        stream->can_send_blocked_frame = false;
-
-        log_warning("Wanted to send %ld octets, but connection window is %ld and stream window is %ld", frame_payload_size,
-                    connection->outgoing_window_size, stream->outgoing_window_size);
-
-        success = success && http_emit_blocked(connection, stream);
-      }
-
-      return success;
     }
+
   }
 
   log_trace("Connection window size: %ld, stream window: %ld", connection->outgoing_window_size,
@@ -954,7 +868,7 @@ static bool http_trigger_send_data(http_connection_t * const connection, http_st
 }
 
 static http_queued_frame_t * http_queue_data_frame(http_stream_t * const stream, uint8_t * buf, const size_t buf_length,
-    const bool compressed, const bool end_stream, void * const buf_begin)
+    const bool end_stream, void * const buf_begin)
 {
   http_queued_frame_t * new_frame = malloc(sizeof(http_queued_frame_t));
 
@@ -967,7 +881,6 @@ static http_queued_frame_t * http_queue_data_frame(http_stream_t * const stream,
   new_frame->buf_length = buf_length;
   new_frame->end_stream = end_stream;
   new_frame->buf_begin = buf_begin;
-  new_frame->compressed = compressed;
   new_frame->next = NULL;
 
   if (!stream->queued_data_frames) {
@@ -991,7 +904,7 @@ static bool http_emit_data(http_connection_t * const connection, http_stream_t *
   // TODO support padding?
 
   if (in_length == 0) {
-    if (!http_queue_data_frame(stream, in, in_length, false, last_in, in)) {
+    if (!http_queue_data_frame(stream, in, in_length, last_in, in)) {
       free(in);
       return false;
     }
@@ -1017,40 +930,14 @@ static bool http_emit_data(http_connection_t * const connection, http_stream_t *
 
     uint8_t * curr_frame_data = per_frame_data;
     size_t curr_frame_length = per_frame_length;
-    bool compressed = false;
 
-    if (connection->enable_compress_data && connection->setting_compress_data && curr_frame_length > GZIP_MIN_SIZE) {
-      // gzip it
-      connection->gzip_context = gzip_compress_init(connection->gzip_context);
-
-      if (!connection->gzip_context) {
-        free(in);
-        return NULL;
-      }
-
-      connection->gzip_context->in = curr_frame_data;
-      connection->gzip_context->in_length = curr_frame_length;
-
-      if (gzip_compress(connection->gzip_context)) {
-
-        compressed = true;
-        curr_frame_data = connection->gzip_context->out;
-        curr_frame_length = connection->gzip_context->out_length;
-      }
-
-    }
-
-    uint8_t * buf_begin = compressed ? curr_frame_data : (last_frame ? in : NULL);
+    uint8_t * buf_begin = last_frame ? in : NULL;
 
     if (buf_begin == in) {
       in_freed = true;
     }
 
-    if (!http_queue_data_frame(stream, curr_frame_data, curr_frame_length, compressed, last_in && last_frame, buf_begin)) {
-
-      if (compressed) {
-        free(curr_frame_data);
-      }
+    if (!http_queue_data_frame(stream, curr_frame_data, curr_frame_length, last_in && last_frame, buf_begin)) {
 
       free(in);
       return false;
@@ -1086,31 +973,6 @@ static bool http_emit_settings_ack(const http_connection_t * const connection)
   http_frame_header_write(buf, 0, FRAME_TYPE_SETTINGS, flags, 0);
 
   log_debug("Writing settings ack frame");
-
-  return http_connection_write(connection, buf, buf_length);
-}
-
-static bool http_emit_settings_default(const http_connection_t * const connection)
-{
-  size_t single_setting_length = 5;
-  size_t buf_length = FRAME_HEADER_SIZE + single_setting_length;
-  uint8_t buf[buf_length];
-  uint8_t flags = 0;
-
-  http_frame_header_write(buf, single_setting_length, FRAME_TYPE_SETTINGS, flags, 0);
-  size_t pos = FRAME_HEADER_SIZE;
-
-  log_debug("Writing settings frame");
-
-  // emit SETTINGS_COMPRESS_DATA identifier
-  buf[pos++] = SETTINGS_COMPRESS_DATA;
-
-  // emit SETTINGS_COMPRESS_DATA value
-  uint32_t value = 1;
-  buf[pos++] = (value >> 24) & 0xFF;
-  buf[pos++] = (value >> 16) & 0xFF;
-  buf[pos++] = (value >> 8) & 0xFF;
-  buf[pos++] = (value) & 0xFF;
 
   return http_connection_write(connection, buf, buf_length);
 }
@@ -1242,12 +1104,6 @@ static bool http_setting_set(http_connection_t * const connection, const enum se
       connection->initial_window_size = value;
       break;
 
-    case SETTINGS_COMPRESS_DATA:
-      log_trace("Settings: Enable compressed data? %s", value ? "yes" : "no");
-
-      connection->setting_compress_data = value;
-      break;
-
     default:
       emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR, "Invalid setting: %d", id);
       return false;
@@ -1306,8 +1162,6 @@ static http_stream_t * http_stream_init(http_connection_t * const connection, co
 
   stream->associated_stream_id = 0;
 
-  stream->can_send_blocked_frame = true;
-
   return stream;
 }
 
@@ -1344,30 +1198,15 @@ static bool http_trigger_request(http_connection_t * const connection, http_stre
   return true;
 }
 
-static bool strip_padding(uint8_t ** payload, size_t * payload_length, bool pad_low_on, bool pad_high_on)
+static bool strip_padding(uint8_t ** payload, size_t * payload_length, bool padded_on)
 {
-  if (!pad_low_on && pad_high_on) {
-    // error - pad high can't be set if pad low is not set
-    log_error("PAD_HIGH set but PAD_LOW unset");
-    return false;
-  } else if (pad_low_on) {
-    size_t padding = 0;
-
-    if (pad_high_on) {
-      uint8_t pad_high = get_bits8(*payload, 0xFF);
-      padding += (256 * pad_high);
-
-      (*payload_length)--;
-      (*payload)++;
-    }
-
-    uint8_t pad_low = get_bits8(*payload, 0xFF);
-    padding += pad_low;
+  if (padded_on) {
+    size_t padding_length = get_bits8(*payload, 0xFF);
 
     (*payload_length)--;
     (*payload)++;
-    *payload_length -= padding;
-    log_trace("Stripped %ld octets of padding from frame", padding);
+    *payload_length -= padding_length;
+    log_trace("Stripped %ld octets of padding from frame", padding_length);
   }
 
   return true;
@@ -1398,36 +1237,15 @@ static bool http_parse_frame_data(http_connection_t * const connection, const ht
   size_t buf_length = frame->length;
   bool last_data_frame = FRAME_FLAG(frame, FLAG_END_STREAM);
 
-  bool pad_low = FRAME_FLAG(frame, FLAG_PAD_LOW);
-  bool pad_high = FRAME_FLAG(frame, FLAG_PAD_HIGH);
+  bool padded = FRAME_FLAG(frame, FLAG_PADDED);
 
-  if (!strip_padding(&buf, &buf_length, pad_low, pad_high)) {
+  if (!strip_padding(&buf, &buf_length, padded)) {
     emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR,
                          "Problem with padding on data frame");
     return false;
   }
 
-  if (FRAME_FLAG(frame, FLAG_COMPRESSED)) {
-    // handle decompression
-
-    size_t inflated_length = 0;
-    uint8_t * inflated = gzip_decompress(buf, buf_length, &inflated_length);
-
-    if (!inflated) {
-      emit_error_and_close(connection, stream->id, HTTP_ERROR_INTERNAL_ERROR,
-                           "Unable to decompress data frame for stream #%d", stream->id);
-      // we can't continute to process this frame, but other frames should continue
-      return true;
-    }
-
-    log_trace("Inflated data frame from %ld octets to %ld octets", buf_length, inflated_length);
-
-    connection->data_handler(stream->request, stream->response, inflated, inflated_length, last_data_frame, true);
-  } else {
-
-    connection->data_handler(stream->request, stream->response, buf, buf_length, last_data_frame, false);
-
-  }
+  connection->data_handler(stream->request, stream->response, buf, buf_length, last_data_frame, false);
 
   // do we need to send WINDOW_UPDATE?
   if (connection->incoming_window_size < 0) {
@@ -1572,10 +1390,9 @@ static bool http_parse_frame_headers(http_connection_t * const connection, const
     return false;
   }
 
-  bool pad_low = FRAME_FLAG(frame, FLAG_PAD_LOW);
-  bool pad_high = FRAME_FLAG(frame, FLAG_PAD_HIGH);
+  bool padded = FRAME_FLAG(frame, FLAG_PADDED);
 
-  if (!strip_padding(&buf, &buf_length, pad_low, pad_high)) {
+  if (!strip_padding(&buf, &buf_length, padded)) {
     emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR,
                          "Problem with padding on header frame");
     return false;
@@ -1623,10 +1440,9 @@ static bool http_parse_frame_continuation(http_connection_t * const connection,
   size_t buf_length = frame->length;
   http_stream_t * stream = http_stream_get(connection, frame->stream_id);
 
-  bool pad_low = FRAME_FLAG(frame, FLAG_PAD_LOW);
-  bool pad_high = FRAME_FLAG(frame, FLAG_PAD_HIGH);
+  bool padded = FRAME_FLAG(frame, FLAG_PADDED);
 
-  if (!strip_padding(&buf, &buf_length, pad_low, pad_high)) {
+  if (!strip_padding(&buf, &buf_length, padded)) {
     emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR,
                          "Problem with padding on data frame");
     return false;
@@ -1703,24 +1519,11 @@ static bool http_parse_frame_ping(http_connection_t * const connection, const ht
 
 }
 
-static bool http_parse_frame_blocked(http_connection_t * const connection, const http_frame_blocked_t * const frame)
-{
-  UNUSED(connection);
-
-  log_warning("Received BLOCKED frame: stream #%d", frame->stream_id);
-
-  return true;
-}
-
 static bool http_increment_connection_window_size(http_connection_t * const connection, const uint32_t increment)
 {
   connection->outgoing_window_size += increment;
 
   log_trace("Connection window size incremented to: %ld", connection->outgoing_window_size);
-
-  if (connection->outgoing_window_size > 0) {
-    connection->can_send_blocked_frame = true;
-  }
 
   return http_trigger_send_data(connection, NULL);
 }
@@ -1746,10 +1549,6 @@ static bool http_increment_stream_window_size(http_connection_t * const connecti
   stream->outgoing_window_size += increment;
 
   log_trace("Stream window size incremented to: %ld", stream->outgoing_window_size);
-
-  if (stream->outgoing_window_size > 0) {
-    stream->can_send_blocked_frame = true;
-  }
 
   return http_trigger_send_data(connection, stream);
 
@@ -1883,14 +1682,6 @@ static http_frame_t * http_frame_init(http_connection_t * const connection, cons
 
     case FRAME_TYPE_CONTINUATION:
       frame = (http_frame_t *) malloc(sizeof(http_frame_continuation_t));
-      break;
-
-    case FRAME_TYPE_ALTSVC:
-      frame = (http_frame_t *) malloc(sizeof(http_frame_t));
-      break;
-
-    case FRAME_TYPE_BLOCKED:
-      frame = (http_frame_t *) malloc(sizeof(http_frame_blocked_t));
       break;
 
     default:
@@ -2062,14 +1853,6 @@ static bool http_connection_add_from_buffer(http_connection_t * const connection
           success = http_parse_frame_continuation(connection, (http_frame_continuation_t *) frame);
           break;
 
-        case FRAME_TYPE_ALTSVC:
-          emit_error_and_close(connection, 0, HTTP_ERROR_PROTOCOL_ERROR, "Server does not accept ALTSVC frames");
-          return false;
-
-        case FRAME_TYPE_BLOCKED:
-          success = http_parse_frame_blocked(connection, (http_frame_blocked_t *) frame);
-          break;
-
         default:
           emit_error_and_close(connection, 0, HTTP_ERROR_INTERNAL_ERROR, "Unhandled frame type: %d", frame->type);
           return false;
@@ -2122,13 +1905,6 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
       connection->received_connection_preface = true;
 
       log_trace("Found HTTP2 connection");
-
-      if (!http_emit_settings_default(connection)) {
-        log_error("Unable to emit default settings frame");
-
-        http_connection_mark_closing(connection);
-        return;
-      }
     } else {
       log_warning("Found non-HTTP2 connection, closing connection");
 

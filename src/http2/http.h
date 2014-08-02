@@ -25,13 +25,11 @@ enum frame_type_e {
   FRAME_TYPE_PING,
   FRAME_TYPE_GOAWAY,
   FRAME_TYPE_WINDOW_UPDATE,
-  FRAME_TYPE_CONTINUATION,
-  FRAME_TYPE_ALTSVC,
-  FRAME_TYPE_BLOCKED
+  FRAME_TYPE_CONTINUATION
 };
 
 #define FRAME_TYPE_MIN FRAME_TYPE_DATA
-#define FRAME_TYPE_MAX FRAME_TYPE_BLOCKED
+#define FRAME_TYPE_MAX FRAME_TYPE_CONTINUATION
 
 /**
  * Stream states
@@ -53,8 +51,7 @@ enum settings_e {
   SETTINGS_HEADER_TABLE_SIZE = 1,
   SETTINGS_ENABLE_PUSH,
   SETTINGS_MAX_CONCURRENT_STREAMS,
-  SETTINGS_INITIAL_WINDOW_SIZE,
-  SETTINGS_COMPRESS_DATA
+  SETTINGS_INITIAL_WINDOW_SIZE
 };
 
 /**
@@ -64,7 +61,6 @@ enum settings_e {
 #define DEFAULT_ENABLE_PUSH 1
 #define DEFAULT_MAX_CONNCURRENT_STREAMS 100
 #define DEFAULT_INITIAL_WINDOW_SIZE 65535
-#define DEFAULT_COMPRESS_DATA 0
 
 /**
  * Frame flags
@@ -75,15 +71,10 @@ enum settings_e {
 #define FLAG_END_STREAM 0x1
 #define FLAG_END_SEGMENT 0x2
 #define FLAG_END_HEADERS 0x4
-#define FLAG_PAD_LOW 0x8
-#define FLAG_PAD_HIGH 0x10
+#define FLAG_PADDED 0x8
 
 // headers
 #define FLAG_PRIORITY 0x20
-
-
-// data
-#define FLAG_COMPRESSED 0x20
 
 /**
  * HTTP errors
@@ -206,12 +197,6 @@ typedef struct {
 
   HTTP_FRAME_FIELDS
 
-} http_frame_blocked_t;
-
-typedef struct {
-
-  HTTP_FRAME_FIELDS
-
   uint32_t error_code;
 
 } http_frame_rst_stream_t;
@@ -290,7 +275,6 @@ typedef struct http_queued_frame_s {
    */
   void * buf_begin;
 
-  bool compressed;
   bool continuation;
   bool end_stream;
 
@@ -323,8 +307,6 @@ typedef struct http_stream_t {
 
   long outgoing_window_size;
   long incoming_window_size;
-
-  bool can_send_blocked_frame;
 
   http_header_fragment_t * header_fragments;
 
@@ -380,7 +362,6 @@ typedef struct {
   // is the connection waiting to be gracefully closed?
   bool closing;
   bool closed;
-  bool can_send_blocked_frame;
 
   // the number of streams that are currently opened
   // that the server has initiated
@@ -406,16 +387,6 @@ typedef struct {
   size_t max_concurrent_streams;
   size_t initial_window_size;
 
-  /**
-   * Was the server started with compression enabled?
-   */
-  bool enable_compress_data;
-
-  /**
-   * Did the client specify that we can compress data frames?
-   */
-  bool setting_compress_data;
-
   hash_table_t * streams;
 
   hpack_context_t * encoding_context;
@@ -426,7 +397,7 @@ typedef struct {
   size_t num_requests;
 } http_connection_t;
 
-http_connection_t * http_connection_init(void * const data, bool enable_compression, const request_cb request_handler,
+http_connection_t * http_connection_init(void * const data, const request_cb request_handler,
     const data_cb data_handler, const write_cb writer, const close_cb closer);
 
 void http_connection_free(http_connection_t * const connection);

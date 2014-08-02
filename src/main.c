@@ -29,7 +29,6 @@ void print_help(char * cmd)
   fprintf(stdout, "  -i\t\t\tturn off TLS\n");
   fprintf(stdout, "  -k FILE\t\tlocation of private key file (PEM)\n");
   fprintf(stdout, "  -c FILE\t\tlocation of certificate file (PEM)\n");
-  fprintf(stdout, "  -g\t\t\tturn off gzip compression\n\n");
 
   print_version();
 }
@@ -37,7 +36,6 @@ void print_help(char * cmd)
 int main(int argc, char ** argv)
 {
   server_config_t * config = malloc(sizeof(server_config_t));
-  config->enable_compression = true;
   config->use_tls = true;
   config->port = SERVER_PORT;
   config->hostname = SERVER_HOSTNAME;
@@ -73,10 +71,6 @@ int main(int argc, char ** argv)
 
       case 'i': // insecure
         config->use_tls = false;
-        break;
-
-      case 'g': // no gzip
-        config->enable_compression = false;
         break;
 
       case 'h': // help

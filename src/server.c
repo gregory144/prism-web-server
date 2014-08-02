@@ -481,7 +481,7 @@ static void uv_cb_listen(uv_stream_t * tcp_server, int status)
   client->closed_async_handle_count = 0;
 
   client->server = server;
-  client->connection = http_connection_init(client, server->config->enable_compression, handle_request,
+  client->connection = http_connection_init(client, handle_request,
                        handle_data, worker_http_cb_write, worker_http_cb_close_connection);
 
   uv_tcp_init(&server->loop, &client->tcp);
