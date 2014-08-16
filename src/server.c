@@ -33,19 +33,21 @@ static void handle_request(http_request_t * request, http_response_t * response)
     log_debug("Query: '%s'", http_request_query_string(request));
 
     log_debug("Got headers:");
-    multimap_iter_t iter;
-    multimap_iterator_init(&iter, request->headers);
+    header_list_iter_t iter;
+    header_list_iterator_init(&iter, request->headers);
 
-    while (multimap_iterate(&iter)) {
-      log_debug("'%s' (%ld): '%s' (%ld)", iter.key, strlen(iter.key), iter.value, strlen(iter.value));
+    while (header_list_iterate(&iter)) {
+      header_field_t * field = iter.field;
+      log_debug("'%s' (%ld): '%s' (%ld)", field->name, field->name_length, field->value, field->value_length);
     }
 
     log_debug("Got parameters:");
 
-    multimap_iterator_init(&iter, request->params);
+    multimap_iter_t mm_iter;
+    multimap_iterator_init(&mm_iter, request->params);
 
-    while (multimap_iterate(&iter)) {
-      log_debug("'%s' (%ld): '%s' (%ld)", iter.key, strlen(iter.key), iter.value, strlen(iter.value));
+    while (multimap_iterate(&mm_iter)) {
+      log_debug("'%s' (%ld): '%s' (%ld)", mm_iter.key, strlen(mm_iter.key), mm_iter.value, strlen(mm_iter.value));
     }
   }
 

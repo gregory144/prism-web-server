@@ -1,6 +1,7 @@
 #ifndef HTTP_REQUEST_H
 #define HTTP_REQUEST_H
 
+#include "../util/multimap.h"
 #include "../hpack/hpack.h"
 
 typedef struct http_connection_t * _http_connection_t;
@@ -11,7 +12,7 @@ typedef struct http_request_t {
   _http_connection_t connection;
   _http_stream_t stream;
 
-  multimap_t * headers;
+  header_list_t * headers;
   multimap_t * params;
 
   char * method;
@@ -32,13 +33,11 @@ typedef struct http_request_t {
   http_request_init_internal((_http_connection_t)a, (_http_stream_t)b, c)
 
 http_request_t * http_request_init_internal(const _http_connection_t connection,
-    const _http_stream_t stream, multimap_t * const headers);
+    const _http_stream_t stream, header_list_t * const headers);
 
 void http_request_header_add(const http_request_t * const request, char * name, char * value);
 
 char * http_request_header_get(const http_request_t * const request, char * name);
-
-multimap_values_t * http_request_header_get_values(const http_request_t * const request, char * name);
 
 char * http_request_param_get(const http_request_t * const request, char * name);
 

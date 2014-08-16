@@ -12,7 +12,7 @@
 #include <stdbool.h>
 
 #include "circular_buffer.h"
-#include "../util/multimap.h"
+#include "header_list.h"
 #include "../util/binary_buffer.h"
 
 #define HEADER_TABLE_OVERHEAD 32
@@ -22,17 +22,17 @@
 #define ESTIMATED_HEADER_ENTRY_SIZE HEADER_TABLE_OVERHEAD + \
   ESTIMATED_HEADER_NAME_SIZE + ESTIMATED_HEADER_VALUE_SIZE
 
-typedef struct hpack_decode_quantity_result_t {
+typedef struct {
   size_t num_bytes;
   size_t value;
 } hpack_decode_quantity_result_t;
 
-typedef struct hpack_encode_result_t {
+typedef struct {
   uint8_t * buf;
   size_t buf_length;
 } hpack_encode_result_t;
 
-typedef struct hpack_header_table_entry_t {
+typedef struct {
 
   char * name;
   size_t name_length;
@@ -42,16 +42,11 @@ typedef struct hpack_header_table_entry_t {
 
   size_t size_in_table;
 
-  // TODO can these flags be moved to a bitset?
   bool from_static_table;
-
-  bool in_refset;
-
-  bool added_on_current_request;
 
 } hpack_header_table_entry_t;
 
-typedef struct hpack_header_table_t {
+typedef struct {
 
   // maxiumum size in octets
   size_t max_size;
@@ -60,13 +55,7 @@ typedef struct hpack_header_table_t {
   // the spec
   size_t current_size;
 
-  circular_buffer_t * entries;
-
-} hpack_header_table_t;
-
-typedef struct hpack_context_t {
-
-  hpack_header_table_t * header_table;
+  circular_buffer_t * header_table;
 
 } hpack_context_t;
 
@@ -78,13 +67,13 @@ bool hpack_encode_quantity(binary_buffer_t * const buf, const uint8_t first_byte
 
 hpack_context_t * hpack_context_init(const size_t header_table_size);
 
-void hpack_context_free(const hpack_context_t * const context);
+void hpack_context_free(hpack_context_t * const context);
 
-void hpack_header_table_adjust_size(const hpack_context_t * const context, size_t new_size);
+void hpack_header_table_adjust_size(hpack_context_t * const context, size_t new_size);
 
-multimap_t * hpack_decode(const hpack_context_t * const context, const uint8_t * const buf, const size_t length);
+header_list_t * hpack_decode(hpack_context_t * const context, const uint8_t * const buf, const size_t length);
 
-binary_buffer_t * hpack_encode(const hpack_context_t * const context, const multimap_t * const headers,
+binary_buffer_t * hpack_encode(hpack_context_t * const context, const header_list_t * const header_list,
                                binary_buffer_t * result);
 
 #endif

@@ -157,35 +157,8 @@ static void parse_parameters(multimap_t * const params, char * query_string)
   }
 }
 
-/**
- * Removes all headers that start with ':'
- * from the set of headers that will be exposed
- */
-static void remove_special_headers(multimap_t * const headers)
-{
-  size_t found = 0;
-  char * special_names[headers->size];
-
-  multimap_iter_t iter;
-  multimap_iterator_init(&iter, headers);
-
-  while (multimap_iterate(&iter)) {
-    char * key = iter.key;
-
-    if (*key == ':') {
-      special_names[found++] = key;
-    }
-  }
-
-  size_t i;
-
-  for (i = 0; i < found; i++) {
-    multimap_remove(headers, special_names[i], free, free);
-  }
-}
-
 http_request_t * http_request_init_internal(const _http_connection_t connection,
-    const _http_stream_t stream, multimap_t * const headers)
+    const _http_stream_t stream, header_list_t * const header_list)
 {
   http_request_t * request = malloc(sizeof(http_request_t));
 
@@ -200,9 +173,9 @@ http_request_t * http_request_init_internal(const _http_connection_t connection,
   request->method = NULL;
   request->scheme = NULL;
 
-  if (headers) {
+  if (header_list) {
 
-    request->headers = headers;
+    request->headers = header_list;
 
     char * method = http_request_header_get(request, ":method");
 
@@ -232,10 +205,11 @@ http_request_t * http_request_init_internal(const _http_connection_t connection,
     parse_authority(request);
     parse_parameters(request->params, request->query_string);
 
-    remove_special_headers(headers);
+    header_list_remove_pseudo_headers(header_list);
+
   } else {
 
-    request->headers = multimap_init_with_string_keys();
+    request->headers = header_list_init(NULL);
 
     request->path = NULL;
     request->query_string = NULL;
@@ -252,28 +226,28 @@ void http_request_header_add(const http_request_t * const request, char * name, 
 {
 
   char * name_copy, * value_copy;
-  COPY_STRING(name_copy, name, strlen(name));
-  COPY_STRING(value_copy, value, strlen(value));
+  size_t name_length = strlen(name);
+  size_t value_length = strlen(value);
+  COPY_STRING(name_copy, name, name_length);
+  COPY_STRING(value_copy, value, value_length);
 
-  multimap_put(request->headers, name_copy, value_copy);
+  header_list_push(request->headers, name_copy, name_length, true, value_copy, value_length, true);
 }
 
 /**
  * Returns the first header value for the given name
  * (ignores any other defined header values)
+ *
  */
-char * http_request_header_get(const http_request_t * const request, char * name)
+char * http_request_header_get(const http_request_t * const request, char * const name)
 {
-  multimap_values_t * values = multimap_get(request->headers, name);
-  return values ? values->value : NULL;
-}
+  header_list_linked_field_t * entry = header_list_get(request->headers, name, NULL);
 
-/**
- * Returns a reference to the first header value for the given name.
- */
-multimap_values_t * http_request_header_get_values(const http_request_t * const request, char * name)
-{
-  return multimap_get(request->headers, name);
+  if (entry) {
+    return entry->field.value;
+  }
+
+  return NULL;
 }
 
 /**
@@ -326,7 +300,7 @@ char * http_request_query_string(const http_request_t * const request)
 
 void http_request_free(http_request_t * const request)
 {
-  multimap_free(request->headers, free, free);
+  header_list_free(request->headers);
   multimap_free(request->params, free, free);
 
   if (request->path) {

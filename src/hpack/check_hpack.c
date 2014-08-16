@@ -10,6 +10,7 @@
 
 #include "hpack.c"
 #include "circular_buffer.c"
+#include "header_list.c"
 
 binary_buffer_t * buffer;
 

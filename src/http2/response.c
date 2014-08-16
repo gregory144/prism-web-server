@@ -7,19 +7,31 @@
 http_response_t * http_response_init(http_request_t * const request)
 {
   http_response_t * response = malloc(sizeof(http_response_t));
-  response->headers = multimap_init_with_string_keys();
+  response->headers = header_list_init(NULL);
   response->request = request;
   return response;
 }
 
 void http_response_header_add(const http_response_t * const response, char * name, char * value)
 {
-
   char * name_copy, * value_copy;
-  COPY_STRING(name_copy, name, strlen(name));
-  COPY_STRING(value_copy, value, strlen(value));
+  size_t name_length = strlen(name);
+  size_t value_length = strlen(value);
+  COPY_STRING(name_copy, name, name_length);
+  COPY_STRING(value_copy, value, value_length);
 
-  multimap_put(response->headers, name_copy, value_copy);
+  header_list_push(response->headers, name_copy, name_length, true, value_copy, value_length, true);
+}
+
+void http_response_pseudo_header_add(const http_response_t * const response, char * name, char * value)
+{
+  char * name_copy, * value_copy;
+  size_t name_length = strlen(name);
+  size_t value_length = strlen(value);
+  COPY_STRING(name_copy, name, name_length);
+  COPY_STRING(value_copy, value, value_length);
+
+  header_list_unshift(response->headers, name_copy, name_length, true, value_copy, value_length, true);
 }
 
 void http_response_status_set(http_response_t * const response, const uint16_t status)
@@ -32,7 +44,7 @@ void http_response_free(http_response_t * const response)
 
   http_request_free(response->request);
 
-  multimap_free(response->headers, free, free);
+  header_list_free(response->headers);
 
   free(response);
 }

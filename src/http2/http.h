@@ -51,7 +51,9 @@ enum settings_e {
   SETTINGS_HEADER_TABLE_SIZE = 1,
   SETTINGS_ENABLE_PUSH,
   SETTINGS_MAX_CONCURRENT_STREAMS,
-  SETTINGS_INITIAL_WINDOW_SIZE
+  SETTINGS_INITIAL_WINDOW_SIZE,
+  SETTINGS_MAX_FRAME_SIZE,
+  SETTINGS_MAX_HEADER_LIST_SIZE
 };
 
 /**
@@ -61,6 +63,8 @@ enum settings_e {
 #define DEFAULT_ENABLE_PUSH 1
 #define DEFAULT_MAX_CONNCURRENT_STREAMS 100
 #define DEFAULT_INITIAL_WINDOW_SIZE 65535
+#define DEFAULT_MAX_FRAME_SIZE 16384 // 2^14
+#define DEFAULT_MAX_HEADER_LIST_SIZE 0 // unlimited
 
 /**
  * Frame flags
@@ -312,7 +316,7 @@ typedef struct http_stream_t {
 
   http_queued_frame_t * queued_data_frames;
 
-  multimap_t * headers;
+  header_list_t * headers;
 
   http_request_t * request;
   http_response_t * response;
@@ -386,6 +390,8 @@ typedef struct {
   bool enable_push;
   size_t max_concurrent_streams;
   size_t initial_window_size;
+  size_t max_frame_size;
+  size_t max_header_list_size;
 
   hash_table_t * streams;
 

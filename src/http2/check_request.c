@@ -5,6 +5,8 @@
 #include "../util/util.c"
 #include "../util/multimap.c"
 
+#include "../hpack/header_list.c"
+
 #include "request.c"
 
 void setup()

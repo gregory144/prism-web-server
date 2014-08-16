@@ -12,12 +12,14 @@
 #include "response.h"
 #include "hash_table.h"
 
-#define FRAME_HEADER_SIZE 8 // octets
+#define FRAME_HEADER_SIZE 9 // octets
 #define DEFAULT_STREAM_EXCLUSIVE_FLAG 0
 #define DEFAULT_STREAM_DEPENDENCY 0
 #define DEFAULT_STREAM_WEIGHT 16
+#define SETTING_ID_SIZE 2
+#define SETTING_VALUE_SIZE 4
+#define SETTING_SIZE (SETTING_ID_SIZE + SETTING_VALUE_SIZE)
 
-#define MAX_FRAME_SIZE 0x3FFF // 16,383
 #define MAX_WINDOW_SIZE 0x7FFFFFFF // 2^31 - 1
 #define MAX_CONNECTION_BUFFER_SIZE 0x1000000 // 2^24
 
@@ -43,8 +45,8 @@ char * http_connection_errors[] = {
 };
 
 typedef struct {
-  uint16_t length_min;
-  uint16_t length_max;
+  uint32_t length_min;
+  uint32_t length_max;
 
   uint8_t frame_type;
 
@@ -254,7 +256,7 @@ static void http_stream_free(void * value)
   http_stream_t * stream = value;
 
   if (stream->headers) {
-    multimap_free(stream->headers, free, free);
+    header_list_free(stream->headers);
   }
 
   // Free any remaining data frames. This may need to happen
@@ -309,6 +311,8 @@ http_connection_t * http_connection_init(void * const data, const request_cb req
   connection->enable_push = DEFAULT_ENABLE_PUSH;
   connection->max_concurrent_streams = DEFAULT_MAX_CONNCURRENT_STREAMS;
   connection->initial_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
+  connection->max_frame_size = DEFAULT_MAX_FRAME_SIZE;
+  connection->max_header_list_size = DEFAULT_MAX_HEADER_LIST_SIZE;
 
   /**
    * Set these to NULL, http_connection_free requires the values to be set
@@ -492,12 +496,13 @@ static bool http_connection_write(const http_connection_t * const connection, ui
   return true;
 }
 
-static void http_frame_header_write(uint8_t * const buf, const uint16_t length, const uint8_t type, const uint8_t flags,
+static void http_frame_header_write(uint8_t * const buf, const uint32_t length, const uint8_t type, const uint8_t flags,
                                     uint32_t stream_id)
 {
   size_t pos = 0;
 
-  buf[pos++] = (length >> 8) & 0x3F; // only the first 6 bits (first 2 bits are reserved)
+  buf[pos++] = (length >> 16) & 0xFF;
+  buf[pos++] = (length >> 8) & 0xFF;
   buf[pos++] = (length) & 0xFF;
 
   buf[pos++] = type;
@@ -624,7 +629,7 @@ static bool emit_error_and_close(http_connection_t * const connection, uint32_t 
 }
 
 static bool http_emit_headers(http_connection_t * const connection, const http_stream_t * const stream,
-                              const multimap_t * const headers)
+                              const header_list_t * const headers)
 {
   // TODO split large headers into multiple frames
   size_t headers_length = 0;
@@ -679,7 +684,7 @@ static bool http_emit_headers(http_connection_t * const connection, const http_s
 }
 
 static bool http_emit_push_promise(http_connection_t * const connection, const http_stream_t * const stream,
-                                   const multimap_t * const headers, const uint32_t associated_stream_id)
+                                   const header_list_t * const headers, const uint32_t associated_stream_id)
 {
 
   // TODO split large headers into multiple frames
@@ -920,8 +925,8 @@ static bool http_emit_data(http_connection_t * const connection, http_stream_t *
   bool in_freed = false;
 
   while (remaining_length > 0) {
-    if (remaining_length > MAX_FRAME_SIZE) {
-      per_frame_length = MAX_FRAME_SIZE;
+    if (remaining_length > connection->max_frame_size) {
+      per_frame_length = connection->max_frame_size;
       last_frame = false;
     } else {
       per_frame_length = remaining_length;
@@ -1102,6 +1107,19 @@ static bool http_setting_set(http_connection_t * const connection, const enum se
 
       http_adjust_initial_window_size(connection, value - connection->initial_window_size);
       connection->initial_window_size = value;
+      break;
+
+    case SETTINGS_MAX_FRAME_SIZE:
+      log_trace("Settings: Initial max frame size: %d", value);
+
+      connection->max_frame_size = value;
+      break;
+
+    case SETTINGS_MAX_HEADER_LIST_SIZE:
+      log_trace("Settings: Initial max header list size: %d", value);
+
+      // TODO - send to hpack encoding context
+      connection->max_header_list_size = value;
       break;
 
     default:
@@ -1483,17 +1501,16 @@ static bool http_parse_frame_settings(http_connection_t * const connection, cons
 
   } else {
     uint8_t * pos = connection->buffer + connection->buffer_position;
-    size_t setting_size = 5;
-    size_t num_settings = frame->length / setting_size;
+    size_t num_settings = frame->length / SETTING_SIZE;
 
     log_trace("Settings: Found #%ld settings", num_settings);
 
     size_t i;
 
     for (i = 0; i < num_settings; i++) {
-      uint8_t * curr_setting = pos + (i * setting_size);
-      uint8_t setting_id = curr_setting[0];
-      uint32_t setting_value = get_bits32(curr_setting + 1, 0xFFFFFFFF);
+      uint8_t * curr_setting = pos + (i * SETTING_SIZE);
+      uint16_t setting_id = get_bits16(curr_setting, 0xFFFF);
+      uint32_t setting_value = get_bits32(curr_setting + SETTING_ID_SIZE, 0xFFFFFFFF);
 
       if (!http_setting_set(connection, setting_id, setting_value)) {
         return false;
@@ -1638,7 +1655,7 @@ static bool http_parse_frame_goaway(http_connection_t * const connection, http_f
   return true;
 }
 
-static http_frame_t * http_frame_init(http_connection_t * const connection, const uint16_t length, const uint8_t type,
+static http_frame_t * http_frame_init(http_connection_t * const connection, const uint32_t length, const uint8_t type,
                                       const uint8_t flags, const uint32_t stream_id)
 {
   http_frame_t * frame;
@@ -1773,16 +1790,16 @@ static bool http_connection_add_from_buffer(http_connection_t * const connection
   uint8_t * pos = connection->buffer + connection->buffer_position;
 
   // Read the frame header
-  // get 14 bits of first 2 bytes
-  uint16_t frame_length = get_bits16(pos, 0x3FFF);
+  // get first 3 bytes
+  uint32_t frame_length = get_bits32(pos, 0xFFFFFF00) >> 8;
 
   // is there enough in the buffer to read the frame payload?
   if (connection->buffer_position + FRAME_HEADER_SIZE + frame_length <= connection->buffer_length) {
 
-    uint8_t frame_type = pos[2];
-    uint8_t frame_flags = pos[3];
+    uint8_t frame_type = pos[3];
+    uint8_t frame_flags = pos[4];
     // get 31 bits
-    uint32_t stream_id = get_bits32(pos + 4, 0x7FFFFFFF);
+    uint32_t stream_id = get_bits32(pos + 5, 0x7FFFFFFF);
 
     // is this a valid frame type?
     if (!is_valid_frame_type(frame_type)) {
@@ -1956,7 +1973,7 @@ bool http_response_write(http_response_t * const response, uint8_t * data, const
   char status_buf[10];
   snprintf(status_buf, 10, "%d", response->status);
   // add the status header
-  http_response_header_add(response, ":status", status_buf);
+  http_response_pseudo_header_add(response, ":status", status_buf);
 
   http_connection_t * connection = (http_connection_t *)response->request->connection;
   http_stream_t * stream = (http_stream_t *)response->request->stream;

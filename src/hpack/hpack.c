@@ -158,16 +158,9 @@ hpack_context_t * hpack_context_init(const size_t header_table_size)
   hpack_context_t * context = malloc(sizeof(hpack_context_t));
   ASSERT_OR_RETURN_NULL(context);
 
-  context->header_table = malloc(sizeof(hpack_header_table_t));
-
-  if (!context->header_table) {
-    free(context);
-    return NULL;
-  }
-
-  context->header_table->max_size = header_table_size;
-  context->header_table->current_size = 0;
-  context->header_table->entries = circular_buffer_init(header_table_size / ESTIMATED_HEADER_ENTRY_SIZE);
+  context->max_size = header_table_size;
+  context->current_size = 0;
+  context->header_table = circular_buffer_init(header_table_size / ESTIMATED_HEADER_ENTRY_SIZE);
 
   return context;
 }
@@ -184,148 +177,52 @@ static void hpack_header_table_entry_free(void * entry)
   free(header);
 }
 
-static void hpack_header_table_free(hpack_header_table_t * header_table)
+void hpack_context_free(hpack_context_t * const context)
 {
-  circular_buffer_free(header_table->entries, hpack_header_table_entry_free);
-  free(header_table);
+  circular_buffer_free(context->header_table, hpack_header_table_entry_free);
+
+  free(context);
 }
 
-void hpack_context_free(const hpack_context_t * const context)
+static hpack_header_table_entry_t * hpack_header_table_get(hpack_context_t * const context, const size_t index)
 {
-  hpack_header_table_free(context->header_table);
-  free((void *)context);
-}
+  log_trace("Getting from header table with adjusted index: %ld", index);
 
-static hpack_header_table_entry_t * hpack_header_table_get(const hpack_context_t * const context, const size_t index)
-{
-  if (index > 0 && index + 1 <= context->header_table->entries->length) {
-    return circular_buffer_get(context->header_table->entries, index);
+  if (index > 0 && index <= context->header_table->length) {
+    return circular_buffer_get(context->header_table, index);
   }
 
   return NULL;
 }
 
-static void hpack_reference_set_add(const hpack_context_t * const context,
-                                    hpack_header_table_entry_t * const header)
+static void hpack_header_table_evict(hpack_context_t * const context)
 {
-  UNUSED(context);
-  header->in_refset = true;
-}
-
-static void hpack_reference_set_remove(hpack_header_table_entry_t * const entry)
-{
-  entry->in_refset = false;
-}
-
-static bool hpack_reference_set_contains(hpack_header_table_entry_t * const entry)
-{
-  return entry->in_refset;
-}
-
-static void hpack_reference_set_clear(const hpack_context_t * const context)
-{
-  circular_buffer_iter_t iter;
-  circular_buffer_iterator_init(&iter, context->header_table->entries);
-
-  while (circular_buffer_iterate(&iter)) {
-    hpack_reference_set_remove(iter.value);
-  }
-}
-
-static void hpack_header_table_evict(const hpack_context_t * const context)
-{
-  hpack_header_table_t * header_table = context->header_table;
-
-  const size_t last_index = header_table->entries->length;
+  const size_t last_index = context->header_table->length;
 
   if (last_index > 0) {
-    hpack_header_table_entry_t * entry = hpack_header_table_get(context, last_index);
+    hpack_header_table_entry_t * entry = circular_buffer_get(context->header_table, last_index);
 
     if (entry) {
-      header_table->current_size -= entry->size_in_table;
-      hpack_header_table_entry_t * evicted = circular_buffer_evict(header_table->entries);
+      context->current_size -= entry->size_in_table;
+      hpack_header_table_entry_t * evicted = circular_buffer_evict(context->header_table);
       hpack_header_table_entry_free(evicted);
     }
   }
 }
 
-void hpack_header_table_adjust_size(const hpack_context_t * const context, const size_t new_size)
+void hpack_header_table_adjust_size(hpack_context_t * const context, const size_t new_size)
 {
-  context->header_table->max_size = new_size;
-  hpack_header_table_t * header_table = context->header_table;
+  context->max_size = new_size;
 
-  while (header_table->current_size > header_table->max_size) {
+  while (context->current_size > context->max_size) {
     hpack_header_table_evict(context);
   }
 }
 
-static void hpack_emit_header(const multimap_t * const headers, char * name,
-                              size_t name_length, char * value, size_t value_length)
-{
-
-  if (LOG_TRACE) {
-    log_trace("Emitting header: '%s' (%ld): '%s' (%ld)", name, name_length, value, value_length);
-  }
-
-  char * name_copy, * value_copy;
-  size_t value_start = 0;
-  size_t value_index;
-
-  // there may be multiple values in this header
-  // the values are separated by a zero-valued octet
-  //
-  // See https://tools.ietf.org/html/draft-ietf-httpbis-http2-10#section-8.1.3.3
-  for (value_index = 0; value_index < value_length; value_index++) {
-    // the last value is not terminated by a 0 octet
-    if (value_index == value_length - 1 || value[value_index + 1] == '\0') {
-      COPY_STRING(name_copy, name, name_length);
-      COPY_STRING(value_copy, value + value_start, value_index + 1 - value_start);
-      multimap_put((multimap_t * const) headers, name_copy, value_copy);
-
-      value_start = value_index + 2;
-    }
-  }
-
-}
-
-static hpack_header_table_entry_t * hpack_header_table_add_existing_entry(
-  const hpack_context_t * const context, hpack_header_table_entry_t * const header)
-{
-
-  hpack_header_table_t * header_table = context->header_table;
-
-  size_t new_header_table_size = header_table->current_size +
-                                 header->size_in_table;
-
-  while (new_header_table_size > header_table->max_size) {
-    // remove from the end of the table
-    hpack_header_table_evict(context);
-
-    new_header_table_size = header_table->current_size +
-                            header->size_in_table;
-  }
-
-  // make sure it fits in the header table
-  if (header->size_in_table <= header_table->max_size) {
-
-    header->added_on_current_request = true;
-
-    if (LOG_TRACE) log_trace("Adding to header table: '%s' (%ld): '%s' (%ld)",
-                               header->name, header->name_length, header->value, header->value_length);
-
-    context->header_table->current_size += header->size_in_table;
-    circular_buffer_add(context->header_table->entries, header);
-
-    // add to reference set
-    hpack_reference_set_add(context, header);
-  }
-
-  return header;
-}
-
-static hpack_header_table_entry_t * hpack_header_table_add(const hpack_context_t * const context,
+static hpack_header_table_entry_t * hpack_header_table_add(hpack_context_t * const context,
     char * name, size_t name_length, char * value, size_t value_length)
 {
+  // create the new header table entry
   hpack_header_table_entry_t * const header = malloc(sizeof(hpack_header_table_entry_t));
   ASSERT_OR_RETURN_NULL(header);
   header->from_static_table = false;
@@ -338,16 +235,34 @@ static hpack_header_table_entry_t * hpack_header_table_add(const hpack_context_t
   // http://tools.ietf.org/html/draft-ietf-httpbis-header-compression-05#section-3.3.1
   header->size_in_table = name_length + value_length + HEADER_TABLE_OVERHEAD;
 
-  return hpack_header_table_add_existing_entry(context, header);
+  // insert the entry into the table
+  size_t new_header_table_size = context->current_size + header->size_in_table;
+
+  // make sure there is room in the table before adding
+  while (new_header_table_size > context->max_size) {
+    // remove from the end of the table
+    hpack_header_table_evict(context);
+
+    new_header_table_size = context->current_size + header->size_in_table;
+  }
+
+  // make sure it fits in the header table before adding it
+  if (header->size_in_table <= context->max_size) {
+
+    log_trace("Adding to header table: '%s' (%ld): '%s' (%ld)",
+              header->name, header->name_length, header->value, header->value_length);
+
+    context->current_size += header->size_in_table;
+    circular_buffer_add(context->header_table, header);
+  }
+
+  return header;
 }
 
-static hpack_header_table_entry_t * hpack_static_table_get(const hpack_context_t * const context, const size_t index)
+static hpack_header_table_entry_t * hpack_static_table_get(const size_t index)
 {
-  size_t header_table_length = context->header_table->entries->length;
-
-  if (index + 1 > header_table_length) {
-    size_t static_table_index = index - header_table_length - 1;
-    static_entry_t entry = static_table[static_table_index];
+  if (index > 0 && index - 1 < static_table_length) {
+    static_entry_t entry = static_table[index - 1];
     hpack_header_table_entry_t * header = malloc(sizeof(hpack_header_table_entry_t));
     ASSERT_OR_RETURN_NULL(header);
     size_t name_length = strlen(entry.name);
@@ -371,7 +286,7 @@ static hpack_header_table_entry_t * hpack_static_table_get(const hpack_context_t
 }
 
 static bool hpack_decode_string_literal(
-  const hpack_context_t * const context, const uint8_t * const buf, const size_t length,
+  hpack_context_t * const context, const uint8_t * const buf, const size_t length,
   size_t * const current, string_and_length_t * const ret)
 {
   UNUSED(context);
@@ -382,9 +297,7 @@ static bool hpack_decode_string_literal(
   *current += key_name_result.num_bytes;
   size_t key_name_length = key_name_result.value;
 
-  if (LOG_TRACE) {
-    log_trace("Decoding string literal length: %ld", key_name_length);
-  }
+  log_trace("Decoding string literal length: %ld", key_name_length);
 
   char * key_name;
 
@@ -405,8 +318,37 @@ static bool hpack_decode_string_literal(
   return true;
 }
 
+static hpack_header_table_entry_t * hpack_table_get(hpack_context_t * const context, const size_t index)
+{
+  hpack_header_table_entry_t * entry;
+
+  if (index < static_table_length) {
+    entry = hpack_static_table_get(index);
+  } else {
+    size_t adjusted_index = index - static_table_length;
+    entry = hpack_header_table_get(context, adjusted_index);
+  }
+
+  if (entry) {
+    log_trace("From index: %s: %s", entry->name, entry->value);
+  }
+
+  return entry;
+}
+
+/**
+ *
+ * A _literal representation_ that is _not added_ to the header table
+ * entails the following action:
+ * The header field is added to the decoded header list.
+ *
+ * A _literal representation_ that is _added_ to the header table
+ * entails the following actions:
+ * The header field is added to the decoded header list.
+ * The header field is inserted at the beginning of the header table.
+ */
 static bool hpack_decode_literal_header(
-  const hpack_context_t * const context, const multimap_t * const headers, const uint8_t * const buf,
+  hpack_context_t * const context, header_list_t * const header_list, const uint8_t * const buf,
   const size_t length, size_t * const current, const size_t bit_offset, const bool add_to_header_table)
 {
 
@@ -415,16 +357,14 @@ static bool hpack_decode_literal_header(
   size_t header_table_index = index_result.value;
   *current += index_result.num_bytes;
 
-  if (LOG_TRACE) {
-    log_trace("Adding literal header field: %ld, %ld", index_result.value, index_result.num_bytes);
-  }
+  log_trace("Adding literal header field: %ld, %ld", index_result.value, index_result.num_bytes);
 
   char * key_name = NULL;
   size_t key_name_length = 0;
 
   if (header_table_index == 0) {
 
-    // literal name
+    // Literal Header Field with Incremental Indexing - New Name
     string_and_length_t ret;
 
     if (hpack_decode_string_literal(context, buf, length, current, &ret)) {
@@ -435,26 +375,12 @@ static bool hpack_decode_literal_header(
       return false;
     }
 
-    if (LOG_TRACE) {
-      log_trace("Literal name: '%s' (%ld)", key_name, key_name_length);
-    }
+    log_trace("Literal name: '%s' (%ld)", key_name, key_name_length);
 
   } else {
 
-    // indexed name
-    if (LOG_TRACE) {
-      log_trace("getting from header table %ld", header_table_index);
-    }
-
-    hpack_header_table_entry_t * entry = hpack_header_table_get(context, header_table_index);
-
-    if (!entry) {
-      if (LOG_TRACE) {
-        log_trace("getting from static table %ld", header_table_index);
-      }
-
-      entry = hpack_static_table_get(context, header_table_index);
-    }
+    // Literal Header Field with Incremental Indexing - Indexed Name
+    hpack_header_table_entry_t * entry = hpack_table_get(context, header_table_index);
 
     if (!entry) {
       // TODO protocol error - invalid index
@@ -464,10 +390,6 @@ static bool hpack_decode_literal_header(
 
     COPY_STRING(key_name, entry->name, entry->name_length);
     key_name_length = entry->name_length;
-
-    if (LOG_TRACE) {
-      log_trace("Indexed name: '%s' (%ld)", key_name, key_name_length);
-    }
 
     if (entry->from_static_table) {
       free(entry);
@@ -491,27 +413,30 @@ static bool hpack_decode_literal_header(
   char * value = ret.value;
   size_t value_length = ret.length;
 
-  if (LOG_TRACE) {
-    log_trace("Emitting header literal value: %s (%ld), %s (%ld)", key_name, key_name_length, value, value_length);
-  }
+  log_trace("Emitting header literal value: %s (%ld), %s (%ld)", key_name, key_name_length, value, value_length);
 
   if (add_to_header_table) {
-    hpack_header_table_entry_t * header = hpack_header_table_add(context,
-                                          key_name, key_name_length, value, value_length);
-    hpack_emit_header(headers, header->name, header->name_length,
-                      header->value, header->value_length);
+    hpack_header_table_add(context, key_name, key_name_length, value, value_length);
+    header_list_push(header_list, key_name, key_name_length, false, value, value_length, false);
   } else {
-    hpack_emit_header(headers, key_name, key_name_length,
-                      value, value_length);
-    free(key_name);
-    free(value);
+    header_list_push(header_list, key_name, key_name_length, false, value, value_length, false);
   }
 
   return true;
 }
 
+/**
+ *
+ * From 4.2:
+ *
+ * An _indexed representation_ entails the following actions:
+ *
+ * The header field corresponding to the referenced entry in either
+ * the static table or header table is added to the decoded header
+ * list.
+ */
 static bool hpack_decode_indexed_header(
-  const hpack_context_t * const context, const multimap_t * const headers, const uint8_t * const buf,
+  hpack_context_t * const context, header_list_t * const header_list, const uint8_t * const buf,
   const size_t length, size_t * const current)
 {
 
@@ -519,14 +444,6 @@ static bool hpack_decode_indexed_header(
   hpack_decode_quantity(buf + (*current), length - (*current), 1, &result);
   *current += result.num_bytes;
   size_t index = result.value;
-
-  if (LOG_TRACE) {
-    log_trace("Adding indexed header field: %ld", index);
-  }
-
-  if (LOG_TRACE) {
-    log_trace("Header table size: %ld", context->header_table->entries->length);
-  }
 
   if (index == 0) {
 
@@ -536,28 +453,17 @@ static bool hpack_decode_indexed_header(
 
   } else {
 
-    // if the value is in the reference set - remove it from the reference set
-    hpack_header_table_entry_t * entry = hpack_header_table_get(context, index);
+    hpack_header_table_entry_t * entry = hpack_table_get(context, index);
 
-    if (entry && hpack_reference_set_contains(entry)) {
-      hpack_reference_set_remove(entry);
-    } else {
-      if (!entry) {
-        entry = hpack_static_table_get(context, index);
-      }
+    if (!entry) {
+      log_error("Error decoding indexed header: invalid index (%ld)", index);
+      return false;
+    }
 
-      if (!entry) {
-        log_error("Error decoding indexed header: invalid index (%d)", index);
-        return false;
-      }
+    header_list_push(header_list, entry->name, entry->name_length, false, entry->value, entry->value_length, false);
 
-      hpack_header_table_add_existing_entry(context, entry);
-      hpack_emit_header(headers, entry->name,
-                        entry->name_length, entry->value, entry->value_length);
-
-      if (LOG_TRACE) {
-        log_trace("From index: %s: %s", entry->name, entry->value);
-      }
+    if (entry->from_static_table) {
+      free(entry);
     }
 
   }
@@ -566,8 +472,8 @@ static bool hpack_decode_indexed_header(
 }
 
 static bool hpack_decode_context_update(
-  const hpack_context_t * const context, const uint8_t * const buf,
-  const size_t length, size_t * const current, const bool fourth_bit)
+  hpack_context_t * const context, const uint8_t * const buf,
+  const size_t length, size_t * const current)
 {
 
   hpack_decode_quantity_result_t result;
@@ -575,153 +481,52 @@ static bool hpack_decode_context_update(
   *current += result.num_bytes;
   size_t new_size = result.value;
 
-  // 4.4 encoding context update
-  if (fourth_bit == 0) {
-    // empty ref set
-
-    // low 4 bits must be 0
-    if (new_size != 0) {
-      // error!
-      log_error("Unable to decode context update: low bits must be set to 0");
-      return false;
-    }
-
-    hpack_reference_set_clear(context);
-
-  } else {
-
-    // adjust header table size
-    hpack_header_table_adjust_size(context, new_size);
-
-  }
+  // adjust header table size
+  hpack_header_table_adjust_size(context, new_size);
 
   return true;
 
 }
 
-/**
- * Finds any cookie values and transforms them into a single value
- */
-static void concatenate_cookie_fields(multimap_t * headers)
-{
-  char * name = "cookie";
-  multimap_values_t * values = multimap_get(headers, name);
-
-  if (values) {
-    // First count the size of the final appended strings
-    size_t length = 0;
-    size_t num_crumbs = 0;
-    multimap_values_t * curr = values;
-
-    while (curr) {
-      length += strlen(curr->value);
-      curr = curr->next;
-      num_crumbs++;
-    }
-
-    size_t total_length = length + ((num_crumbs - 1) * 2);
-
-    // Append all the values together
-    char * single_cookie = malloc(sizeof(char) * (total_length + 1));
-    size_t total_index = 0;
-    size_t curr_index;
-    curr = values;
-
-    while (curr) {
-      char * value = curr->value;
-
-      for (curr_index = 0; curr_index < strlen(value); curr_index++) {
-        single_cookie[total_index++] = value[curr_index];
-      }
-
-      curr = curr->next;
-
-      if (curr) {
-        // seprated by "; "
-        single_cookie[total_index++] = ';';
-        single_cookie[total_index++] = ' ';
-      }
-    }
-
-    single_cookie[total_index] = '\0';
-    // remove the old cookie values
-    multimap_remove(headers, name, free, free);
-    // add the single concatenated value
-    multimap_put(headers, strdup(name), single_cookie);
-  }
-}
-
-multimap_t * hpack_decode(const hpack_context_t * const context, const uint8_t * const buf, const size_t length)
+header_list_t * hpack_decode(hpack_context_t * const context, const uint8_t * const buf, const size_t length)
 {
 
   size_t current = 0;
-  multimap_t * headers = multimap_init_with_string_keys();
+  header_list_t * header_list = header_list_init(NULL);
+  ASSERT_OR_RETURN_NULL(header_list);
 
-  if (!headers) {
-    if (LOG_ERROR) {
-      log_error("Could not allocate memory for headers");
-    }
-
-    return NULL;
-  }
-
-  if (LOG_TRACE) {
-    log_trace("Decompressing headers: %ld, %ld", current, length);
-  }
+  log_trace("Decompressing headers: %ld, %ld", current, length);
 
   while (current < length) {
     uint8_t first_bit = get_bits8(buf + current, 0x80);
     uint8_t second_bit = get_bits8(buf + current, 0x40);
     uint8_t third_bit = get_bits8(buf + current, 0x20);
-    uint8_t fourth_bit = get_bits8(buf + current, 0x10);
 
     bool success = false;
 
     if (first_bit) {
-      // indexed header field (4.2)
-      success = hpack_decode_indexed_header(context, headers, buf, length, &current);
+      // Indexed Header Field Representation (7.1)
+      success = hpack_decode_indexed_header(context, header_list, buf, length, &current);
     } else if (second_bit) {
-      // literal header field with incremental indexing (4.3.1)
-      success = hpack_decode_literal_header(context, headers, buf, length, &current, 2, true);
+      // Literal Header Field with Incremental Indexing (7.2.1)
+      success = hpack_decode_literal_header(context, header_list, buf, length, &current, 2, true);
     } else if (third_bit) {
-      success = hpack_decode_context_update(context, buf, length, &current, fourth_bit);
-    } else if (fourth_bit) {
-      // literal header field never indexed 4.3.3
-      success = hpack_decode_literal_header(context, headers, buf, length, &current, 4, false);
+      // Header Table Size Update
+      success = hpack_decode_context_update(context, buf, length, &current);
     } else {
-      // literal header field without indexing (4.3.2)
-      success = hpack_decode_literal_header(context, headers, buf, length, &current, 4, false);
+      // Literal Header Field without Indexing (7.2.2)
+      // Literal Header Field never Indexed (7.2.3)
+      success = hpack_decode_literal_header(context, header_list, buf, length, &current, 4, false);
     }
 
     if (!success) {
+      header_list_free(header_list);
       return NULL;
     }
 
   }
 
-  // does this need to go below the emissionof reference set headers?
-  concatenate_cookie_fields(headers);
-
-  // emit reference set headers
-  if (LOG_TRACE) {
-    log_trace("Emitting from ref set");
-  }
-
-  circular_buffer_iter_t iter;
-  circular_buffer_iterator_init(&iter, context->header_table->entries);
-
-  while (circular_buffer_iterate(&iter)) {
-    hpack_header_table_entry_t * entry = iter.value;
-
-    if (!entry->added_on_current_request && entry->in_refset) {
-      hpack_emit_header(headers, entry->name,
-                        entry->name_length, entry->value, entry->value_length);
-    }
-
-    entry->added_on_current_request = false;
-  }
-
-  return headers;
+  return header_list;
 }
 
 static bool hpack_encode_string_literal(binary_buffer_t * const encoded, char * name, size_t name_length)
@@ -737,25 +542,23 @@ static bool hpack_encode_string_literal(binary_buffer_t * const encoded, char * 
 }
 
 // naive hpack encoding - never add to the header table
-binary_buffer_t * hpack_encode(const hpack_context_t * const context, const multimap_t * const headers,
+binary_buffer_t * hpack_encode(hpack_context_t * const context, const header_list_t * const header_list,
                                binary_buffer_t * result)
 {
   UNUSED(context);
 
   ASSERT_OR_RETURN_NULL(binary_buffer_init(result, 512));
 
-  multimap_iter_t iter;
-  multimap_iterator_init(&iter, (multimap_t *) headers);
+  header_list_iter_t iter;
+  header_list_iterator_init(&iter, (header_list_t *) header_list);
 
-  while (multimap_iterate(&iter)) {
-    char * name = iter.key;
-    size_t name_length = strlen(name);
-    char * value = iter.value;
-    size_t value_length = strlen(value);
+  while (header_list_iterate(&iter)) {
+    char * name = iter.field->name;
+    size_t name_length = iter.field->name_length;
+    char * value = iter.field->value;
+    size_t value_length = iter.field->value_length;
 
-    if (LOG_TRACE) {
-      log_trace("Encoding Reponse Header: %s (%ld): %s (%ld)", name, name_length, value, value_length);
-    }
+    log_trace("Encoding Reponse Header: %s (%ld): %s (%ld)", name, name_length, value, value_length);
 
     // 4.3.2 Literal Header Field without Indexing - New Name
     // First byte = all zeros
@@ -765,9 +568,7 @@ binary_buffer_t * hpack_encode(const hpack_context_t * const context, const mult
     ASSERT_OR_RETURN_FALSE(hpack_encode_string_literal(result, value, value_length));
   }
 
-  if (LOG_TRACE) {
-    log_trace("Encoded headers into %ld bytes", binary_buffer_size(result));
-  }
+  log_trace("Encoded headers into %ld bytes", binary_buffer_size(result));
 
   return result;
 }

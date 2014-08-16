@@ -14,10 +14,18 @@
 
 #define TLS_BUF_LENGTH 0x4000
 
+SSL_CTX * global_ssl_ctx;
+
+static const char * const DEFAULT_CIPHERS =
+  "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK";
+
 // list of suported protocols
 // TLS 'wire' format: length prefixed, non-empty 8-bit characters
-const unsigned char supported_protocols[] = { 5, 'h', '2', '-', '1', '3' };
+static const unsigned char supported_protocols[] = { 5, 'h', '2', '-', '1', '4' };
 const unsigned char supported_protocols_length = 6;
+
+static const char * http2_protocol_version = "h2-14";
+static const int http2_protocol_version_length = 5;
 
 bool tls_init()
 {
@@ -100,16 +108,38 @@ static bool tls_debug_error(const SSL * const ssl, int retval, char * prefix)
 
     case SSL_ERROR_SYSCALL:
       err = ERR_get_error();
-      log_error("%s: ERROR_SYSCALL: %d", prefix, err);
+      log_error("%s: ERROR_SYSCALL: %s", prefix, ERR_error_string(err, NULL));
       return false;
 
     case SSL_ERROR_SSL:
       err = ERR_get_error();
-      log_error("%s: Generic ERROR: %d", prefix, err);
+      log_error("%s: Generic ERROR: %s", prefix, ERR_error_string(err, NULL));
       return false;
   }
 
   return true;
+}
+
+int servername_callback(SSL * ssl, int * al, void * arg)
+{
+  UNUSED(ssl);
+  UNUSED(al);
+  UNUSED(arg);
+  const char * hostname = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
+
+  if (hostname) {
+    log_trace("SNI hostname: %s", hostname);
+
+    if (!global_ssl_ctx) {
+      log_trace("Could not set SSL CTX");
+    }
+
+    SSL_set_SSL_CTX(ssl, global_ssl_ctx);
+  } else {
+    log_trace("SNI hostname: null");
+  }
+
+  return SSL_TLSEXT_ERR_OK;
 }
 
 // handles NPN negotiation
@@ -134,7 +164,7 @@ static int alpn_callback(SSL * ssl, const unsigned char ** out, unsigned char * 
   UNUSED(ssl);
   UNUSED(arg);
 
-  log_trace("Selecting protocol [ALPN]");
+  log_trace("Selecting protocol using ALPN");
 
   if (SSL_select_next_proto((unsigned char **) out, outlen, supported_protocols, supported_protocols_length, in,
                             inlen) != OPENSSL_NPN_NEGOTIATED) {
@@ -216,19 +246,59 @@ tls_server_ctx_t * tls_server_init(char * key_file, char * cert_file)
 {
   SSL_CTX * ssl_ctx = SSL_CTX_new(TLSv1_2_server_method());
 
-  SSL_CTX_set_options(ssl_ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1);
+  global_ssl_ctx = ssl_ctx;
+
+  SSL_CTX_set_options(ssl_ctx,
+                      SSL_OP_NO_SSLv2 |
+                      SSL_OP_NO_SSLv3 |
+                      SSL_OP_NO_TLSv1 |
+                      SSL_OP_NO_TLSv1_1 |
+                      SSL_OP_ALL |
+                      SSL_OP_NO_COMPRESSION |
+                      SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION |
+                      SSL_OP_SINGLE_ECDH_USE |
+                      SSL_OP_SINGLE_DH_USE |
+                      SSL_OP_NO_TICKET |
+                      SSL_OP_CIPHER_SERVER_PREFERENCE
+                     );
+
   SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_NONE, NULL);
+
+  if (SSL_CTX_set_cipher_list(ssl_ctx, DEFAULT_CIPHERS) == 0) {
+    log_trace("SSL_CTX_set_cipher_list failed: %s", ERR_error_string(ERR_get_error(), NULL));
+    SSL_CTX_free(ssl_ctx);
+    return NULL;
+  }
+
+  SSL_CTX_set_mode(ssl_ctx, SSL_MODE_ENABLE_PARTIAL_WRITE);
+  SSL_CTX_set_mode(ssl_ctx, SSL_MODE_AUTO_RETRY);
+  SSL_CTX_set_mode(ssl_ctx, SSL_MODE_RELEASE_BUFFERS);
+
+  // set up elliptic curve key
+  EC_KEY * ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+
+  if (ecdh == NULL) {
+    log_fatal("EC_KEY_new_by_curve_name failed: %s", ERR_error_string(ERR_get_error(), NULL));
+    return NULL;
+  }
+
+  SSL_CTX_set_tmp_ecdh(ssl_ctx, ecdh);
+  EC_KEY_free(ecdh);
+
+  // set up Server Name Indication (SNI) callback
+  SSL_CTX_set_tlsext_servername_callback(ssl_ctx, servername_callback);
+
+  // set up Next Protocol Negotiation (NPN) callbacks
+  SSL_CTX_set_next_protos_advertised_cb(ssl_ctx, next_proto_callback, NULL);
+
+#ifdef HAVE_ALPN
+  // set up Application Layer Protocol Negotiation (ALPN)
+  SSL_CTX_set_alpn_select_cb(ssl_ctx, alpn_callback, NULL);
+#endif
 
   // set certificates
   SSL_CTX_use_certificate_file(ssl_ctx, cert_file, SSL_FILETYPE_PEM);
   SSL_CTX_use_PrivateKey_file(ssl_ctx, key_file, SSL_FILETYPE_PEM);
-
-  // set up protocol negotiation callbacks
-  SSL_CTX_set_next_protos_advertised_cb(ssl_ctx, next_proto_callback, NULL);
-
-#ifdef HAVE_ALPN
-  SSL_CTX_set_alpn_select_cb(ssl_ctx, alpn_callback, NULL);
-#endif
 
   tls_thread_setup();
 
@@ -396,6 +466,35 @@ static bool tls_update(tls_client_ctx_t * client_ctx)
 
 }
 
+bool tls_check_protocol(tls_client_ctx_t * client_ctx)
+{
+  const unsigned char * proto = NULL;
+  unsigned int proto_len;
+  // Check the negotiated protocol in NPN or ALPN
+  SSL_get0_next_proto_negotiated(client_ctx->ssl, &proto, &proto_len);
+
+  if (proto) {
+    log_trace("Using protocol (through NPN): %s", proto);
+
+    if (proto_len == http2_protocol_version_length && memcmp(http2_protocol_version, proto, proto_len) == 0) {
+      return true;
+    }
+  } else {
+#if HAVE_ALPN
+    SSL_get0_alpn_selected(client_ctx->ssl, &proto, &proto_len);
+    log_trace("Using protocol (through ALPN): %s", proto);
+
+    if (proto_len == http2_protocol_version_length && memcmp(http2_protocol_version, proto, proto_len) == 0) {
+      return true;
+    }
+
+#endif
+  }
+
+  log_info("Did not negotiate http2");
+  return false;
+}
+
 bool tls_decrypt_data_and_pass_to_app(tls_client_ctx_t * client_ctx, uint8_t * buf, size_t length)
 {
 
@@ -440,6 +539,11 @@ bool tls_decrypt_data_and_pass_to_app(tls_client_ctx_t * client_ctx, uint8_t * b
       // success
       client_ctx->handshake_complete = true;
       log_trace("Handshake complete");
+
+      if (!tls_check_protocol(client_ctx)) {
+        return false;
+      }
+
     } else if (tls_ssl_wants_read(client_ctx->ssl, retval)) {
       log_trace("Handshake not yet complete, should read");
     } else if (tls_ssl_wants_write(client_ctx->ssl, retval)) {
@@ -479,6 +583,8 @@ bool tls_encrypt_data_and_pass_to_network(tls_client_ctx_t * client_ctx, uint8_t
       // try again
     } else if (tls_ssl_wants_write(client_ctx->ssl, retval)) {
       log_debug("SSL_write: wants write with %ld bytes remaining", remaining_length);
+      int err = ERR_get_error();
+      log_debug("SSL_write: returned %d, %s", retval, ERR_error_string(err, NULL));
       free(buf);
       abort();
       return false;
