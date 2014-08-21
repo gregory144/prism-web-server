@@ -120,11 +120,16 @@ static void worker_uv_cb_written_handle_closed(uv_handle_t * handle)
   uv_async_send(&client->close_handle);
 }
 
+static void worker_close(client_t * client)
+{
+  uv_close((uv_handle_t *) &client->written_handle, worker_uv_cb_written_handle_closed);
+}
+
 static void worker_http_cb_close_connection(void * data)
 {
   client_t * client = data;
 
-  uv_close((uv_handle_t *) &client->written_handle, worker_uv_cb_written_handle_closed);
+  worker_close(client);
 }
 
 static bool worker_http_cb_write(void * data, uint8_t * buf, size_t length)
@@ -192,7 +197,9 @@ static void worker_handle(uv_async_t * async_handle)
       tls_client_ctx_t * tls_client_ctx = client->tls_ctx;
 
       log_trace("Passing %ld octets of data from network to TLS handler", buffer->length);
-      tls_decrypt_data_and_pass_to_app(tls_client_ctx, buffer->buffer, buffer->length);
+      if (!tls_decrypt_data_and_pass_to_app(tls_client_ctx, buffer->buffer, buffer->length)) {
+        worker_close(client);
+      }
       log_trace("Passed %ld octets of data from network to TLS handler", buffer->length);
 
     } else {

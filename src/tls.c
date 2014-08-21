@@ -97,6 +97,7 @@ static bool tls_debug_error(const SSL * const ssl, int retval, char * prefix)
 
     case SSL_ERROR_WANT_CONNECT:
       log_error("%s: WANT_CONNECT", prefix);
+      return false;
 
     case SSL_ERROR_WANT_ACCEPT:
       log_error("%s: WANT_ACCEPT", prefix);
@@ -495,6 +496,9 @@ bool tls_check_protocol(tls_client_ctx_t * client_ctx)
   return false;
 }
 
+/**
+ * Returns false if the handshake fails or TLS handling cannot continue.
+ */
 bool tls_decrypt_data_and_pass_to_app(tls_client_ctx_t * client_ctx, uint8_t * buf, size_t length)
 {
 
@@ -515,7 +519,7 @@ bool tls_decrypt_data_and_pass_to_app(tls_client_ctx_t * client_ctx, uint8_t * b
         log_error("Could not write encrypted data to network BIO for decryption: %d (should retry)", retval);
         free(buf);
 
-        return false;
+        return true;
       }
 
       // otherwise try again
@@ -550,6 +554,7 @@ bool tls_decrypt_data_and_pass_to_app(tls_client_ctx_t * client_ctx, uint8_t * b
       log_trace("Handshake not yet complete, should write");
     } else {
       tls_debug_error(client_ctx->ssl, retval, "Handshake failed");
+      return false;
     }
 
   }
