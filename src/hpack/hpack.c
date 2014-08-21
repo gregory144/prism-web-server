@@ -361,6 +361,7 @@ static bool hpack_decode_literal_header(
 
   char * key_name = NULL;
   size_t key_name_length = 0;
+  bool free_name = false;
 
   if (header_table_index == 0) {
 
@@ -370,6 +371,7 @@ static bool hpack_decode_literal_header(
     if (hpack_decode_string_literal(context, buf, length, current, &ret)) {
       key_name = ret.value;
       key_name_length = ret.length;
+      free_name = true;
     } else {
       log_error("Error decoding literal header: unable to decode literal name");
       return false;
@@ -388,7 +390,7 @@ static bool hpack_decode_literal_header(
       return false;
     }
 
-    COPY_STRING(key_name, entry->name, entry->name_length);
+    key_name = entry->name;
     key_name_length = entry->name_length;
 
     if (entry->from_static_table) {
@@ -417,9 +419,9 @@ static bool hpack_decode_literal_header(
 
   if (add_to_header_table) {
     hpack_header_table_add(context, key_name, key_name_length, value, value_length);
-    header_list_push(header_list, key_name, key_name_length, false, value, value_length, false);
+    header_list_push(header_list, key_name, key_name_length, free_name, value, value_length, false);
   } else {
-    header_list_push(header_list, key_name, key_name_length, false, value, value_length, false);
+    header_list_push(header_list, key_name, key_name_length, free_name, value, value_length, true);
   }
 
   return true;
