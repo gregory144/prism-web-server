@@ -18,12 +18,10 @@ An interoperable HTTP2 server.
 * openssl libssl/libcrypto (1.0.2 for ALPN)
 * zlib
 
-
 ## TODO
 
 #### Required features
 
-* handle reads in thread pool
 * logging categories (turn on/off tls logging, gzip logging, etc)
 * listen on secure port + non-secure port at the same time
 * handle 1.1 traffic
