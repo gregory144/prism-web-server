@@ -588,11 +588,11 @@ bool tls_encrypt_data_and_pass_to_network(tls_client_ctx_t * client_ctx, uint8_t
       // try again
     } else if (tls_ssl_wants_write(client_ctx->ssl, retval)) {
       log_debug("SSL_write: wants write with %ld bytes remaining", remaining_length);
-      int err = ERR_get_error();
-      log_debug("SSL_write: returned %d, %s", retval, ERR_error_string(err, NULL));
-      free(buf);
-      abort();
-      return false;
+      if (!tls_read_encrypted_data_and_pass_to_network(client_ctx)) {
+        return false;
+      }
+
+      // try again
     } else {
       tls_debug_error(client_ctx->ssl, retval, "SSL_write");
       return false;
