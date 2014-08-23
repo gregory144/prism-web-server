@@ -29,6 +29,7 @@ void print_help(char * cmd)
   fprintf(stdout, "  -i\t\t\tturn off TLS\n");
   fprintf(stdout, "  -k FILE\t\tlocation of private key file (PEM)\n");
   fprintf(stdout, "  -c FILE\t\tlocation of certificate file (PEM)\n");
+  fprintf(stdout, "  -b FILE\t\tlocation of the shared library backend\n");
 
   print_version();
 }
@@ -42,12 +43,13 @@ int main(int argc, char ** argv)
   config->num_workers = NUM_WORKERS;
   config->private_key_file = "key.pem";
   config->cert_file = "cert.pem";
+  config->backend_file = "backend.so";
 
   int c;
 
   opterr = 0;
 
-  while ((c = getopt(argc, argv, "p:n:k:c:w:ighv")) != -1) {
+  while ((c = getopt(argc, argv, "b:p:n:k:c:w:ighv")) != -1) {
     switch (c) {
       case 'p': // port
         config->port = strtol(optarg, NULL, 10);
@@ -55,6 +57,10 @@ int main(int argc, char ** argv)
 
       case 'n': // nodename (hostname)
         config->hostname = optarg;
+        break;
+
+      case 'b': // backend file
+        config->backend_file = optarg;
         break;
 
       case 'k': // private Key

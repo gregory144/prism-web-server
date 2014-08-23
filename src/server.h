@@ -6,6 +6,7 @@
 #include "http2/http.h"
 #include "tls.h"
 #include "blocking_queue.h"
+#include "backend.h"
 
 struct worker_s;
 
@@ -20,11 +21,15 @@ typedef struct {
   char * cert_file;
   char * private_key_file;
 
+  char * backend_file;
+
 } server_config_t;
 
 typedef struct {
 
   server_config_t * config;
+
+  backend_t backend;
 
   uv_loop_t loop;
 
