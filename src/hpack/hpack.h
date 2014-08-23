@@ -36,9 +36,11 @@ typedef struct {
 
   char * name;
   size_t name_length;
+  bool free_name;
 
   char * value;
   size_t value_length;
+  bool free_value;
 
   size_t size_in_table;
 

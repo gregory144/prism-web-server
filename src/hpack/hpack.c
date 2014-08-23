@@ -170,8 +170,12 @@ static void hpack_header_table_entry_free(void * entry)
   hpack_header_table_entry_t * header = entry;
 
   if (!header->from_static_table) {
-    free(header->name);
-    free(header->value);
+    if (header->free_name) {
+      free(header->name);
+    }
+    if (header->free_value) {
+      free(header->value);
+    }
   }
 
   free(header);
@@ -220,7 +224,8 @@ void hpack_header_table_adjust_size(hpack_context_t * const context, const size_
 }
 
 static hpack_header_table_entry_t * hpack_header_table_add(hpack_context_t * const context,
-    char * name, size_t name_length, char * value, size_t value_length)
+    char * name, size_t name_length, bool free_name,
+    char * value, size_t value_length, bool free_value)
 {
   // create the new header table entry
   hpack_header_table_entry_t * const header = malloc(sizeof(hpack_header_table_entry_t));
@@ -228,8 +233,10 @@ static hpack_header_table_entry_t * hpack_header_table_add(hpack_context_t * con
   header->from_static_table = false;
   header->name = name;
   header->name_length = name_length;
+  header->free_name = free_name;
   header->value = value;
   header->value_length = value_length;
+  header->free_value = free_value;
 
   // add an extra 32 octets - see
   // http://tools.ietf.org/html/draft-ietf-httpbis-header-compression-05#section-3.3.1
@@ -277,8 +284,6 @@ static hpack_header_table_entry_t * hpack_static_table_get(const size_t index)
     // http://tools.ietf.org/html/draft-ietf-httpbis-header-compression-05#section-3.3.1
     header->size_in_table = name_length + value_length + HEADER_TABLE_OVERHEAD;
 
-    // TODO - this will need to be free'd by caller, but the caller won't
-    // know whether it can - because we also return non-freeable entries below
     return header;
   }
 
@@ -368,14 +373,14 @@ static bool hpack_decode_literal_header(
     // Literal Header Field with Incremental Indexing - New Name
     string_and_length_t ret;
 
-    if (hpack_decode_string_literal(context, buf, length, current, &ret)) {
-      key_name = ret.value;
-      key_name_length = ret.length;
-      free_name = true;
-    } else {
+    if (!hpack_decode_string_literal(context, buf, length, current, &ret)) {
       log_error("Error decoding literal header: unable to decode literal name");
       return false;
     }
+
+    key_name = ret.value;
+    key_name_length = ret.length;
+    free_name = true;
 
     log_trace("Literal name: '%s' (%ld)", key_name, key_name_length);
 
@@ -392,6 +397,7 @@ static bool hpack_decode_literal_header(
 
     key_name = entry->name;
     key_name_length = entry->name_length;
+    free_name = false;
 
     if (entry->from_static_table) {
       free(entry);
@@ -405,7 +411,7 @@ static bool hpack_decode_literal_header(
   if (!hpack_decode_string_literal(context, buf, length, current, &ret)) {
     log_error("Error decoding literal header: unable to decode literal value");
 
-    if (key_name) {
+    if (free_name) {
       free(key_name);
     }
 
@@ -418,8 +424,8 @@ static bool hpack_decode_literal_header(
   log_trace("Emitting header literal value: %s (%ld), %s (%ld)", key_name, key_name_length, value, value_length);
 
   if (add_to_header_table) {
-    hpack_header_table_add(context, key_name, key_name_length, value, value_length);
-    header_list_push(header_list, key_name, key_name_length, free_name, value, value_length, false);
+    hpack_header_table_add(context, key_name, key_name_length, free_name, value, value_length, true);
+    header_list_push(header_list, key_name, key_name_length, false, value, value_length, false);
   } else {
     header_list_push(header_list, key_name, key_name_length, free_name, value, value_length, true);
   }
