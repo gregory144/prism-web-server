@@ -95,9 +95,22 @@ static const char * MONTH_NAMES[] = {
  *
  * Returns NULL if malloc or strftime fail.
  */
-/*@null@*/ char * date_rfc1123(char * date_buf, size_t buf_len)
+/*@null@*/ char * current_date_rfc1123(char * date_buf, size_t buf_len)
 {
   time_t t;
+  t = time(&t);
+
+  return date_rfc1123(date_buf, buf_len, t);
+}
+
+/**
+ * Returns the given date + time as a string as specified
+ * by RFC1123
+ *
+ * Returns NULL if malloc or strftime fail.
+ */
+/*@null@*/ char * date_rfc1123(char * date_buf, size_t buf_len, time_t t)
+{
   struct tm * tm;
 
   if (date_buf == NULL) {
@@ -107,7 +120,6 @@ static const char * MONTH_NAMES[] = {
 
   ASSERT_OR_RETURN_NULL(date_buf);
 
-  t = time(&t);
   tm = gmtime(&t);
 
   if (strftime(date_buf, buf_len, "---, %d --- %Y %H:%M:%S GMT", tm) < 1) {

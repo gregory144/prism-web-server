@@ -111,6 +111,7 @@ static void files_backend_init_type_map(file_server_t * fs) {
   register_content_type(fs->type_map, "gif", "image", "gif");
   register_content_type(fs->type_map, "png", "image", "png");
   register_content_type(fs->type_map, "log", "text", "plain");
+  register_content_type(fs->type_map, "bin", "application", "octet-stream");
 }
 
 static void files_backend_start(backend_t * backend)
@@ -301,13 +302,13 @@ static content_type_t * content_type_for_path(multimap_t * type_map, char * path
     } while (offset < length);
   }
 
+  content_type_t * match = NULL;
   if (extension) {
     multimap_values_t * types_for_extension = multimap_get(type_map, extension);
 
     if (types_for_extension && head) {
       // find the first matching content type
       accept_type_t * current_accept_type = head;
-      content_type_t * match = NULL;
       while (!match && current_accept_type) {
 
         if (strcmp(current_accept_type->type, "*") == 0) {
@@ -333,26 +334,23 @@ static content_type_t * content_type_for_path(multimap_t * type_map, char * path
 
         current_accept_type = current_accept_type->next;
       }
-
-      // go through again and free
-      current_accept_type = head;
-      while (current_accept_type) {
-        accept_type_t * next_accept_type = current_accept_type->next;
-        free(current_accept_type->type);
-        free(current_accept_type->subtype);
-        free(current_accept_type);
-
-        current_accept_type = next_accept_type;
-      }
-
-      return match;
     } else if (types_for_extension) {
-      return types_for_extension->value;
+      match = types_for_extension->value;
     }
-
   }
 
-  return NULL;
+  // go through and free
+  accept_type_t * current = head;
+  while (current) {
+    accept_type_t * next = current->next;
+    free(current->type);
+    free(current->subtype);
+    free(current);
+
+    current = next;
+  }
+
+  return match;
 }
 
 static void file_server_uv_stat_cb(uv_fs_t * req)
@@ -387,16 +385,25 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
       http_response_header_add(response, "content-type", content_type_s);
     }
 
+    // content length header
     char content_length_s[256];
     snprintf(content_length_s, 255, "%ld", fs_request->content_length);
     http_response_header_add(response, "content-length", content_length_s);
 
-    http_response_header_add(response, "server", PACKAGE_STRING);
+    // last modified header
+    time_t last_modified = req->statbuf.st_mtime;
+    if (last_modified >= 0) {
+      size_t last_modified_buf_length = RFC1123_TIME_LEN + 1;
+      char last_modified_buf[last_modified_buf_length];
+      char * last_modified_s = date_rfc1123(last_modified_buf, last_modified_buf_length, last_modified);
+      http_response_header_add(response, "last-modified", last_modified_s);
+    }
 
+    http_response_header_add(response, "server", PACKAGE_STRING);
 
     size_t date_buf_length = RFC1123_TIME_LEN + 1;
     char date_buf[date_buf_length];
-    char * date = date_rfc1123(date_buf, date_buf_length);
+    char * date = current_date_rfc1123(date_buf, date_buf_length);
 
     if (date) {
       http_response_header_add(response, "date", date);

@@ -10,7 +10,7 @@
 #define MAX_PORT 0xFFFF
 #define NUM_WORKERS 4
 #define SERVER_HOSTNAME "0.0.0.0"
-#define SERVER_PORT 8080
+#define SERVER_PORT 8443
 
 static server_t * server = NULL;
 
@@ -22,7 +22,7 @@ void print_version()
 void print_help(char * cmd)
 {
   fprintf(stdout, "Usage: %s [OPTION]...\n", cmd);
-  fprintf(stdout, "Example: %s -p 8000 -n localhost -i\n\n", cmd);
+  fprintf(stdout, "Example: %s -p 8443 -n localhost -i\n\n", cmd);
   fprintf(stdout, "  -p NUM\t\tport\n");
   fprintf(stdout, "  -n HOSTNAME\t\thostname\n");
   fprintf(stdout, "  -w NUM_WORKERS\tspecify the number of worker threads to handle requests\n");

@@ -2051,7 +2051,7 @@ bool http_response_write_error(http_response_t * const response, int code)
 
   size_t date_buf_length = RFC1123_TIME_LEN + 1;
   char date_buf[date_buf_length];
-  char * date = date_rfc1123(date_buf, date_buf_length);
+  char * date = current_date_rfc1123(date_buf, date_buf_length);
 
   if (date) {
     http_response_header_add(response, "date", date);

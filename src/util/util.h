@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <stdarg.h>
 
-#define LOG_LEVEL_DEBUG true
+#define LOG_LEVEL_INFO true
 #define LOG_DATA false
 
 #if defined LOG_LEVEL_FATAL
@@ -110,7 +110,9 @@ uint32_t get_bits32(const uint8_t * const buf, const uint32_t mask);
 
 #define RFC1123_TIME_LEN 29
 
-/*@null@*/ char * date_rfc1123();
+/*@null@*/ char * current_date_rfc1123(char * date_buf, size_t buf_len);
+
+/*@null@*/ char * date_rfc1123(char * date_buf, size_t buf_len, time_t t);
 
 void log_fatal(char * format, ...);
 
