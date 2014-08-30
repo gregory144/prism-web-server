@@ -56,6 +56,8 @@ typedef struct {
 
   multimap_t * type_map;
 
+  content_type_t * default_content_type;
+
   char * cwd;
   size_t cwd_length;
 
@@ -89,7 +91,7 @@ typedef struct {
 
 } file_server_request_t;
 
-static void register_content_type(multimap_t * m, char * extension, char * type, char * subtype)
+static content_type_t * register_content_type(multimap_t * m, char * extension, char * type, char * subtype)
 {
   content_type_t * t = malloc(sizeof(content_type_t));
 
@@ -98,6 +100,8 @@ static void register_content_type(multimap_t * m, char * extension, char * type,
   t->subtype = subtype;
 
   multimap_put(m, extension, t);
+
+  return t;
 }
 
 static void files_backend_init_type_map(file_server_t * fs)
@@ -112,7 +116,9 @@ static void files_backend_init_type_map(file_server_t * fs)
   register_content_type(fs->type_map, "gif", "image", "gif");
   register_content_type(fs->type_map, "png", "image", "png");
   register_content_type(fs->type_map, "log", "text", "plain");
-  register_content_type(fs->type_map, "bin", "application", "octet-stream");
+  content_type_t * default_ct = register_content_type(fs->type_map, "bin", "application", "octet-stream");
+
+  fs->default_content_type = default_ct;
 }
 
 static void files_backend_start(backend_t * backend)
@@ -285,8 +291,9 @@ static accept_type_t * parse_accept_type(char * begin, char * end)
   return t;
 }
 
-static content_type_t * content_type_for_path(multimap_t * type_map, char * path, char * accept_header)
+static content_type_t * content_type_for_path(file_server_t * fs, char * path, char * accept_header)
 {
+  multimap_t * type_map = fs->type_map;
   char * extension = file_extension(path);
 
   log_debug("Got extension: %s", extension);
@@ -370,6 +377,11 @@ static content_type_t * content_type_for_path(multimap_t * type_map, char * path
     current = next;
   }
 
+  // return the default of application/octet-stream if nothing else matches
+  if (!match) {
+    match = fs->default_content_type;
+  }
+
   return match;
 }
 
@@ -398,7 +410,7 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
 
     char * accept_header = http_request_header_get(fs_request->response->request, "accept");
     log_debug("Accept header: %s", accept_header);
-    content_type_t * content_type = content_type_for_path(fs->type_map, path, accept_header);
+    content_type_t * content_type = content_type_for_path(fs, path, accept_header);
 
     if (content_type) {
       char content_type_s[strlen(content_type->type) + strlen(content_type->subtype) + 2];
