@@ -268,7 +268,7 @@ static void server_request_handler(void * data, http_request_t * request, http_r
 }
 
 static void server_data_handler(void * data, http_request_t * request, http_response_t * response,
-    uint8_t * buf, size_t length, bool last, bool free_buf)
+                                uint8_t * buf, size_t length, bool last, bool free_buf)
 {
   client_t * client = data;
   backend_t * backend = &client->server->backend;
@@ -355,6 +355,7 @@ server_t * server_init(server_config_t * config)
   server->terminate = false;
 
   backend_t * backend = backend_init(&server->backend, server->config->backend_file, (struct server_s *) server);
+
   if (!backend) {
     free(server);
     return NULL;

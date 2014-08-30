@@ -100,7 +100,8 @@ static void register_content_type(multimap_t * m, char * extension, char * type,
   multimap_put(m, extension, t);
 }
 
-static void files_backend_init_type_map(file_server_t * fs) {
+static void files_backend_init_type_map(file_server_t * fs)
+{
   fs->type_map = multimap_init_with_string_keys();
 
   register_content_type(fs->type_map, "htm", "text", "html");
@@ -122,15 +123,18 @@ static void files_backend_start(backend_t * backend)
 
   size_t cwd_capacity = 256;
   char * cwd = malloc(cwd_capacity);
+
   while (getcwd(cwd, cwd_capacity) == NULL) {
     cwd_capacity *= 2;
     cwd = realloc(cwd, cwd_capacity);
   }
 
   size_t cwd_length = strlen(cwd);
+
   if (cwd_length + 1 >= cwd_capacity) {
     cwd = realloc(cwd, cwd_capacity + 1);
   }
+
   cwd_length++;
   cwd[cwd_length - 1] = '/';
   cwd[cwd_length] = 0;
@@ -161,9 +165,11 @@ static void file_server_request_free(file_server_request_t * fs_request)
   if (fs_request->buf.base) {
     free(fs_request->buf.base);
   }
+
   if (fs_request->path) {
     free(fs_request->path);
   }
+
   free(fs_request);
 }
 
@@ -215,7 +221,8 @@ static void file_server_uv_read_cb(uv_fs_t * req)
 
 static void file_server_read_file(file_server_request_t * fs_request, ssize_t offset)
 {
-  if (uv_fs_read(fs_request->loop, &fs_request->read_req, fs_request->fd, &fs_request->buf, 1, offset, file_server_uv_read_cb)) {
+  if (uv_fs_read(fs_request->loop, &fs_request->read_req, fs_request->fd, &fs_request->buf, 1, offset,
+                 file_server_uv_read_cb)) {
     http_response_write_error(fs_request->response, 500);
     file_server_finish_request(fs_request);
   }
@@ -224,9 +231,11 @@ static void file_server_read_file(file_server_request_t * fs_request, ssize_t of
 static char * file_extension(char * path)
 {
   char * dot = strrchr(path, '.');
-  if(dot && dot != path) {
+
+  if (dot && dot != path) {
     return dot + 1;
   }
+
   return NULL;
 }
 
@@ -235,6 +244,7 @@ static char * eat(char * begin, char * end, char c)
   while (*begin == c && begin < end) {
     begin++;
   }
+
   return begin;
 }
 
@@ -256,9 +266,11 @@ static accept_type_t * parse_accept_type(char * begin, char * end)
 
   char * begin_type = current;
   char * end_type = strchr(current, '/');
+
   if (!end_type) {
     return NULL;
   }
+
   type = copy_range(begin_type, end_type ? end_type : end);
 
   current = end_type + 1;
@@ -280,16 +292,20 @@ static content_type_t * content_type_for_path(multimap_t * type_map, char * path
   log_debug("Got extension: %s", extension);
 
   accept_type_t * head = NULL;
+
   if (accept_header) {
     size_t offset = 0;
     size_t length = strlen(accept_header);
+
     do {
       char * end = strchr(accept_header + offset, ',');
+
       if (!end) {
         end = accept_header + length;
       }
 
       accept_type_t * new_type = parse_accept_type(accept_header + offset, end);
+
       if (!new_type) {
         break;
       }
@@ -303,12 +319,14 @@ static content_type_t * content_type_for_path(multimap_t * type_map, char * path
   }
 
   content_type_t * match = NULL;
+
   if (extension) {
     multimap_values_t * types_for_extension = multimap_get(type_map, extension);
 
     if (types_for_extension && head) {
       // find the first matching content type
       accept_type_t * current_accept_type = head;
+
       while (!match && current_accept_type) {
 
         if (strcmp(current_accept_type->type, "*") == 0) {
@@ -317,6 +335,7 @@ static content_type_t * content_type_for_path(multimap_t * type_map, char * path
         }
 
         multimap_values_t * content_types = types_for_extension;
+
         while (content_types) {
           content_type_t * current_content_type = content_types->value;
 
@@ -341,6 +360,7 @@ static content_type_t * content_type_for_path(multimap_t * type_map, char * path
 
   // go through and free
   accept_type_t * current = head;
+
   while (current) {
     accept_type_t * next = current->next;
     free(current->type);
@@ -379,6 +399,7 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
     char * accept_header = http_request_header_get(fs_request->response->request, "accept");
     log_debug("Accept header: %s", accept_header);
     content_type_t * content_type = content_type_for_path(fs->type_map, path, accept_header);
+
     if (content_type) {
       char content_type_s[strlen(content_type->type) + strlen(content_type->subtype) + 2];
       sprintf(content_type_s, "%s/%s", content_type->type, content_type->subtype);
@@ -392,6 +413,7 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
 
     // last modified header
     time_t last_modified = req->statbuf.st_mtime;
+
     if (last_modified >= 0) {
       size_t last_modified_buf_length = RFC1123_TIME_LEN + 1;
       char last_modified_buf[last_modified_buf_length];
@@ -417,6 +439,7 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
 
     file_server_read_file(fs_request, -1);
   }
+
   uv_fs_req_cleanup(req);
 }
 
@@ -438,10 +461,12 @@ static void file_server_uv_open_cb(uv_fs_t * req)
     http_response_write_error(fs_request->response, 404);
     file_server_finish_request(fs_request);
   }
+
   uv_fs_req_cleanup(req);
 }
 
-static void files_backend_request_handler(backend_t * backend, worker_t * worker, http_request_t * request, http_response_t * response)
+static void files_backend_request_handler(backend_t * backend, worker_t * worker, http_request_t * request,
+    http_response_t * response)
 {
   file_server_t * file_server = backend->data;
   file_server_request_t * fs_request = malloc(sizeof(file_server_request_t));
@@ -460,6 +485,7 @@ static void files_backend_request_handler(backend_t * backend, worker_t * worker
   request->data = fs_request;
 
   char * method = http_request_method(request);
+
   if (strcmp(method, "GET") != 0) {
     log_error("No path provided");
     http_response_header_add(response, "allow", "GET");
@@ -469,16 +495,19 @@ static void files_backend_request_handler(backend_t * backend, worker_t * worker
   }
 
   char * input_path = http_request_path(request);
+
   if (!input_path) {
     log_error("No path provided");
     http_response_write_error(response, 500);
     file_server_finish_request(fs_request);
     return;
   }
+
   size_t relative_input_path_length = strlen(input_path) + 2 + 1;
   char relative_input_path[relative_input_path_length];
   snprintf(relative_input_path, relative_input_path_length, "./%s", input_path);
   char * path = malloc(PATH_MAX);
+
   if (!realpath(relative_input_path, path)) {
     log_error("Could not get path: %s", input_path);
     http_response_write_error(response, 404);
@@ -503,8 +532,9 @@ static void files_backend_request_handler(backend_t * backend, worker_t * worker
   uv_fs_open(fs_request->loop, &fs_request->open_req, fs_request->path, O_RDONLY, 0644, file_server_uv_open_cb);
 }
 
-static void files_backend_data_handler(backend_t * backend, worker_t * worker, http_request_t * request, http_response_t * response,
-    uint8_t * buf, size_t length, bool last, bool free_buf)
+static void files_backend_data_handler(backend_t * backend, worker_t * worker, http_request_t * request,
+                                       http_response_t * response,
+                                       uint8_t * buf, size_t length, bool last, bool free_buf)
 {
   UNUSED(backend);
   UNUSED(worker);

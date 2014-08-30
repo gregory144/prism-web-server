@@ -29,7 +29,8 @@ static void debug_backend_stop(backend_t * backend)
   log_info("Debug backend stopped");
 }
 
-static void debug_backend_request_handler(backend_t * backend, worker_t * worker, http_request_t * request, http_response_t * response)
+static void debug_backend_request_handler(backend_t * backend, worker_t * worker, http_request_t * request,
+    http_response_t * response)
 {
   UNUSED(backend);
   UNUSED(worker);
@@ -196,8 +197,9 @@ static void debug_backend_request_handler(backend_t * backend, worker_t * worker
   http_response_write(response, (uint8_t *) resp_text, content_length, true);
 }
 
-static void debug_backend_data_handler(backend_t * backend, worker_t * worker, http_request_t * request, http_response_t * response,
-    uint8_t * buf, size_t length, bool last, bool free_buf)
+static void debug_backend_data_handler(backend_t * backend, worker_t * worker, http_request_t * request,
+                                       http_response_t * response,
+                                       uint8_t * buf, size_t length, bool last, bool free_buf)
 {
   UNUSED(backend);
   UNUSED(worker);

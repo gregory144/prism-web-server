@@ -173,6 +173,7 @@ static void hpack_header_table_entry_free(void * entry)
     if (header->free_name) {
       free(header->name);
     }
+
     if (header->free_value) {
       free(header->value);
     }

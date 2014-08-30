@@ -23,10 +23,12 @@ typedef void (*backend_start_cb)(backend_t * backend);
 
 typedef void (*backend_stop_cb)(backend_t * backend);
 
-typedef void (*backend_request_cb)(backend_t * backend, struct worker_s * worker, http_request_t * request, http_response_t * response);
+typedef void (*backend_request_cb)(backend_t * backend, struct worker_s * worker, http_request_t * request,
+                                   http_response_t * response);
 
-typedef void (*backend_data_cb)(backend_t * backend, struct worker_s * worker, http_request_t * request, http_response_t * response,
-    uint8_t * buf, size_t len, bool last, bool free_buf);
+typedef void (*backend_data_cb)(backend_t * backend, struct worker_s * worker, http_request_t * request,
+                                http_response_t * response,
+                                uint8_t * buf, size_t len, bool last, bool free_buf);
 
 typedef struct backend_handlers_s {
 
@@ -41,10 +43,12 @@ typedef void (*backend_initializer)(backend_t * backend, struct server_s * serve
 
 backend_t * backend_init(backend_t * backend, char * backend_file, struct server_s * server);
 
-void backend_request_handler(backend_t * backend, struct worker_s * worker, http_request_t * request, http_response_t * response);
+void backend_request_handler(backend_t * backend, struct worker_s * worker, http_request_t * request,
+                             http_response_t * response);
 
-void backend_data_handler(backend_t * backend, struct worker_s * worker, http_request_t * request, http_response_t * response,
-    uint8_t * buf, size_t length, bool last, bool free_buf);
+void backend_data_handler(backend_t * backend, struct worker_s * worker, http_request_t * request,
+                          http_response_t * response,
+                          uint8_t * buf, size_t length, bool last, bool free_buf);
 
 void backend_start(backend_t * backend);
 
