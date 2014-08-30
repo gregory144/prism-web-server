@@ -27,6 +27,8 @@ typedef struct http_request_t {
 
   char * query_string;
 
+  void * data;
+
 } http_request_t;
 
 #define http_request_init(a, b, c) \

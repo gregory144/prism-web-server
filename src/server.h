@@ -78,8 +78,6 @@ typedef struct client_s {
 
   bool eof;
 
-  struct worker_s * worker;
-
   /**
    * Keep track of some stats for each client
    */

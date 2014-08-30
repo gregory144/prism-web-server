@@ -258,6 +258,25 @@ static bool tls_cb_write_to_app(void * data, uint8_t * buf, size_t length)
   return true;
 }
 
+static void server_request_handler(void * data, http_request_t * request, http_response_t * response)
+{
+  client_t * client = data;
+  backend_t * backend = &client->server->backend;
+  worker_t * worker = client->server->workers[client->worker_index];
+
+  backend_request_handler(backend, worker, request, response);
+}
+
+static void server_data_handler(void * data, http_request_t * request, http_response_t * response,
+    uint8_t * buf, size_t length, bool last, bool free_buf)
+{
+  client_t * client = data;
+  backend_t * backend = &client->server->backend;
+  worker_t * worker = client->server->workers[client->worker_index];
+
+  backend_data_handler(backend, worker, request, response, buf, length, last, free_buf);
+}
+
 static void uv_cb_listen(uv_stream_t * tcp_server, int status)
 {
   if (status == -1) {
@@ -294,8 +313,8 @@ static void uv_cb_listen(uv_stream_t * tcp_server, int status)
   client->closed_async_handle_count = 0;
 
   client->server = server;
-  client->connection = http_connection_init(client, server->backend.handlers.request,
-                       server->backend.handlers.data, worker_http_cb_write, worker_http_cb_close_connection);
+  client->connection = http_connection_init(client, server_request_handler,
+                       server_data_handler, worker_http_cb_write, worker_http_cb_close_connection);
 
   uv_tcp_init(&server->loop, &client->tcp);
   client->tcp.data = client;
@@ -335,7 +354,7 @@ server_t * server_init(server_config_t * config)
 
   server->terminate = false;
 
-  backend_t * backend = backend_init(&server->backend, server->config->backend_file);
+  backend_t * backend = backend_init(&server->backend, server->config->backend_file, (struct server_s *) server);
   if (!backend) {
     free(server);
     return NULL;

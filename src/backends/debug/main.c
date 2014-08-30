@@ -8,24 +8,32 @@
 
 #include "../../../config.h"
 
+#include "../../server.h"
 #include "../../backend.h"
 
 #include "../../util/util.h"
 #include "../../http2/http.h"
 #include "../../http2/request.h"
 
-static void debug_backend_start()
+static void debug_backend_start(backend_t * backend)
 {
+  UNUSED(backend);
+
   log_info("Debug backend started");
 }
 
-static void debug_backend_stop()
+static void debug_backend_stop(backend_t * backend)
 {
+  UNUSED(backend);
+
   log_info("Debug backend stopped");
 }
 
-static void debug_backend_request_handler(http_request_t * request, http_response_t * response)
+static void debug_backend_request_handler(backend_t * backend, worker_t * worker, http_request_t * request, http_response_t * response)
 {
+  UNUSED(backend);
+  UNUSED(worker);
+
   if (LOG_DEBUG) {
     log_debug("Method: '%s'", http_request_method(request));
     log_debug("Scheme: '%s'", http_request_scheme(request));
@@ -188,9 +196,11 @@ static void debug_backend_request_handler(http_request_t * request, http_respons
   http_response_write(response, (uint8_t *) resp_text, content_length, true);
 }
 
-static void debug_backend_data_handler(http_request_t * request, http_response_t * response, uint8_t * buf, size_t length, bool last,
-                        bool free_buf)
+static void debug_backend_data_handler(backend_t * backend, worker_t * worker, http_request_t * request, http_response_t * response,
+    uint8_t * buf, size_t length, bool last, bool free_buf)
 {
+  UNUSED(backend);
+  UNUSED(worker);
   UNUSED(request);
 
   if (LOG_TRACE) {
@@ -213,11 +223,13 @@ static void debug_backend_data_handler(http_request_t * request, http_response_t
 
 }
 
-void backend_initialize(backend_t * backend)
+void backend_initialize(backend_t * backend, server_t * server)
 {
-  backend->handlers.start = debug_backend_start;
-  backend->handlers.stop = debug_backend_stop;
-  backend->handlers.request = debug_backend_request_handler;
-  backend->handlers.data = debug_backend_data_handler;
+  UNUSED(server);
+
+  backend->handlers->start = debug_backend_start;
+  backend->handlers->stop = debug_backend_stop;
+  backend->handlers->request = debug_backend_request_handler;
+  backend->handlers->data = debug_backend_data_handler;
 }
 

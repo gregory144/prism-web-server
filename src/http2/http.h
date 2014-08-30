@@ -333,9 +333,9 @@ typedef struct http_stream_t {
 
 } http_stream_t;
 
-typedef void (*request_cb)(http_request_t * request, http_response_t * response);
+typedef void (*request_cb)(void * data, http_request_t * request, http_response_t * response);
 
-typedef void (*data_cb)(http_request_t * request, http_response_t * response, uint8_t * buf, size_t len, bool last,
+typedef void (*data_cb)(void * data, http_request_t * request, http_response_t * response, uint8_t * buf, size_t len, bool last,
                         bool free_buf);
 
 typedef bool (*write_cb)(void * data, uint8_t * buf, size_t len);
@@ -401,6 +401,8 @@ typedef struct {
   gzip_context_t * gzip_context;
 
   size_t num_requests;
+
+  bool reading_from_client;
 } http_connection_t;
 
 http_connection_t * http_connection_init(void * const data, const request_cb request_handler,
@@ -417,6 +419,8 @@ void http_finished_writes(http_connection_t * const connection);
 bool http_response_write(http_response_t * const response, uint8_t * data, const size_t data_length, bool last);
 
 bool http_response_write_data(http_response_t * const response, uint8_t * data, const size_t data_length, bool last);
+
+bool http_response_write_error(http_response_t * const response, int code);
 
 http_request_t * http_push_init(http_request_t * const request);
 

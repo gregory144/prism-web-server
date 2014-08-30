@@ -11,6 +11,8 @@ typedef struct http_response_t {
 
   header_list_t * headers;
 
+  void * data;
+
 } http_response_t;
 
 http_response_t * http_response_init(http_request_t * const request);

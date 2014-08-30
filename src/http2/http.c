@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "config.h"
+
 #include "../util/util.h"
 #include "../util/binary_buffer.h"
 
@@ -306,6 +308,7 @@ http_connection_t * http_connection_init(void * const data, const request_cb req
   connection->buffer = NULL;
   connection->buffer_length = 0;
   connection->buffer_position = 0;
+  connection->reading_from_client = false;
 
   connection->header_table_size = DEFAULT_HEADER_TABLE_SIZE;
   connection->enable_push = DEFAULT_ENABLE_PUSH;
@@ -824,12 +827,7 @@ static bool http_trigger_send_data(http_connection_t * const connection, http_st
 
   if (stream) {
 
-    bool success = http_stream_trigger_send_data(connection, stream);
-
-    log_trace("Connection window size: %ld, stream window: %ld", connection->outgoing_window_size,
-              stream->outgoing_window_size);
-
-    return success;
+    return http_stream_trigger_send_data(connection, stream);
 
   } else {
 
@@ -1209,7 +1207,7 @@ static bool http_trigger_request(http_connection_t * const connection, http_stre
     connection->last_stream_id = stream->id;
   }
 
-  connection->request_handler(request, response);
+  connection->request_handler(connection->data, request, response);
 
   connection->num_requests++;
 
@@ -1263,7 +1261,7 @@ static bool http_parse_frame_data(http_connection_t * const connection, const ht
     return false;
   }
 
-  connection->data_handler(stream->request, stream->response, buf, buf_length, last_data_frame, false);
+  connection->data_handler(connection->data, stream->request, stream->response, buf, buf_length, last_data_frame, false);
 
   // do we need to send WINDOW_UPDATE?
   if (connection->incoming_window_size < 0) {
@@ -1931,7 +1929,11 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
     }
   }
 
+  connection->reading_from_client = true;
+
   while (http_connection_add_from_buffer(connection));
+
+  connection->reading_from_client = false;
 
   if (!http_connection_flush(connection, 0)) {
     log_warning("Could not flush write buffer");
@@ -1992,6 +1994,10 @@ bool http_response_write(http_response_t * const response, uint8_t * data, const
     }
   }
 
+  if (last && !connection->reading_from_client) {
+    http_connection_flush(connection, 0);
+  }
+
   if (last) {
     http_response_free(response);
 
@@ -2014,6 +2020,10 @@ bool http_response_write_data(http_response_t * const response, uint8_t * data, 
     }
   }
 
+  if (last && !connection->reading_from_client) {
+    http_connection_flush(connection, 0);
+  }
+
   if (last) {
     http_response_free(response);
 
@@ -2022,6 +2032,32 @@ bool http_response_write_data(http_response_t * const response, uint8_t * data, 
 
   return true;
 
+}
+
+bool http_response_write_error(http_response_t * const response, int code)
+{
+  http_response_status_set(response, code);
+
+  char * resp_text = malloc(32);
+  snprintf(resp_text, 32, "Error: %d\n", code);
+  size_t content_length = strlen(resp_text);
+
+  char content_length_s[256];
+  snprintf(content_length_s, 255, "%ld", content_length);
+  http_response_header_add(response, "content-length", content_length_s);
+
+  http_response_header_add(response, "content-type", "text/html");
+  http_response_header_add(response, "server", PACKAGE_STRING);
+
+  size_t date_buf_length = RFC1123_TIME_LEN + 1;
+  char date_buf[date_buf_length];
+  char * date = date_rfc1123(date_buf, date_buf_length);
+
+  if (date) {
+    http_response_header_add(response, "date", date);
+  }
+
+  return http_response_write(response, (uint8_t *) resp_text, content_length, true);
 }
 
 http_request_t * http_push_init(http_request_t * const original_request)
