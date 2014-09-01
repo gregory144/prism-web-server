@@ -26,7 +26,6 @@ An interoperable HTTP2 server.
 * listen on secure port + non-secure port at the same time
 * handle 1.1 traffic
 * upgrade from 1.1
-* dynamically load request/data handler from shared library
 * graceful shutdown
 * error on violation of incoming max concurrent streams
 * better goaway handling, goaway on bad hpack indexes
