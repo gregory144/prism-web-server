@@ -363,6 +363,29 @@ static content_type_t * content_type_for_path(file_server_t * fs, char * path, c
     } else if (types_for_extension) {
       match = types_for_extension->value;
     }
+  } else {
+    // no extension?
+    content_type_t * content_type = fs->default_content_type;
+    accept_type_t * current_accept_type = head;
+
+    while (!match && current_accept_type) {
+
+      if (strcmp(current_accept_type->type, "*") == 0) {
+        match = content_type;
+        break;
+      }
+
+      if (strcmp(content_type->type, current_accept_type->type) == 0) {
+        if (strcmp(current_accept_type->subtype, "*") == 0 ||
+            strcmp(content_type->subtype, current_accept_type->subtype) == 0) {
+
+          match = content_type;
+          break;
+        }
+      }
+
+      current_accept_type = current_accept_type->next;
+    }
   }
 
   // go through and free
@@ -375,11 +398,6 @@ static content_type_t * content_type_for_path(file_server_t * fs, char * path, c
     free(current);
 
     current = next;
-  }
-
-  // return the default of application/octet-stream if nothing else matches
-  if (!match) {
-    match = fs->default_content_type;
   }
 
   return match;
