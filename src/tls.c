@@ -475,7 +475,7 @@ bool tls_check_protocol(tls_client_ctx_t * client_ctx)
   SSL_get0_next_proto_negotiated(client_ctx->ssl, &proto, &proto_len);
 
   if (proto) {
-    log_trace("Using protocol (through NPN): %s", proto);
+    log_info("Using protocol (through NPN): %s", proto);
 
     if (proto_len == http2_protocol_version_length && memcmp(http2_protocol_version, proto, proto_len) == 0) {
       return true;
@@ -483,7 +483,7 @@ bool tls_check_protocol(tls_client_ctx_t * client_ctx)
   } else {
 #if HAVE_ALPN
     SSL_get0_alpn_selected(client_ctx->ssl, &proto, &proto_len);
-    log_trace("Using protocol (through ALPN): %s", proto);
+    log_info("Using protocol (through ALPN): %s", proto);
 
     if (proto_len == http2_protocol_version_length && memcmp(http2_protocol_version, proto, proto_len) == 0) {
       return true;

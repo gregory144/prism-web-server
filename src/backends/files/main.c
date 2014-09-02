@@ -16,6 +16,8 @@
 #include "../../util/multimap.h"
 #include "../../http2/http.h"
 
+#define READ_BUF_SIZE 4096 // 2^12
+
 typedef struct accept_param_s {
   struct accept_param_s * next;
 
@@ -110,12 +112,15 @@ static void files_backend_init_type_map(file_server_t * fs)
 
   register_content_type(fs->type_map, "htm", "text", "html");
   register_content_type(fs->type_map, "html", "text", "html");
+  register_content_type(fs->type_map, "txt", "text", "plain");
   register_content_type(fs->type_map, "text", "text", "plain");
   register_content_type(fs->type_map, "jpg", "image", "jpeg");
   register_content_type(fs->type_map, "jpeg", "image", "jpeg");
   register_content_type(fs->type_map, "gif", "image", "gif");
   register_content_type(fs->type_map, "png", "image", "png");
   register_content_type(fs->type_map, "log", "text", "plain");
+  register_content_type(fs->type_map, "js", "application", "javascript");
+  register_content_type(fs->type_map, "css", "text", "css");
   content_type_t * default_ct = register_content_type(fs->type_map, "bin", "application", "octet-stream");
 
   fs->default_content_type = default_ct;
@@ -409,7 +414,7 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
   http_response_t * response = fs_request->response;
 
   if (req->result != 0) {
-    log_error("Could not stat file: %s: %q", fs_request->path);
+    log_error("Could not stat file: %d: %s", req->result, fs_request->path);
     http_response_write_error(response, 500);
     file_server_finish_request(fs_request);
   } else if (!S_ISREG(req->statbuf.st_mode)) {
@@ -464,7 +469,7 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
     http_response_write(response, NULL, 0, false);
 
     uv_buf_t * buf = &fs_request->buf;
-    buf->len = fs_request->content_length > 4096 ? 4096 : fs_request->content_length;
+    buf->len = fs_request->content_length > READ_BUF_SIZE ? READ_BUF_SIZE : fs_request->content_length;
     buf->base = malloc(buf->len);
 
     file_server_read_file(fs_request, -1);
