@@ -3,11 +3,11 @@
 
 #include <stdbool.h>
 
+#include "../util/hash_table.h"
 #include "../hpack/hpack.h"
 
 #include "request.h"
 #include "response.h"
-#include "hash_table.h"
 #include "gzip.h"
 
 #define PUSH_ENABLED false

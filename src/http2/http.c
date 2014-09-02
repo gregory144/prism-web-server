@@ -12,7 +12,6 @@
 #include "http.h"
 #include "request.h"
 #include "response.h"
-#include "hash_table.h"
 
 #define FRAME_HEADER_SIZE 9 // octets
 #define DEFAULT_STREAM_EXCLUSIVE_FLAG 0
