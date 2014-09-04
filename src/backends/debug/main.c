@@ -6,14 +6,14 @@
 
 #include <uv.h>
 
-#include "../../../config.h"
+#include "config.h"
 
-#include "../../server.h"
-#include "../../backend.h"
+#include "server.h"
+#include "backend.h"
 
-#include "../../util/util.h"
-#include "../../http2/http.h"
-#include "../../http2/request.h"
+#include "util.h"
+#include "http2/http.h"
+#include "http2/request.h"
 
 static void debug_backend_start(backend_t * backend)
 {

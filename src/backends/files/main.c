@@ -7,14 +7,14 @@
 
 #include <uv.h>
 
-#include "../../../config.h"
+#include "config.h"
 
-#include "../../server.h"
-#include "../../backend.h"
+#include "server.h"
+#include "backend.h"
 
-#include "../../util/util.h"
-#include "../../util/multimap.h"
-#include "../../http2/http.h"
+#include "util.h"
+#include "multimap.h"
+#include "http2/http.h"
 
 #define READ_BUF_SIZE 4096 // 2^12
 

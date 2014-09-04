@@ -3,11 +3,6 @@
 #include <check.h>
 #include <limits.h>
 
-#include "../util/util.c"
-#include "../util/multimap.c"
-#include "../util/binary_buffer.c"
-#include "../huffman/huffman.c"
-
 #include "hpack.c"
 #include "circular_buffer.c"
 #include "header_list.c"

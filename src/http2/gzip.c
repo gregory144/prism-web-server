@@ -3,7 +3,7 @@
 
 #include "gzip.h"
 
-#include "../util/util.h"
+#include "util.h"
 
 #define GZIP_CHUNK 16384
 #define GZIP_WINDOW_BITS (MAX_WBITS + 16)

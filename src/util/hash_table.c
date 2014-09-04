@@ -3,7 +3,7 @@
 #include <stdio.h>
 
 #include "hash_table.h"
-#include "../util/util.h"
+#include "util.h"
 
 #define DEFAULT_HASH_TABLE_INITIAL_CAPACITY 128
 

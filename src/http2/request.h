@@ -1,8 +1,8 @@
 #ifndef HTTP_REQUEST_H
 #define HTTP_REQUEST_H
 
-#include "../util/multimap.h"
-#include "../hpack/hpack.h"
+#include "multimap.h"
+#include "hpack/hpack.h"
 
 typedef struct http_connection_t * _http_connection_t;
 typedef struct http_stream_t * _http_stream_t;

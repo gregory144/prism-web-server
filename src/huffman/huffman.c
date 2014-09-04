@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-#include "../util/util.h"
+#include "util.h"
 
 #include "huffman_decoder_data.c"
 #include "huffman_encoder_data.c"

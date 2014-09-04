@@ -3,8 +3,8 @@
 
 #include <stdbool.h>
 
-#include "../util/hash_table.h"
-#include "../hpack/hpack.h"
+#include "hash_table.h"
+#include "hpack/hpack.h"
 
 #include "request.h"
 #include "response.h"

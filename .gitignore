@@ -52,3 +52,6 @@ check_*.trs
 /src/util/check_util
 /src/util/check_multimap
 /src/util/check_binary_buffer
+/src/util/check_blocking_queue
+/src/util/check_priority_queue
+/src/util/check_hash_table

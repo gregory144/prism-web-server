@@ -42,6 +42,8 @@ AC_CHECK_LIB(z, zlibVersion)
 # required for 'check'
 AM_PROG_CC_C_O
 
+AC_SUBST(UTIL_DIR, `pwd`/src/util)
+
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([Makefile src/backends/debug/Makefile src/backends/files/Makefile src/backends/Makefile src/util/Makefile src/huffman/Makefile src/hpack/Makefile src/http2/Makefile src/Makefile])
 

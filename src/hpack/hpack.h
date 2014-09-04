@@ -13,7 +13,7 @@
 
 #include "circular_buffer.h"
 #include "header_list.h"
-#include "../util/binary_buffer.h"
+#include "binary_buffer.h"
 
 #define HEADER_TABLE_OVERHEAD 32
 

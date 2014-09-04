@@ -6,8 +6,8 @@
 
 #include "config.h"
 
-#include "../util/util.h"
-#include "../util/binary_buffer.h"
+#include "util.h"
+#include "binary_buffer.h"
 
 #include "http.h"
 #include "request.h"
