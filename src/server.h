@@ -3,9 +3,10 @@
 
 #include <uv.h>
 
+#include "util/blocking_queue.h"
+
 #include "http2/http.h"
 #include "tls.h"
-#include "blocking_queue.h"
 #include "backend.h"
 
 struct worker_s;

@@ -2,7 +2,6 @@
 
 #include "util/util.h"
 #include "server.h"
-#include "blocking_queue.h"
 
 static void worker_handle(uv_async_t * async_handle);
 
