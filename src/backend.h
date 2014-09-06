@@ -1,7 +1,7 @@
 #ifndef HTTP_BACKEND_H
 #define HTTP_BACKEND_H
 
-#include "http2/http.h"
+#include "http/http.h"
 
 struct server_s;
 

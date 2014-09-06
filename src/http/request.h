@@ -4,13 +4,11 @@
 #include "multimap.h"
 #include "hpack/hpack.h"
 
-typedef struct http_connection_t * _http_connection_t;
-typedef struct http_stream_t * _http_stream_t;
-
 typedef struct http_request_t {
 
-  _http_connection_t connection;
-  _http_stream_t stream;
+  void * handler_data;
+
+  void * data;
 
   header_list_t * headers;
   multimap_t * params;
@@ -27,15 +25,9 @@ typedef struct http_request_t {
 
   char * query_string;
 
-  void * data;
-
 } http_request_t;
 
-#define http_request_init(a, b, c) \
-  http_request_init_internal((_http_connection_t)a, (_http_stream_t)b, c)
-
-http_request_t * http_request_init_internal(const _http_connection_t connection,
-    const _http_stream_t stream, header_list_t * const headers);
+http_request_t * http_request_init(void * handler_data, header_list_t * const headers);
 
 void http_request_header_add(const http_request_t * const request, char * name, char * value);
 

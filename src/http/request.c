@@ -157,13 +157,12 @@ static void parse_parameters(multimap_t * const params, char * query_string)
   }
 }
 
-http_request_t * http_request_init_internal(const _http_connection_t connection,
-    const _http_stream_t stream, header_list_t * const header_list)
+http_request_t * http_request_init(void * handler_data, header_list_t * const header_list)
 {
   http_request_t * request = malloc(sizeof(http_request_t));
 
-  request->connection = (_http_connection_t)connection;
-  request->stream = (_http_stream_t)stream;
+  request->handler_data = handler_data;
+  request->data = NULL;
 
   request->params = multimap_init_with_string_keys();
 

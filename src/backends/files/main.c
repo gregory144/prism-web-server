@@ -1,9 +1,11 @@
 #include <stdio.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
+#include <linux/limits.h>
 
 #include <uv.h>
 
@@ -14,7 +16,7 @@
 
 #include "util.h"
 #include "multimap.h"
-#include "http2/http.h"
+#include "http/http.h"
 
 #define READ_BUF_SIZE 4096 // 2^12
 

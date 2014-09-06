@@ -5,7 +5,7 @@
 
 #include "util/blocking_queue.h"
 
-#include "http2/http.h"
+#include "http/http.h"
 #include "tls.h"
 #include "backend.h"
 

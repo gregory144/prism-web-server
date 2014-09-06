@@ -8,4 +8,4 @@ check_PROGRAMS = check_hpack
 
 check_hpack_SOURCES = check_hpack.c
 check_hpack_CFLAGS = @CHECK_CFLAGS@ -I$(UTIL_DIR) -I$(top_srcdir) -I$(top_srcdir)/src
-check_hpack_LDADD = @CHECK_LIBS@ ../huffman/libhpack_huffman.la ../util/libhttp2_util.la
+check_hpack_LDADD = @CHECK_LIBS@ ../huffman/libhpack_huffman.la ../util/libhttp_util.la

@@ -12,8 +12,8 @@
 #include "backend.h"
 
 #include "util.h"
-#include "http2/http.h"
-#include "http2/request.h"
+#include "http/http.h"
+#include "http/request.h"
 
 static void debug_backend_start(backend_t * backend)
 {

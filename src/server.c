@@ -9,8 +9,8 @@
 #include "config.h"
 
 #include "util/util.h"
-#include "http2/http.h"
-#include "http2/request.h"
+#include "http/http.h"
+#include "http/request.h"
 
 #include "server.h"
 

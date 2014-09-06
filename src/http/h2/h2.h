@@ -1,16 +1,26 @@
-#ifndef HTTP_HTTP_H
-#define HTTP_HTTP_H
+#ifndef H2_H
+#define H2_H
 
 #include <stdbool.h>
 
 #include "hash_table.h"
 #include "hpack/hpack.h"
 
-#include "request.h"
-#include "response.h"
-#include "gzip.h"
+#include "http/request.h"
+#include "http/response.h"
 
 #define PUSH_ENABLED false
+
+typedef void (*h2_request_cb)(void * data, http_request_t * request, http_response_t * response);
+
+typedef void (*h2_data_cb)(void * data, http_request_t * request, http_response_t * response, uint8_t * buf,
+    size_t len, bool last, bool free_buf);
+
+typedef bool (*h2_write_cb)(void * data, uint8_t * buf, size_t len);
+
+typedef void (*h2_close_cb)(void * data);
+
+typedef http_request_t * (*h2_request_init_cb)(void * data, void * user_data, header_list_t * headers);
 
 /**
  * Frame types
@@ -81,7 +91,7 @@ enum settings_e {
 #define FLAG_PRIORITY 0x20
 
 /**
- * HTTP errors
+ * HTTP 2 errors
  */
 enum h2_error_code_e {
 
@@ -89,80 +99,80 @@ enum h2_error_code_e {
    * The associated condition is not as a result of an error. For example, a
    * GOAWAY might include this code to indicate graceful shutdown of a connection.
    */
-  HTTP_ERROR_NO_ERROR,
+  H2_ERROR_NO_ERROR,
 
   /**
    * The endpoint detected an unspecific protocol error. This error is for use
    * when a more specific error code is not available.
    */
-  HTTP_ERROR_PROTOCOL_ERROR,
+  H2_ERROR_PROTOCOL_ERROR,
 
   /**
    * The endpoint encountered an unexpected internal error.
    */
-  HTTP_ERROR_INTERNAL_ERROR,
+  H2_ERROR_INTERNAL_ERROR,
 
   /**
    * The endpoint detected that its peer violated the flow control protocol.
    */
-  HTTP_ERROR_FLOW_CONTROL_ERROR,
+  H2_ERROR_FLOW_CONTROL_ERROR,
 
   /**
    * The endpoint sent a SETTINGS frame, but did not receive a response in a
    * timely manner. See Settings Synchronization (Section 6.5.3).
    */
-  HTTP_ERROR_SETTINGS_TIMEOUT,
+  H2_ERROR_SETTINGS_TIMEOUT,
 
   /**
    * The endpoint received a frame after a stream was half closed.
    */
-  HTTP_ERROR_STREAM_CLOSED,
+  H2_ERROR_STREAM_CLOSED,
 
   /**
    * The endpoint received a frame that was larger than the maximum size
    * that it supports.
    */
-  HTTP_ERROR_FRAME_SIZE_ERROR,
+  H2_ERROR_FRAME_SIZE_ERROR,
 
   /**
    * The endpoint refuses the stream prior to performing any application
    * processing, see Section 8.1.4 for details.
    */
-  HTTP_ERROR_REFUSED_STREAM,
+  H2_ERROR_REFUSED_STREAM,
 
   /**
    * Used by the endpoint to indicate that the stream is no longer needed.
    */
-  HTTP_ERROR_CANCEL,
+  H2_ERROR_CANCEL,
 
   /**
    * The endpoint is unable to maintain the compression context for the
    * connection.
    */
-  HTTP_ERROR_COMPRESSION_ERROR,
+  H2_ERROR_COMPRESSION_ERROR,
 
   /**
    * The connection established in response to a CONNECT request (Section 8.3)
    * was reset or abnormally closed.
    */
-  HTTP_ERROR_CONNECT_ERROR,
+  H2_ERROR_CONNECT_ERROR,
 
   /**
    * The endpoint detected that its peer is exhibiting a behavior over a given
    * amount of time that has caused it to refuse to process further frames.
    */
-  HTTP_ERROR_ENHANCE_YOUR_CALM,
+  H2_ERROR_ENHANCE_YOUR_CALM,
 
   /**
    * The underlying transport has properties that do not meet the minimum
    * requirements imposed by this document (see Section 9.2) or the endpoint.
    */
-  HTTP_ERROR_INADEQUATE_SECURITY
+  H2_ERROR_INADEQUATE_SECURITY
 
 };
 
 
-#define HTTP_FRAME_FIELDS               \
+#define H2_FRAME_FIELDS                 \
   /* Length in octets of the frame */   \
   /* 14 bits                       */   \
   uint16_t length;                      \
@@ -181,92 +191,92 @@ enum h2_error_code_e {
 
 typedef struct {
 
-  HTTP_FRAME_FIELDS
+  H2_FRAME_FIELDS
 
-} http_frame_t;
-
-typedef struct {
-
-  HTTP_FRAME_FIELDS
-
-} http_frame_settings_t;
+} h2_frame_t;
 
 typedef struct {
 
-  HTTP_FRAME_FIELDS
+  H2_FRAME_FIELDS
 
-} http_frame_priority_t;
+} h2_frame_settings_t;
 
 typedef struct {
 
-  HTTP_FRAME_FIELDS
+  H2_FRAME_FIELDS
+
+} h2_frame_priority_t;
+
+typedef struct {
+
+  H2_FRAME_FIELDS
 
   uint32_t error_code;
 
-} http_frame_rst_stream_t;
+} h2_frame_rst_stream_t;
 
 typedef struct {
 
-  HTTP_FRAME_FIELDS
+  H2_FRAME_FIELDS
 
-} http_frame_push_promise_t;
-
-typedef struct {
-
-  HTTP_FRAME_FIELDS
-
-} http_frame_ping_t;
+} h2_frame_push_promise_t;
 
 typedef struct {
 
-  HTTP_FRAME_FIELDS
+  H2_FRAME_FIELDS
+
+} h2_frame_ping_t;
+
+typedef struct {
+
+  H2_FRAME_FIELDS
 
   uint32_t last_stream_id;
   uint32_t error_code;
 
   uint8_t * debug_data;
 
-} http_frame_goaway_t;
+} h2_frame_goaway_t;
 
 typedef struct {
 
-  HTTP_FRAME_FIELDS
+  H2_FRAME_FIELDS
 
   uint32_t increment;
 
-} http_frame_window_update_t;
+} h2_frame_window_update_t;
 
-typedef struct http_header_fragment_s {
+typedef struct h2_header_fragment_s {
 
   uint8_t * buffer;
   size_t length;
-  struct http_header_fragment_s * next;
+  struct h2_header_fragment_s * next;
 
-} http_header_fragment_t;
+} h2_header_fragment_t;
 
 typedef struct {
 
-  HTTP_FRAME_FIELDS
+  H2_FRAME_FIELDS
 
   size_t header_block_fragment_size;
   uint8_t * header_block_fragment;
 
-} http_frame_headers_t;
+} h2_frame_headers_t;
 
 typedef struct {
 
-  HTTP_FRAME_FIELDS
+  H2_FRAME_FIELDS
 
-} http_frame_continuation_t;
+} h2_frame_continuation_t;
 
 typedef struct {
 
-  HTTP_FRAME_FIELDS
+  H2_FRAME_FIELDS
 
-} http_frame_data_t;
+} h2_frame_data_t;
 
-typedef struct http_queued_frame_s {
-  struct http_queued_frame_s * next;
+typedef struct h2_queued_frame_s {
+  struct h2_queued_frame_s * next;
 
   uint8_t * buf;
   size_t buf_length;
@@ -282,9 +292,13 @@ typedef struct http_queued_frame_s {
   bool continuation;
   bool end_stream;
 
-} http_queued_frame_t;
+} h2_queued_frame_t;
 
-typedef struct http_stream_t {
+typedef struct h2_s h2_t;
+
+typedef struct {
+
+  h2_t * h2;
 
   /**
    * Stream identifier
@@ -312,9 +326,9 @@ typedef struct http_stream_t {
   long outgoing_window_size;
   long incoming_window_size;
 
-  http_header_fragment_t * header_fragments;
+  h2_header_fragment_t * header_fragments;
 
-  http_queued_frame_t * queued_data_frames;
+  h2_queued_frame_t * queued_data_frames;
 
   header_list_t * headers;
 
@@ -331,27 +345,17 @@ typedef struct http_stream_t {
   uint8_t priority_weight;
   bool priority_exclusive;
 
-} http_stream_t;
+} h2_stream_t;
 
-typedef void (*request_cb)(void * data, http_request_t * request, http_response_t * response);
+struct h2_s {
 
-typedef void (*data_cb)(void * data, http_request_t * request, http_response_t * response, uint8_t * buf, size_t len,
-                        bool last,
-                        bool free_buf);
-
-typedef bool (*write_cb)(void * data, uint8_t * buf, size_t len);
-
-typedef void (*close_cb)(void * data);
-
-/**
- * Stores state for a client.
- */
-typedef struct {
   void * data;
-  write_cb writer;
-  close_cb closer;
-  request_cb request_handler;
-  data_cb data_handler;
+
+  h2_write_cb writer;
+  h2_close_cb closer;
+  h2_request_cb request_handler;
+  h2_data_cb data_handler;
+  h2_request_init_cb request_init;
 
   /**
    * connection state
@@ -364,6 +368,7 @@ typedef struct {
   size_t last_stream_id;
   long outgoing_window_size;
   long incoming_window_size;
+
   // is the connection waiting to be gracefully closed?
   bool closing;
   bool closed;
@@ -381,6 +386,7 @@ typedef struct {
   uint8_t * buffer;
   size_t buffer_length;
   size_t buffer_position;
+  bool reading_from_client;
 
   binary_buffer_t * write_buffer;
 
@@ -399,34 +405,28 @@ typedef struct {
   hpack_context_t * encoding_context;
   hpack_context_t * decoding_context;
 
-  gzip_context_t * gzip_context;
+};
 
-  size_t num_requests;
+h2_t * h2_init(void * const data, const h2_request_cb request_handler,
+    const h2_data_cb data_handler, const h2_write_cb writer, const h2_close_cb closer,
+    const h2_request_init_cb request_init);
 
-  bool reading_from_client;
-} http_connection_t;
+void h2_free(h2_t * const h2);
 
-http_connection_t * http_connection_init(void * const data, const request_cb request_handler,
-    const data_cb data_handler, const write_cb writer, const close_cb closer);
+void h2_read(h2_t * const h2, uint8_t * const buffer, const size_t len);
 
-void http_connection_free(http_connection_t * const connection);
+void h2_eof(h2_t * const h2);
 
-void http_connection_read(http_connection_t * const connection, uint8_t * const buffer, const size_t len);
+void h2_finished_writes(h2_t * const h2);
 
-void http_connection_eof(http_connection_t * const connection);
+bool h2_response_write(h2_stream_t * stream, http_response_t * const response, uint8_t * data, const size_t data_length, bool last);
 
-void http_finished_writes(http_connection_t * const connection);
+bool h2_response_write_data(h2_stream_t * stream, http_response_t * const response, uint8_t * data, const size_t data_length, bool last);
 
-bool http_response_write(http_response_t * const response, uint8_t * data, const size_t data_length, bool last);
+http_request_t * h2_push_init(h2_stream_t * stream, http_request_t * const request);
 
-bool http_response_write_data(http_response_t * const response, uint8_t * data, const size_t data_length, bool last);
+bool h2_push_promise(h2_stream_t * stream, http_request_t * const request);
 
-bool http_response_write_error(http_response_t * const response, int code);
-
-http_request_t * http_push_init(http_request_t * const request);
-
-bool http_push_promise(http_request_t * const request);
-
-http_response_t * http_push_response_get(http_request_t * const request);
+http_response_t * h2_push_response_get(h2_stream_t * stream, http_request_t * const request);
 
 #endif
