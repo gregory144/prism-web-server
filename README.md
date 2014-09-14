@@ -23,6 +23,7 @@ An interoperable HTTP2 server.
 
 #### Required features
 
+* serious security checks
 * logging categories (turn on/off tls logging, gzip logging, etc)
 * listen on secure port + non-secure port at the same time
 * upgrade from 1.1
