@@ -45,9 +45,9 @@ END_TEST
 START_TEST(test_mm_strings_put_and_grow)
 {
   int i, j;
-  char keys[1000][10];
+  char keys[500][10];
 
-  for (i = 0; i < 1000; i++) {
+  for (i = 0; i < 500; i++) {
     snprintf(keys[i], 10, "%d", i);
     ck_assert(multimap_put(map, strdup(keys[i]), strdup(keys[i])));
 

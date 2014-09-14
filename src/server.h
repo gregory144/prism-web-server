@@ -90,6 +90,8 @@ typedef struct client_s {
 
   size_t worker_index;
 
+  bool selected_protocol;
+
 } client_t;
 
 typedef struct worker_s {

@@ -1,8 +1,12 @@
 AC_INIT([conduit],[0.0.1],[greg@gtgross.com])
 AM_INIT_AUTOMAKE([foreign -Wall -Werror])
 
+# archiver for libraries
+AM_PROG_AR
+
 AC_PROG_CC
 AC_PROG_CC_C99
+AM_PROG_LIBTOOL
 
 AC_CHECK_HEADERS([stdint.h])
 AC_CHECK_HEADERS([stdlib.h])
@@ -18,9 +22,6 @@ AC_TYPE_SSIZE_T
 AC_TYPE_UINT16_T
 AC_TYPE_UINT32_T
 AC_TYPE_UINT8_T
-
-# archiver for libraries
-AM_PROG_AR
 
 # libtool
 LT_INIT
@@ -53,6 +54,7 @@ AC_CONFIG_FILES([Makefile
                  src/huffman/Makefile
                  src/hpack/Makefile
                  src/http/h2/Makefile
+                 src/http/h1_1/Makefile
                  src/http/Makefile
                  src/Makefile])
 

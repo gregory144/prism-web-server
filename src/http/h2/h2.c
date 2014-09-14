@@ -249,6 +249,17 @@ frame_parser_definition_t frame_parser_definitions[] = {
 
 };
 
+bool h2_detect_connection(uint8_t * buffer, size_t buffer_length)
+{
+  if (buffer_length >= H2_CONNECTION_PREFACE_LENGTH) {
+    if (memcmp(buffer, H2_CONNECTION_PREFACE, H2_CONNECTION_PREFACE_LENGTH) == 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 static void h2_stream_free(void * value)
 {
   h2_stream_t * stream = value;
@@ -331,8 +342,8 @@ static void h2_stream_mark_closing(h2_t * const h2, h2_stream_t * const stream)
 }
 
 h2_t * h2_init(void * const data, const h2_request_cb request_handler,
-    const h2_data_cb data_handler, const h2_write_cb writer, const h2_close_cb closer,
-    const h2_request_init_cb request_init)
+               const h2_data_cb data_handler, const h2_write_cb writer, const h2_close_cb closer,
+               const h2_request_init_cb request_init)
 {
   h2_t * h2 = malloc(sizeof(h2_t));
   ASSERT_OR_RETURN_NULL(h2);
@@ -495,7 +506,7 @@ static bool h2_write(const h2_t * const h2, uint8_t * const buf, size_t buf_leng
 }
 
 static void h2_frame_header_write(uint8_t * const buf, const uint32_t length, const uint8_t type, const uint8_t flags,
-                                    uint32_t stream_id)
+                                  uint32_t stream_id)
 {
   size_t pos = 0;
 
@@ -558,7 +569,7 @@ static bool h2_emit_goaway(const h2_t * const h2, enum h2_error_code_e error_cod
 }
 
 static bool h2_emit_rst_stream(const h2_t * const h2, uint32_t stream_id,
-                                 enum h2_error_code_e error_code)
+                               enum h2_error_code_e error_code)
 {
 
   size_t error_code_length = 4; // 32 bits
@@ -627,7 +638,7 @@ static bool emit_error_and_close(h2_t * const h2, uint32_t stream_id,
 }
 
 static bool h2_emit_headers(h2_t * const h2, const h2_stream_t * const stream,
-                              const header_list_t * const headers)
+                            const header_list_t * const headers)
 {
   // TODO split large headers into multiple frames
   size_t headers_length = 0;
@@ -682,7 +693,7 @@ static bool h2_emit_headers(h2_t * const h2, const h2_stream_t * const stream,
 }
 
 static bool h2_emit_push_promise(h2_t * const h2, const h2_stream_t * const stream,
-                                   const header_list_t * const headers, const uint32_t associated_stream_id)
+                                 const header_list_t * const headers, const uint32_t associated_stream_id)
 {
 
   // TODO split large headers into multiple frames
@@ -747,7 +758,7 @@ static bool h2_emit_push_promise(h2_t * const h2, const h2_stream_t * const stre
 }
 
 static bool h2_emit_data_frame(const h2_t * const h2, const h2_stream_t * const stream,
-                                 const h2_queued_frame_t * const frame)
+                               const h2_queued_frame_t * const frame)
 {
   // buffer data frames per connection? - only trigger connection->writer after all emit_data_frames have been written
   // or size threshold has been reached
@@ -897,7 +908,7 @@ static h2_queued_frame_t * h2_queue_data_frame(h2_stream_t * const stream, uint8
 }
 
 static bool h2_emit_data(h2_t * const h2, h2_stream_t * const stream, uint8_t * in,
-                           const size_t in_length, bool last_in)
+                         const size_t in_length, bool last_in)
 {
   // TODO support padding?
 
@@ -998,7 +1009,7 @@ static bool h2_emit_ping_ack(const h2_t * const h2, uint8_t * opaque_data)
 }
 
 static bool h2_emit_window_update(const h2_t * const h2, const uint32_t stream_id,
-                                    const size_t increment)
+                                  const size_t increment)
 {
 
   size_t payload_length = 4;
@@ -1045,11 +1056,10 @@ static bool h2_frame_flag_get(const h2_frame_t * const frame, int mask)
  */
 static bool h2_recognize_connection_preface(h2_t * const h2)
 {
-  if (h2->buffer_length >= H2_CONNECTION_PREFACE_LENGTH) {
-    if (memcmp(h2->buffer, H2_CONNECTION_PREFACE, H2_CONNECTION_PREFACE_LENGTH) == 0) {
-      h2->buffer_position = H2_CONNECTION_PREFACE_LENGTH;
-      return true;
-    }
+
+  if (h2_detect_connection(h2->buffer, h2->buffer_length)) {
+    h2->buffer_position = H2_CONNECTION_PREFACE_LENGTH;
+    return true;
   }
 
   return false;
@@ -1185,6 +1195,7 @@ static bool h2_trigger_request(h2_t * const h2, h2_stream_t * const stream)
 
     abort();
   }
+
   if (!h2->request_handler) {
     log_fatal("No request handler set up");
 
@@ -1450,7 +1461,7 @@ static bool h2_parse_frame_headers(h2_t * const h2, const h2_frame_headers_t * c
 }
 
 static bool h2_parse_frame_continuation(h2_t * const h2,
-    const h2_frame_continuation_t * const frame)
+                                        const h2_frame_continuation_t * const frame)
 {
   uint8_t * buf = h2->buffer + h2->buffer_position;
   size_t buf_length = frame->length;
@@ -1654,7 +1665,7 @@ static bool h2_parse_frame_goaway(h2_t * const h2, h2_frame_goaway_t * const fra
 }
 
 static h2_frame_t * h2_frame_init(h2_t * const h2, const uint32_t length, const uint8_t type,
-                                      const uint8_t flags, const uint32_t stream_id)
+                                  const uint8_t flags, const uint32_t stream_id)
 {
   h2_frame_t * frame;
 
@@ -1970,7 +1981,8 @@ void h2_eof(h2_t * const h2)
   h2_close(h2);
 }
 
-bool h2_response_write(h2_stream_t * stream, http_response_t * const response, uint8_t * data, const size_t data_length, bool last)
+bool h2_response_write(h2_stream_t * stream, http_response_t * const response, uint8_t * data, const size_t data_length,
+                       bool last)
 {
   h2_t * h2 = stream->h2;
 
@@ -2006,7 +2018,8 @@ bool h2_response_write(h2_stream_t * stream, http_response_t * const response, u
   return true;
 }
 
-bool h2_response_write_data(h2_stream_t * stream, http_response_t * const response, uint8_t * data, const size_t data_length, bool last)
+bool h2_response_write_data(h2_stream_t * stream, http_response_t * const response, uint8_t * data,
+                            const size_t data_length, bool last)
 {
 
   h2_t * h2 = stream->h2;

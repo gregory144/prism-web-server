@@ -159,6 +159,11 @@ static void worker_parse(client_t * client, uint8_t * buffer, size_t length)
 {
   client->octets_read += length;
 
+  if (!client->selected_protocol && client->tls_ctx && client->tls_ctx->selected_protocol) {
+    http_connection_set_protocol(client->connection, client->tls_ctx->selected_protocol);
+    client->selected_protocol = true;
+  }
+
   log_debug("Read client #%ld (%ld octets, %ld total)", client->id, length, client->octets_read);
 
   http_connection_t * connection = client->connection;

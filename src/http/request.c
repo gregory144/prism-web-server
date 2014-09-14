@@ -322,5 +322,9 @@ void http_request_free(http_request_t * const request)
     free(request->scheme);
   }
 
+  if (request->handler_data) {
+    free(request->handler_data);
+  }
+
   free(request);
 }

@@ -19,13 +19,21 @@ SSL_CTX * global_ssl_ctx;
 static const char * const DEFAULT_CIPHERS =
   "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK";
 
-// list of suported protocols
-// TLS 'wire' format: length prefixed, non-empty 8-bit characters
-static const unsigned char supported_protocols[] = { 5, 'h', '2', '-', '1', '4' };
-const unsigned char supported_protocols_length = 6;
+#define HTTP2_VERSION_LENGTH 5
+#define HTTP1_1_VERSION_LENGTH 8
 
 static const char * http2_protocol_version = "h2-14";
-static const int http2_protocol_version_length = 5;
+static const int http2_protocol_version_length = HTTP2_VERSION_LENGTH;
+static const char * http1_1_protocol_version = "http/1.1";
+static const int http1_1_protocol_version_length = HTTP1_1_VERSION_LENGTH;
+
+// list of suported protocols
+// TLS 'wire' format: length prefixed, non-empty 8-bit characters
+static const unsigned char supported_protocols[] = {
+  HTTP2_VERSION_LENGTH, 'h', '2', '-', '1', '4',
+  HTTP1_1_VERSION_LENGTH, 'h', 't', 't', 'p', '/', '1', '.', '1'
+};
+const unsigned char supported_protocols_length = HTTP2_VERSION_LENGTH + HTTP1_1_VERSION_LENGTH + 1;
 
 bool tls_init()
 {
@@ -326,6 +334,7 @@ tls_client_ctx_t * tls_client_init(tls_server_ctx_t * server_ctx, void * data, t
 
   tls_client_ctx_t * tls_client_ctx = malloc(sizeof(tls_client_ctx_t));
   ASSERT_OR_RETURN_NULL(tls_client_ctx);
+  tls_client_ctx->selected_protocol = NULL;
   tls_client_ctx->handshake_complete = false;
   tls_client_ctx->writing_to_app = false;
   tls_client_ctx->data = data;
@@ -467,7 +476,7 @@ static bool tls_update(tls_client_ctx_t * client_ctx)
 
 }
 
-bool tls_check_protocol(tls_client_ctx_t * client_ctx)
+bool tls_set_protocol(tls_client_ctx_t * client_ctx)
 {
   const unsigned char * proto = NULL;
   unsigned int proto_len;
@@ -475,24 +484,39 @@ bool tls_check_protocol(tls_client_ctx_t * client_ctx)
   SSL_get0_next_proto_negotiated(client_ctx->ssl, &proto, &proto_len);
 
   if (proto) {
-    log_info("Using protocol (through NPN): %s", proto);
+    log_debug("Using protocol (through NPN): %s", proto);
 
     if (proto_len == http2_protocol_version_length && memcmp(http2_protocol_version, proto, proto_len) == 0) {
+      client_ctx->selected_protocol = http2_protocol_version;
+      return true;
+    }
+
+    if (proto_len == http1_1_protocol_version_length && memcmp(http1_1_protocol_version, proto, proto_len) == 0) {
+      client_ctx->selected_protocol = http1_1_protocol_version;
       return true;
     }
   } else {
 #if HAVE_ALPN
     SSL_get0_alpn_selected(client_ctx->ssl, &proto, &proto_len);
-    log_info("Using protocol (through ALPN): %s", proto);
 
-    if (proto_len == http2_protocol_version_length && memcmp(http2_protocol_version, proto, proto_len) == 0) {
-      return true;
+    if (proto) {
+      log_debug("Using protocol (through ALPN): %s", proto);
+
+      if (proto_len == http2_protocol_version_length && memcmp(http2_protocol_version, proto, proto_len) == 0) {
+        client_ctx->selected_protocol = http2_protocol_version;
+        return true;
+      }
+
+      if (proto_len == http1_1_protocol_version_length && memcmp(http1_1_protocol_version, proto, proto_len) == 0) {
+        client_ctx->selected_protocol = http1_1_protocol_version;
+        return true;
+      }
     }
 
 #endif
   }
 
-  log_info("Did not negotiate http2");
+  log_debug("Did not negotiate protocol");
   return false;
 }
 
@@ -544,9 +568,7 @@ bool tls_decrypt_data_and_pass_to_app(tls_client_ctx_t * client_ctx, uint8_t * b
       client_ctx->handshake_complete = true;
       log_trace("Handshake complete");
 
-      if (!tls_check_protocol(client_ctx)) {
-        return false;
-      }
+      tls_set_protocol(client_ctx);
 
     } else if (tls_ssl_wants_read(client_ctx->ssl, retval)) {
       log_trace("Handshake not yet complete, should read");

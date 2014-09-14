@@ -123,6 +123,8 @@ static void files_backend_init_type_map(file_server_t * fs)
   register_content_type(fs->type_map, "log", "text", "plain");
   register_content_type(fs->type_map, "js", "application", "javascript");
   register_content_type(fs->type_map, "css", "text", "css");
+  register_content_type(fs->type_map, "ttf", "application", "x-font-ttf");
+
   content_type_t * default_ct = register_content_type(fs->type_map, "bin", "application", "octet-stream");
 
   fs->default_content_type = default_ct;

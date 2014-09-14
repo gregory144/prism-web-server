@@ -292,6 +292,7 @@ static void uv_cb_listen(uv_stream_t * tcp_server, int status)
   client_t * client = malloc(sizeof(client_t));
   client->id = server->client_ids++;
   log_debug("Initializing client %ld (%d)", client->id, total_clients);
+  client->selected_protocol = false;
   client->closing = false;
   client->closed = false;
   client->uv_closed = false;
@@ -313,7 +314,12 @@ static void uv_cb_listen(uv_stream_t * tcp_server, int status)
   client->closed_async_handle_count = 0;
 
   client->server = server;
-  client->connection = http_connection_init(client, server_request_handler,
+
+  char * scheme = server->config->use_tls ? "https" : "http";
+  char * hostname = server->config->hostname;
+  int port = server->config->port;
+
+  client->connection = http_connection_init(client, scheme, hostname, port, server_request_handler,
                        server_data_handler, worker_http_cb_write, worker_http_cb_close_connection);
 
   uv_tcp_init(&server->loop, &client->tcp);

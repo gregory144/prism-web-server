@@ -2,7 +2,6 @@
 
 An interoperable HTTP2 server.
 
-
 ## Build from git
 
 1. ./autogen.sh
@@ -18,13 +17,14 @@ An interoperable HTTP2 server.
 * openssl libssl/libcrypto (1.0.2 for ALPN)
 * zlib
 
+* joyent http parser [https://github.com/joyent/http-parser] (already in repo, see src/http/h1_1/http_parser.c)
+
 ## TODO
 
 #### Required features
 
 * logging categories (turn on/off tls logging, gzip logging, etc)
 * listen on secure port + non-secure port at the same time
-* handle 1.1 traffic
 * upgrade from 1.1
 * graceful shutdown
 * error on violation of incoming max concurrent streams

@@ -20,7 +20,6 @@
  * We send that encrypted data back to LibUV to write it to the socket.
  */
 
-
 typedef bool (*tls_write_to_network_cb)(void * data, uint8_t * buf, size_t length);
 typedef bool (*tls_write_to_app_cb)(void * data, uint8_t * buf, size_t length);
 typedef bool (*tls_can_continue_cb)(void * data);
@@ -34,6 +33,8 @@ typedef struct {
 typedef struct {
 
   void * data;
+
+  const char * selected_protocol;
 
   SSL * ssl;
   BIO * app_bio;

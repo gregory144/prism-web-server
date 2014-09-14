@@ -14,7 +14,7 @@
 typedef void (*h2_request_cb)(void * data, http_request_t * request, http_response_t * response);
 
 typedef void (*h2_data_cb)(void * data, http_request_t * request, http_response_t * response, uint8_t * buf,
-    size_t len, bool last, bool free_buf);
+                           size_t len, bool last, bool free_buf);
 
 typedef bool (*h2_write_cb)(void * data, uint8_t * buf, size_t len);
 
@@ -407,9 +407,11 @@ struct h2_s {
 
 };
 
+bool h2_detect_connection(uint8_t * buffer, size_t len);
+
 h2_t * h2_init(void * const data, const h2_request_cb request_handler,
-    const h2_data_cb data_handler, const h2_write_cb writer, const h2_close_cb closer,
-    const h2_request_init_cb request_init);
+               const h2_data_cb data_handler, const h2_write_cb writer, const h2_close_cb closer,
+               const h2_request_init_cb request_init);
 
 void h2_free(h2_t * const h2);
 
@@ -419,9 +421,11 @@ void h2_eof(h2_t * const h2);
 
 void h2_finished_writes(h2_t * const h2);
 
-bool h2_response_write(h2_stream_t * stream, http_response_t * const response, uint8_t * data, const size_t data_length, bool last);
+bool h2_response_write(h2_stream_t * stream, http_response_t * const response, uint8_t * data, const size_t data_length,
+                       bool last);
 
-bool h2_response_write_data(h2_stream_t * stream, http_response_t * const response, uint8_t * data, const size_t data_length, bool last);
+bool h2_response_write_data(h2_stream_t * stream, http_response_t * const response, uint8_t * data,
+                            const size_t data_length, bool last);
 
 http_request_t * h2_push_init(h2_stream_t * stream, http_request_t * const request);
 
