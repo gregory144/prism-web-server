@@ -29,7 +29,7 @@ static http_parser_settings http_settings = {
 
 bool h1_1_detect_connection(uint8_t * buffer, size_t buffer_length)
 {
-  // check for a line that looks like:
+  // check for a line that vaguely looks like:
   // GET /path HTTP/1.1\r\n
 
   char * end_of_line = strpbrk((char *) buffer, "\r\n");
@@ -38,19 +38,21 @@ bool h1_1_detect_connection(uint8_t * buffer, size_t buffer_length)
     return false;
   }
 
-  char * first_space = strchr((char *) buffer, ' ') + 1;
+  char * first_space = strchr((char *) buffer, ' ');
+  char * after_first_space = first_space ? first_space + 1 : NULL;
 
-  if (!first_space || first_space >= end_of_line) {
+  if (!after_first_space || after_first_space >= end_of_line) {
     return false;
   }
 
-  char * second_space = strchr(first_space, ' ') + 1;
+  char * second_space = strchr(after_first_space, ' ');
+  char * after_second_space = second_space ? second_space + 1 : NULL;
 
-  if (!second_space || second_space >= end_of_line) {
+  if (!after_second_space || after_second_space >= end_of_line) {
     return false;
   }
 
-  if (((uint8_t *) second_space) + 8 >= buffer + buffer_length) {
+  if (((uint8_t *) after_second_space) + 8 >= buffer + buffer_length) {
     return false;
   }
 
@@ -63,7 +65,7 @@ bool h1_1_detect_connection(uint8_t * buffer, size_t buffer_length)
 
 h1_1_t * h1_1_init(void * const data, const char * scheme, const char * hostname, const int port, const h1_1_request_cb request_handler,
                    const h1_1_data_cb data_handler, const h1_1_write_cb writer, const h1_1_close_cb closer,
-                   const h1_1_request_init_cb request_init)
+                   const h1_1_request_init_cb request_init, const h1_1_upgrade_cb upgrade_cb)
 {
   h1_1_t * h1_1 = malloc(sizeof(h1_1_t));
   ASSERT_OR_RETURN_NULL(h1_1);
@@ -79,10 +81,11 @@ h1_1_t * h1_1_init(void * const data, const char * scheme, const char * hostname
   h1_1->writer = writer;
   h1_1->closer = closer;
   h1_1->request_init = request_init;
+  h1_1->upgrade_cb = upgrade_cb;
 
-  h1_1->closing = false;
   h1_1->closed = false;
 
+  h1_1->upgrade_to_h2 = false;
   h1_1->is_1_1 = true;
   h1_1->keep_alive = false;
 
@@ -108,21 +111,14 @@ void h1_1_free(h1_1_t * const h1_1)
   free(h1_1);
 }
 
-static void h1_1_mark_closing(h1_1_t * const h1_1)
-{
-  h1_1->closing = true;
-}
-
 static void h1_1_close(h1_1_t * const h1_1)
 {
   if (h1_1->closed) {
     return;
   }
 
-  if (h1_1->closing) {
-    h1_1->closer(h1_1->data);
-    h1_1->closed = true;
-  }
+  h1_1->closer(h1_1->data);
+  h1_1->closed = true;
 }
 
 void h1_1_finished_writes(h1_1_t * const h1_1)
@@ -133,8 +129,8 @@ void h1_1_finished_writes(h1_1_t * const h1_1)
 
 static int hp_message_begin_cb(http_parser * http_parser)
 {
-  UNUSED(http_parser);
   h1_1_t * h1_1 = http_parser->data;
+  h1_1->upgrade_to_h2 = false;
 
   h1_1->headers = header_list_init(NULL);
 
@@ -261,6 +257,23 @@ static int hp_headers_complete_cb(http_parser * http_parser)
                       ":method", 7, false,
                       method_str, strlen(method_str), false);
 
+  if (http_parser->upgrade) {
+    header_list_linked_field_t * upgrade_header = header_list_get(h1_1->headers, "upgrade", NULL);
+    if (!upgrade_header) {
+      log_error("Parser indicated upgrade without upgrade header");
+      // settings header is required
+      h1_1_close(h1_1);
+    } else {
+      char * protocol = upgrade_header->field.value;
+      log_info("Upgrading to %s", protocol);
+      if (strncmp("h2c-14", protocol, 6) == 0) {
+        h1_1->upgrade_to_h2 = true;
+        // don't try to handle the response yet - it'll get passed on to the h2 handler
+        return 0;
+      }
+    }
+  }
+
   h1_1->request = h1_1->request_init(h1_1->data, h1_1, h1_1->headers);
 
   if (!h1_1->request) {
@@ -281,6 +294,10 @@ static int hp_headers_complete_cb(http_parser * http_parser)
 static int hp_body_cb(http_parser * http_parser, const char * at, size_t length)
 {
   h1_1_t * h1_1 = http_parser->data;
+  if (h1_1->upgrade_to_h2) {
+    // don't try to handle the response yet - it'll get passed on to the h2 handler
+    return 0;
+  }
 
   h1_1->data_handler(h1_1->data, h1_1->request, h1_1->response, (uint8_t *) at, length, false, false);
 
@@ -290,6 +307,10 @@ static int hp_body_cb(http_parser * http_parser, const char * at, size_t length)
 static int hp_message_complete_cb(http_parser * http_parser)
 {
   h1_1_t * h1_1 = http_parser->data;
+  if (h1_1->upgrade_to_h2) {
+    // don't try to handle the response yet - it'll get passed on to the h2 handler
+    return 0;
+  }
 
   // the request may have already been handled
   if (h1_1->request) {
@@ -303,9 +324,21 @@ static void h1_1_parse(h1_1_t * const h1_1, uint8_t * const buffer, const size_t
 {
   size_t ret = http_parser_execute(&h1_1->http_parser, &http_settings, (char *) buffer, len);
 
-  if (h1_1->http_parser.upgrade) {
-    log_error("Client requested upgrade, not yet implemented");
-    abort();
+  if (h1_1->upgrade_to_h2) {
+    // TODO spec requires 1 and only 1 settings header
+    header_list_linked_field_t * settings_header = header_list_get(h1_1->headers, "http2-settings", NULL);
+    if (!settings_header) {
+      log_error("Tried to upgrade without settings header");
+      // settings header is required
+      h1_1_close(h1_1);
+    } else {
+      header_field_t * field = &settings_header->field;
+      char * settings = field->value;
+      log_info("Upgrading to h2: %s", settings);
+      uint8_t * http2_buf_begin = buffer + ret;
+      size_t buf_length = len - ret;
+      h1_1->upgrade_cb(h1_1->data, settings, h1_1->headers, http2_buf_begin, buf_length);
+    }
   } else if (ret != len) {
 
     enum http_errno err = h1_1->http_parser.http_errno;
@@ -316,7 +349,6 @@ static void h1_1_parse(h1_1_t * const h1_1, uint8_t * const buffer, const size_t
       log_error("Could not process all of buffer: %ld / %ld", ret, len);
     }
 
-    h1_1_mark_closing(h1_1);
     h1_1_close(h1_1);
   }
 }
@@ -340,7 +372,6 @@ void h1_1_eof(h1_1_t * const h1_1)
 static void finish_response(h1_1_t * h1_1)
 {
   if (!h1_1->keep_alive) {
-    h1_1_mark_closing(h1_1);
     h1_1_close(h1_1);
   }
 
@@ -352,7 +383,6 @@ static void finish_response(h1_1_t * h1_1)
 bool h1_1_response_write(h1_1_t * h1_1, http_response_t * const response, uint8_t * data, const size_t data_length,
                          bool last)
 {
-  UNUSED(last);
   binary_buffer_reset(h1_1->write_buffer, 0);
 
   char status_line[256];
@@ -375,7 +405,6 @@ bool h1_1_response_write(h1_1_t * h1_1, http_response_t * const response, uint8_
   }
 
   char * connection_header = "connection: close\r\n";
-
   if (h1_1->keep_alive) {
     connection_header = "connection: keep-alive\r\n";
   }

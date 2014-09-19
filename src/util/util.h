@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdarg.h>
+#include <time.h>
 
 #define LOG_LEVEL_INFO true
 #define LOG_DATA false

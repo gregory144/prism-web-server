@@ -413,6 +413,10 @@ h2_t * h2_init(void * const data, const h2_request_cb request_handler,
                const h2_data_cb data_handler, const h2_write_cb writer, const h2_close_cb closer,
                const h2_request_init_cb request_init);
 
+bool h2_settings_apply(h2_t * const h2, char * base64);
+
+bool h2_request_begin(h2_t * const h2, header_list_t * headers, uint8_t * buf, size_t buf_length);
+
 void h2_free(h2_t * const h2);
 
 void h2_read(h2_t * const h2, uint8_t * const buffer, const size_t len);

@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "base64url.h"
 #include "util.h"
 
 #include "h2.h"
@@ -1225,6 +1226,25 @@ static bool h2_trigger_request(h2_t * const h2, h2_stream_t * const stream)
   return true;
 }
 
+bool h2_request_begin(h2_t * const h2, header_list_t * headers, uint8_t * buf, size_t buf_length)
+{
+  h2_stream_t * stream = h2_stream_init(h2, 1);
+  ASSERT_OR_RETURN_FALSE(stream);
+  stream->headers = headers;
+
+  if (!h2_trigger_request(h2, stream)) {
+    return false;
+  }
+
+  if (buf && buf_length > 0) {
+    h2_read(h2, buf, buf_length);
+  } else {
+    h2_flush(h2, 0);
+  }
+
+  return true;
+}
+
 static bool strip_padding(uint8_t ** payload, size_t * payload_length, bool padded_on)
 {
   if (padded_on) {
@@ -1383,7 +1403,7 @@ static bool h2_parse_header_fragments(h2_t * const h2, h2_stream_t * const strea
 
   *header_appender = '\0';
 
-  log_trace("Got headers: (%ld octets), decoding", headers, headers_length);
+  log_trace("Got headers: (%ld octets), decoding", headers_length);
 
   stream->headers = hpack_decode(h2->decoding_context, headers, headers_length);
 
@@ -1490,6 +1510,32 @@ static bool h2_parse_frame_continuation(h2_t * const h2,
   return true;
 }
 
+static bool h2_settings_parse(h2_t * const h2, uint8_t * pos, size_t buf_length)
+{
+  size_t num_settings = buf_length / SETTING_SIZE;
+
+  log_trace("Settings: Found %ld settings", num_settings);
+
+  size_t i;
+
+  for (i = 0; i < num_settings; i++) {
+    uint8_t * curr_setting = pos + (i * SETTING_SIZE);
+    uint16_t setting_id = get_bits16(curr_setting, 0xFFFF);
+    uint32_t setting_value = get_bits32(curr_setting + SETTING_ID_SIZE, 0xFFFFFFFF);
+
+    if (!h2_setting_set(h2, setting_id, setting_value)) {
+      return false;
+    }
+  }
+
+  h2->received_settings = true;
+
+  log_trace("Settings: %ld, %d, %ld, %ld", h2->header_table_size, h2->enable_push,
+            h2->max_concurrent_streams, h2->initial_window_size);
+
+  return true;
+}
+
 static bool h2_parse_frame_settings(h2_t * const h2, const h2_frame_settings_t * const frame)
 {
 
@@ -1510,21 +1556,7 @@ static bool h2_parse_frame_settings(h2_t * const h2, const h2_frame_settings_t *
 
   } else {
     uint8_t * pos = h2->buffer + h2->buffer_position;
-    size_t num_settings = frame->length / SETTING_SIZE;
-
-    log_trace("Settings: Found #%ld settings", num_settings);
-
-    size_t i;
-
-    for (i = 0; i < num_settings; i++) {
-      uint8_t * curr_setting = pos + (i * SETTING_SIZE);
-      uint16_t setting_id = get_bits16(curr_setting, 0xFFFF);
-      uint32_t setting_value = get_bits32(curr_setting + SETTING_ID_SIZE, 0xFFFFFFFF);
-
-      if (!h2_setting_set(h2, setting_id, setting_value)) {
-        return false;
-      }
-    }
+    h2_settings_parse(h2, pos, frame->length);
 
     h2->received_settings = true;
 
@@ -1772,6 +1804,19 @@ static bool is_valid_frame(h2_t * const h2, h2_frame_t * frame)
   return true;
 }
 
+bool h2_settings_apply(h2_t * const h2, char * base64)
+{
+  binary_buffer_t buf;
+  binary_buffer_init(&buf, 0);
+
+  base64url_decode(&buf, base64);
+
+  h2_settings_parse(h2, binary_buffer_start(&buf), binary_buffer_size(&buf));
+  h2->received_settings = true;
+
+  return true;
+}
+
 /**
  * Processes the next frame in the buffer.
  *
@@ -1906,7 +1951,7 @@ void h2_read(h2_t * const h2, uint8_t * const buffer, const size_t len)
   size_t unprocessed_bytes = h2->buffer_length;
 
   if (unprocessed_bytes > 0) {
-    log_trace("Appending new data to uncprocessed bytes %ld + %ld = %ld", unprocessed_bytes, len, unprocessed_bytes + len);
+    log_trace("Appending new data to unprocessed bytes %ld + %ld = %ld", unprocessed_bytes, len, unprocessed_bytes + len);
     // there are still unprocessed bytes
     h2->buffer = realloc(h2->buffer, unprocessed_bytes + len);
 
