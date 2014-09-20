@@ -206,6 +206,12 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
   }
 
   switch (connection->protocol) {
+    case NOT_SELECTED:
+      log_error("Unrecognized protocol");
+      free(buffer);
+      connection->closer(connection->data);
+      break;
+
     case H2:
       h2_read((h2_t *) connection->handler, buffer, len);
       break;
