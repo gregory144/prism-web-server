@@ -27,7 +27,7 @@
 const char * H2_CONNECTION_PREFACE = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 const size_t H2_CONNECTION_PREFACE_LENGTH = 24;
 
-char * h2_errors[] = {
+static const char * const H2_ERRORS[] = {
   "NO_ERROR",
   "PROTOCOL_ERROR",
   "INTERNAL_ERROR",
@@ -41,6 +41,15 @@ char * h2_errors[] = {
   "CONNECT_ERROR",
   "ENHANCE_YOUR_CALM",
   "INADEQUATE_SECURITY"
+};
+
+static const char * const HTTP2_CIPHERS[] = {
+  "ECDHE-RSA-AES128-GCM-SHA256",
+  "ECDHE-ECDSA-AES128-GCM-SHA256",
+  "ECDHE-RSA-AES256-GCM-SHA384",
+  "ECDHE-ECDSA-AES256-GCM-SHA384",
+  "DHE-RSA-AES128-GCM-SHA256"
+  "DHE-DSS-AES128-GCM-SHA256"
 };
 
 typedef struct {
@@ -342,9 +351,9 @@ static void h2_stream_mark_closing(h2_t * const h2, h2_stream_t * const stream)
 
 }
 
-h2_t * h2_init(void * const data, const h2_request_cb request_handler,
-               const h2_data_cb data_handler, const h2_write_cb writer, const h2_close_cb closer,
-               const h2_request_init_cb request_init)
+h2_t * h2_init(void * const data, const char * tls_version, const char * cipher, int cipher_key_size_in_bits,
+               const h2_request_cb request_handler, const h2_data_cb data_handler, const h2_write_cb writer,
+               const h2_close_cb closer, const h2_request_init_cb request_init)
 {
   h2_t * h2 = malloc(sizeof(h2_t));
   ASSERT_OR_RETURN_NULL(h2);
@@ -357,6 +366,10 @@ h2_t * h2_init(void * const data, const h2_request_cb request_handler,
   h2->closer = closer;
   h2->request_init = request_init;
 
+  h2->tls_version = tls_version;
+  h2->cipher = cipher;
+  h2->cipher_key_size_in_bits = cipher_key_size_in_bits;
+  h2->verified_tls_settings = false;
   h2->received_connection_preface = false;
   h2->received_settings = false;
   h2->last_stream_id = 0;
@@ -1638,7 +1651,7 @@ static bool h2_parse_frame_rst_stream(h2_t * const h2, h2_frame_rst_stream_t * c
   frame->error_code = get_bits32(buf, 0xFFFFFFFF);
 
   log_warning("Received reset stream: stream #%d, error code: %s (%d)",
-              frame->stream_id, h2_errors[frame->error_code], frame->error_code);
+              frame->stream_id, H2_ERRORS[frame->error_code], frame->error_code);
 
   h2_stream_t * stream = h2_stream_get(h2, frame->stream_id);
 
@@ -1682,12 +1695,12 @@ static bool h2_parse_frame_goaway(h2_t * const h2, h2_frame_goaway_t * const fra
 
   if (frame->error_code == H2_ERROR_NO_ERROR) {
     log_trace("Received goaway, last stream: %d, error code: %s (%d), debug_data: %s",
-              frame->last_stream_id, h2_errors[frame->error_code],
+              frame->last_stream_id, H2_ERRORS[frame->error_code],
               frame->error_code, frame->debug_data);
     h2_mark_closing(h2);
   } else {
     log_error("Received goaway, last stream: %d, error code: %s (%d), debug_data: %s",
-              frame->last_stream_id, h2_errors[frame->error_code],
+              frame->last_stream_id, H2_ERRORS[frame->error_code],
               frame->error_code, frame->debug_data);
   }
 
@@ -1813,6 +1826,40 @@ bool h2_settings_apply(h2_t * const h2, char * base64)
 
   h2_settings_parse(h2, binary_buffer_start(&buf), binary_buffer_size(&buf));
   h2->received_settings = true;
+
+  return true;
+}
+
+static bool h2_verify_tls_settings(h2_t * const h2)
+{
+  if (h2->tls_version) {
+    // TODO support newer versions?
+    log_trace("Comparing: %s == %s", h2->tls_version, "TLSv1.2");
+
+    if (strcmp(h2->tls_version, "TLSv1.2") != 0) {
+      return false;
+    }
+  }
+
+  if (h2->cipher) {
+    bool match = false;
+
+    for (size_t i = 0; i < sizeof(HTTP2_CIPHERS); i++) {
+      log_trace("Comparing: %s == %s", h2->cipher, HTTP2_CIPHERS[i]);
+
+      if (strcmp(h2->cipher, HTTP2_CIPHERS[i]) == 0) {
+        match = true;
+        break;
+      }
+    }
+
+    if (!match) {
+      return false;
+    }
+  }
+
+  // TODO check key size
+  // TODO check for SNI extension
 
   return true;
 }
@@ -1970,6 +2017,16 @@ void h2_read(h2_t * const h2, uint8_t * const buffer, const size_t len)
   }
 
   h2->buffer_position = 0;
+
+  if (!h2->verified_tls_settings) {
+    if (h2_verify_tls_settings(h2)) {
+      h2->verified_tls_settings = true;
+    } else {
+      emit_error_and_close(h2, 0, H2_ERROR_INADEQUATE_SECURITY, "Inadequate security");
+      free(buffer);
+      return;
+    }
+  }
 
   if (!h2->received_connection_preface) {
     if (h2_recognize_connection_preface(h2)) {

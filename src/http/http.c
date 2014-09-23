@@ -17,6 +17,7 @@
 #include "response.h"
 
 #define MAX_CONNECTION_BUFFER_SIZE 0x1000000 // 2^24
+#define MAX_DETECT_LENGTH 4096
 
 static void http_internal_request_cb(void * data, http_request_t * request, http_response_t * response)
 {
@@ -40,6 +41,14 @@ static bool http_internal_write_cb(void * data, uint8_t * buf, size_t len)
   return connection->writer(connection->data, buf, len);
 }
 
+static void http_connection_close(http_connection_t * connection)
+{
+  if (!connection->closed) {
+    connection->closer(connection->data);
+    connection->closed = true;
+  }
+}
+
 static void http_internal_close_cb(void * data)
 {
   http_connection_t * connection = data;
@@ -58,8 +67,10 @@ static http_request_t * http_internal_request_init_cb(void * data, void * req_us
 static void set_protocol_h2(http_connection_t * connection)
 {
   connection->protocol = H2;
-  connection->handler = h2_init(connection, http_internal_request_cb, http_internal_data_cb,
-                                http_internal_write_cb, http_internal_close_cb, http_internal_request_init_cb);
+  connection->handler = h2_init(connection, connection->tls_version, connection->cipher,
+                                connection->cipher_key_size_in_bits,
+                                http_internal_request_cb, http_internal_data_cb, http_internal_write_cb, http_internal_close_cb,
+                                http_internal_request_init_cb);
 }
 
 static bool send_upgrade_response(http_connection_t * connection)
@@ -70,7 +81,8 @@ static bool send_upgrade_response(http_connection_t * connection)
   return connection->writer(connection->data, (uint8_t *) resp, resp_length);
 }
 
-static bool http_internal_upgrade_cb(void * data, char * settings_base64, header_list_t * headers, uint8_t * buffer, size_t buffer_length)
+static bool http_internal_upgrade_cb(void * data, char * settings_base64, header_list_t * headers, uint8_t * buffer,
+                                     size_t buffer_length)
 {
   http_connection_t * connection = data;
 
@@ -98,8 +110,8 @@ static void set_protocol_h1_1(http_connection_t * connection)
 {
   connection->protocol = H1_1;
   connection->handler = h1_1_init(connection, connection->scheme, connection->hostname, connection->port,
-      http_internal_request_cb, http_internal_data_cb, http_internal_write_cb, http_internal_close_cb,
-      http_internal_request_init_cb, http_internal_upgrade_cb);
+                                  http_internal_request_cb, http_internal_data_cb, http_internal_write_cb, http_internal_close_cb,
+                                  http_internal_request_init_cb, http_internal_upgrade_cb);
 }
 
 http_connection_t * http_connection_init(void * const data, const char * scheme, const char * hostname, const int port,
@@ -120,7 +132,14 @@ http_connection_t * http_connection_init(void * const data, const char * scheme,
   connection->closer = closer;
 
   connection->protocol = NOT_SELECTED;
+  connection->buffer = NULL;
   connection->handler = NULL;
+
+  connection->tls_version = NULL;
+  connection->cipher = NULL;
+  connection->cipher_key_size_in_bits = -1;
+
+  connection->closed = false;
 
   return connection;
 }
@@ -143,6 +162,14 @@ void http_connection_set_protocol(http_connection_t * const connection, const ch
   }
 }
 
+void http_connection_set_tls_details(http_connection_t * const connection, const char * tls_version,
+                                     const char * cipher, const int cipher_key_size_in_bits)
+{
+  connection->tls_version = tls_version;
+  connection->cipher = cipher;
+  connection->cipher_key_size_in_bits = cipher_key_size_in_bits;;
+}
+
 void http_connection_free(http_connection_t * const connection)
 {
   switch (connection->protocol) {
@@ -160,6 +187,10 @@ void http_connection_free(http_connection_t * const connection)
 
     default:
       abort();
+  }
+
+  if (connection->buffer) {
+    binary_buffer_free(connection->buffer);
   }
 
   free(connection);
@@ -185,13 +216,60 @@ void http_finished_writes(http_connection_t * const connection)
   }
 }
 
-static void detect_protocol(http_connection_t * connection, uint8_t * const buffer, const size_t len)
+/**
+ * Detects the protocol of the data in the given buffer and Sets connection->protocol.
+ *
+ * Returns false if the protocol could not be detected and getting more data will not help.
+ */
+static bool detect_protocol(http_connection_t * connection, uint8_t * const buffer, const size_t len)
 {
-  if (h2_detect_connection(buffer, len)) {
-    set_protocol_h2(connection);
-  } else if (h1_1_detect_connection(buffer, len)) {
-    set_protocol_h1_1(connection);
+  uint8_t * full_buffer = buffer;
+  size_t full_buffer_length = len;
+  bool fail_hard = false;
+
+  if (connection->buffer) {
+    // if we've already tried to detect the protocol, but it failed because it didn't
+    // have enough data, append the input to the previous data and retry
+    binary_buffer_write(connection->buffer, buffer, len);
+
+    full_buffer = binary_buffer_start(connection->buffer);
+    full_buffer_length = binary_buffer_size(connection->buffer);
+
+    // if, the data length exceeds MAX_DETECT_LENGTH, give up
+    // (to prevent DoS attacks)
+    if (full_buffer_length > MAX_DETECT_LENGTH) {
+      fail_hard = true;
+    }
   }
+
+  bool detected = false;
+
+  if (h2_detect_connection(full_buffer, full_buffer_length)) {
+    set_protocol_h2(connection);
+    detected = true;
+  } else if (h1_1_detect_connection(full_buffer, full_buffer_length)) {
+    set_protocol_h1_1(connection);
+    detected = true;
+  }
+
+  if (!detected) {
+    if (fail_hard) {
+      // fail if we've read a lot of data and still can't detect
+      // the protocol
+      return false;
+    }
+
+    // remember the existing data so we can use it to
+    // recheck in the next read
+    if (connection->buffer == NULL) {
+      connection->buffer = malloc(sizeof(binary_buffer_t));
+      binary_buffer_init(connection->buffer, len);
+
+      binary_buffer_write(connection->buffer, buffer, len);
+    }
+  }
+
+  return true;
 }
 
 /**
@@ -200,24 +278,36 @@ static void detect_protocol(http_connection_t * connection, uint8_t * const buff
  */
 void http_connection_read(http_connection_t * const connection, uint8_t * const buffer, const size_t len)
 {
+  uint8_t * read_buffer = buffer;
+  size_t read_buffer_length = len;
+
   if (connection->protocol == NOT_SELECTED) {
     // auto select protocol
-    detect_protocol(connection, buffer, len);
+    if (!detect_protocol(connection, buffer, len)) {
+      log_error("Unrecognized protocol");
+      free(buffer);
+      http_connection_close(connection);
+      return;
+    } else if (connection->buffer) {
+      free(buffer);
+
+      read_buffer_length = binary_buffer_size(connection->buffer);
+      read_buffer = malloc(read_buffer_length);
+      memcpy(read_buffer, binary_buffer_start(connection->buffer), read_buffer_length);
+    }
   }
 
   switch (connection->protocol) {
     case NOT_SELECTED:
-      log_error("Unrecognized protocol");
-      free(buffer);
-      connection->closer(connection->data);
+      free(read_buffer);
       break;
 
     case H2:
-      h2_read((h2_t *) connection->handler, buffer, len);
+      h2_read((h2_t *) connection->handler, read_buffer, read_buffer_length);
       break;
 
     case H1_1:
-      h1_1_read((h1_1_t *) connection->handler, buffer, len);
+      h1_1_read((h1_1_t *) connection->handler, read_buffer, read_buffer_length);
       break;
 
     default:

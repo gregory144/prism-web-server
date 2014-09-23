@@ -35,6 +35,9 @@ typedef struct {
   void * data;
 
   const char * selected_protocol;
+  const char * selected_tls_version;
+  const char * selected_cipher;
+  int cipher_key_size_in_bits;
 
   SSL * ssl;
   BIO * app_bio;

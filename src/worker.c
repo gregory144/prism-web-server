@@ -159,6 +159,11 @@ static void worker_parse(client_t * client, uint8_t * buffer, size_t length)
 {
   client->octets_read += length;
 
+  if (client->tls_ctx && client->tls_ctx->selected_tls_version) {
+    http_connection_set_tls_details(client->connection, client->tls_ctx->selected_tls_version,
+                                    client->tls_ctx->selected_cipher, client->tls_ctx->cipher_key_size_in_bits);
+  }
+
   if (!client->selected_protocol && client->tls_ctx && client->tls_ctx->selected_protocol) {
     http_connection_set_protocol(client->connection, client->tls_ctx->selected_protocol);
     client->selected_protocol = true;

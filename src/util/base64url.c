@@ -39,7 +39,7 @@ void base64url_decode(binary_buffer_t * buf, char * base64)
   size_t in_length = strlen(base64);
 
   // base64 converts 3 octets into 4 encoded characters
-  for (size_t i = 0; i < in_length; i+=4) {
+  for (size_t i = 0; i < in_length; i += 4) {
     // d1, d2, d3 are the decoded octets
     //       d1              d2              d3
     // 0 0 0 0 0 0 0 0|0 0 0 0 0 0 0 0|0 0 0 0 0 0 0 0
@@ -59,7 +59,7 @@ void base64url_decode(binary_buffer_t * buf, char * base64)
     uint8_t sextet4 = i + 3 < in_length ? decoding_table[in[i + 3]] : 0;
 
     uint32_t triple = (sextet1 << 3 * 6) + (sextet2 << 2 * 6)
-      + (sextet3 << 1 * 6) + (sextet4 << 0 * 6);
+                      + (sextet3 << 1 * 6) + (sextet4 << 0 * 6);
 
     // a single remaining encoded character is not possible
     // 2 remaining chars = 1 octet output

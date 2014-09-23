@@ -17,7 +17,7 @@
 SSL_CTX * global_ssl_ctx;
 
 static const char * const DEFAULT_CIPHERS =
-  "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK";
+  "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128:AES256:AES:DES-CBC3-SHA:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK";
 
 #define HTTP2_VERSION_LENGTH 5
 #define HTTP1_1_VERSION_LENGTH 8
@@ -253,15 +253,12 @@ static void tls_thread_cleanup(void)
 
 tls_server_ctx_t * tls_server_init(char * key_file, char * cert_file)
 {
-  SSL_CTX * ssl_ctx = SSL_CTX_new(TLSv1_2_server_method());
+  SSL_CTX * ssl_ctx = SSL_CTX_new(SSLv23_server_method());
 
   global_ssl_ctx = ssl_ctx;
 
   SSL_CTX_set_options(ssl_ctx,
                       SSL_OP_NO_SSLv2 |
-                      SSL_OP_NO_SSLv3 |
-                      SSL_OP_NO_TLSv1 |
-                      SSL_OP_NO_TLSv1_1 |
                       SSL_OP_ALL |
                       SSL_OP_NO_COMPRESSION |
                       SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION |
@@ -476,6 +473,18 @@ static bool tls_update(tls_client_ctx_t * client_ctx)
 
 }
 
+bool tls_set_version(tls_client_ctx_t * client_ctx)
+{
+  log_debug("SSL version: %s", SSL_get_version(client_ctx->ssl));
+  log_debug("SSL cipher: %s, %d", SSL_get_cipher_name(client_ctx->ssl), SSL_get_cipher_bits(client_ctx->ssl, NULL));
+
+  client_ctx->selected_tls_version = SSL_get_version(client_ctx->ssl);
+  client_ctx->selected_cipher = SSL_get_cipher_name(client_ctx->ssl);
+  client_ctx->cipher_key_size_in_bits = SSL_get_cipher_bits(client_ctx->ssl, NULL);
+
+  return true;
+}
+
 bool tls_set_protocol(tls_client_ctx_t * client_ctx)
 {
   const unsigned char * proto = NULL;
@@ -567,6 +576,8 @@ bool tls_decrypt_data_and_pass_to_app(tls_client_ctx_t * client_ctx, uint8_t * b
       // success
       client_ctx->handshake_complete = true;
       log_trace("Handshake complete");
+
+      tls_set_version(client_ctx);
 
       tls_set_protocol(client_ctx);
 

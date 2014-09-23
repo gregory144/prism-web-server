@@ -27,44 +27,152 @@ static http_parser_settings http_settings = {
   .on_message_complete = hp_message_complete_cb,
 };
 
+enum detect_state {
+  METHOD,
+  PATH,
+  VERSION_H,
+  VERSION_HT,
+  VERSION_HTT,
+  VERSION_HTTP,
+  VERSION_HTTP_SLASH,
+  MAJOR,
+  VERSION_SEP,
+  MINOR,
+  NEWLINE
+};
+
 bool h1_1_detect_connection(uint8_t * buffer, size_t buffer_length)
 {
   // check for a line that vaguely looks like:
   // GET /path HTTP/1.1\r\n
 
-  char * end_of_line = strpbrk((char *) buffer, "\r\n");
+  enum detect_state state = METHOD;
 
-  if (end_of_line == NULL) {
-    return false;
-  }
+  uint8_t * curr = buffer;
 
-  char * first_space = strchr((char *) buffer, ' ');
-  char * after_first_space = first_space ? first_space + 1 : NULL;
+  while (curr < buffer + buffer_length) {
+    switch (state) {
+      case METHOD: {
+        // find the first space
+        if (curr[0] == ' ') {
+          state = PATH;
+        }
 
-  if (!after_first_space || after_first_space >= end_of_line) {
-    return false;
-  }
+        break;
+      }
 
-  char * second_space = strchr(after_first_space, ' ');
-  char * after_second_space = second_space ? second_space + 1 : NULL;
+      case PATH: {
+        // find the second space
+        if (curr[0] == ' ') {
+          state = VERSION_H;
+        }
 
-  if (!after_second_space || after_second_space >= end_of_line) {
-    return false;
-  }
+        break;
+      }
 
-  if (((uint8_t *) after_second_space) + 8 >= buffer + buffer_length) {
-    return false;
-  }
+      case VERSION_H: {
+        if (curr[0] == 'H') {
+          state = VERSION_HT;
+        } else {
+          return false;
+        }
 
-  if (strncasecmp(second_space, "http/1.1", 8) == 0 || strncasecmp(second_space, "http/1.0", 8) == 0) {
-    return second_space[8] == '\r' || second_space[8] == '\n';
+        break;
+      }
+
+      case VERSION_HT: {
+        if (curr[0] == 'T') {
+          state = VERSION_HTT;
+        } else {
+          return false;
+        }
+
+        break;
+      }
+
+      case VERSION_HTT: {
+        if (curr[0] == 'T') {
+          state = VERSION_HTTP;
+        } else {
+          return false;
+        }
+
+        break;
+      }
+
+      case VERSION_HTTP: {
+        if (curr[0] == 'P') {
+          state = VERSION_HTTP_SLASH;
+        } else {
+          return false;
+        }
+
+        break;
+      }
+
+      case VERSION_HTTP_SLASH: {
+        if (curr[0] == '/') {
+          state = MAJOR;
+        } else {
+          return false;
+        }
+
+        break;
+      }
+
+      case MAJOR: {
+        if (curr[0] == '1') {
+          state = VERSION_SEP;
+        } else {
+          return false;
+        }
+
+        break;
+      }
+
+      case VERSION_SEP: {
+        if (curr[0] == '.') {
+          state = MINOR;
+        } else {
+          return false;
+        }
+
+        break;
+      }
+
+      case MINOR: {
+        if (curr[0] == '1' || curr[0] == '0') {
+          state = NEWLINE;
+        } else {
+          return false;
+        }
+
+        break;
+      }
+
+      case NEWLINE: {
+        if (curr[0] == '\r' || curr[0] == '\n') {
+          return true;
+        } else {
+          return false;
+        }
+
+        break;
+      }
+
+      default:
+        return false;
+    }
+
+    curr++;
   }
 
   return false;
 }
 
-h1_1_t * h1_1_init(void * const data, const char * scheme, const char * hostname, const int port, const h1_1_request_cb request_handler,
-                   const h1_1_data_cb data_handler, const h1_1_write_cb writer, const h1_1_close_cb closer,
+h1_1_t * h1_1_init(void * const data, const char * scheme, const char * hostname, const int port,
+                   const h1_1_request_cb request_handler, const h1_1_data_cb data_handler,
+                   const h1_1_write_cb writer, const h1_1_close_cb closer,
                    const h1_1_request_init_cb request_init, const h1_1_upgrade_cb upgrade_cb)
 {
   h1_1_t * h1_1 = malloc(sizeof(h1_1_t));
@@ -259,6 +367,7 @@ static int hp_headers_complete_cb(http_parser * http_parser)
 
   if (http_parser->upgrade) {
     header_list_linked_field_t * upgrade_header = header_list_get(h1_1->headers, "upgrade", NULL);
+
     if (!upgrade_header) {
       log_error("Parser indicated upgrade without upgrade header");
       // settings header is required
@@ -266,6 +375,7 @@ static int hp_headers_complete_cb(http_parser * http_parser)
     } else {
       char * protocol = upgrade_header->field.value;
       log_info("Upgrading to %s", protocol);
+
       if (strncmp("h2c-14", protocol, 6) == 0) {
         h1_1->upgrade_to_h2 = true;
         // don't try to handle the response yet - it'll get passed on to the h2 handler
@@ -294,6 +404,7 @@ static int hp_headers_complete_cb(http_parser * http_parser)
 static int hp_body_cb(http_parser * http_parser, const char * at, size_t length)
 {
   h1_1_t * h1_1 = http_parser->data;
+
   if (h1_1->upgrade_to_h2) {
     // don't try to handle the response yet - it'll get passed on to the h2 handler
     return 0;
@@ -307,6 +418,7 @@ static int hp_body_cb(http_parser * http_parser, const char * at, size_t length)
 static int hp_message_complete_cb(http_parser * http_parser)
 {
   h1_1_t * h1_1 = http_parser->data;
+
   if (h1_1->upgrade_to_h2) {
     // don't try to handle the response yet - it'll get passed on to the h2 handler
     return 0;
@@ -327,6 +439,7 @@ static void h1_1_parse(h1_1_t * const h1_1, uint8_t * const buffer, const size_t
   if (h1_1->upgrade_to_h2) {
     // TODO spec requires 1 and only 1 settings header
     header_list_linked_field_t * settings_header = header_list_get(h1_1->headers, "http2-settings", NULL);
+
     if (!settings_header) {
       log_error("Tried to upgrade without settings header");
       // settings header is required
@@ -405,6 +518,7 @@ bool h1_1_response_write(h1_1_t * h1_1, http_response_t * const response, uint8_
   }
 
   char * connection_header = "connection: close\r\n";
+
   if (h1_1->keep_alive) {
     connection_header = "connection: keep-alive\r\n";
   }

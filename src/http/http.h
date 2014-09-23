@@ -36,6 +36,9 @@ typedef struct {
   int port;
 
   enum http_protocol_e protocol;
+  const char * tls_version;
+  const char * cipher;
+  int cipher_key_size_in_bits;
 
   write_cb writer;
   close_cb closer;
@@ -43,6 +46,10 @@ typedef struct {
   data_cb data_handler;
 
   void * handler;
+
+  bool closed;
+
+  binary_buffer_t * buffer;
 
 } http_connection_t;
 
@@ -58,6 +65,9 @@ http_connection_t * http_connection_init(void * const data, const char * scheme,
     const request_cb request_handler, const data_cb data_handler, const write_cb writer, const close_cb closer);
 
 void http_connection_set_protocol(http_connection_t * const connection, const char * selected_protocol);
+
+void http_connection_set_tls_details(http_connection_t * const connection, const char * tls_version,
+                                     const char * cipher, const int key_size_in_bits);
 
 void http_connection_free(http_connection_t * const connection);
 

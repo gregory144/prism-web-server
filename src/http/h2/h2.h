@@ -358,8 +358,16 @@ struct h2_s {
   h2_request_init_cb request_init;
 
   /**
+   * TLS settings
+   */
+  const char * tls_version;
+  const char * cipher;
+  int cipher_key_size_in_bits;
+
+  /**
    * connection state
    */
+  bool verified_tls_settings;
   bool received_connection_preface;
   bool received_settings;
   // the next stream id that can be used to start a pushed stream
@@ -409,9 +417,9 @@ struct h2_s {
 
 bool h2_detect_connection(uint8_t * buffer, size_t len);
 
-h2_t * h2_init(void * const data, const h2_request_cb request_handler,
-               const h2_data_cb data_handler, const h2_write_cb writer, const h2_close_cb closer,
-               const h2_request_init_cb request_init);
+h2_t * h2_init(void * const data, const char * tls_version, const char * cipher, int cipher_key_size_in_bits,
+               const h2_request_cb request_handler, const h2_data_cb data_handler, const h2_write_cb writer,
+               const h2_close_cb closer, const h2_request_init_cb request_init);
 
 bool h2_settings_apply(h2_t * const h2, char * base64);
 

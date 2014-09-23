@@ -18,6 +18,9 @@
  */
 size_t roundup_to_power_of_2(size_t v)
 {
+  if (v == 1) {
+    return 1;
+  }
 
   // TODO - does this work for values greater than 2^32?
 
