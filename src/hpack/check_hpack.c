@@ -56,6 +56,7 @@ void teardown_encoder()
 {
   if (buffer) {
     binary_buffer_free(buffer);
+    free(buffer);
   }
 }
 
@@ -111,6 +112,7 @@ START_TEST(test_hpack_encode_and_decode_smaller_numbers)
     ck_assert_int_eq(decoded.value, i);
 
     binary_buffer_free(buffer);
+    free(buffer);
     buffer = NULL;
   }
 }
@@ -131,6 +133,7 @@ START_TEST(test_hpack_encode_and_decode_small_numbers)   // 1 - 2^16
     ck_assert_int_eq(decoded.value, i);
 
     binary_buffer_free(buffer);
+    free(buffer);
     buffer = NULL;
   }
 }
@@ -155,6 +158,7 @@ START_TEST(test_hpack_encode_and_decode_large_numbers)
     value = value * multiplier + addand;
 
     binary_buffer_free(buffer);
+    free(buffer);
     buffer = NULL;
   }
 }

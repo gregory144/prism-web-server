@@ -16,6 +16,7 @@ void teardown()
 {
   if (buffer) {
     binary_buffer_free(buffer);
+    free(buffer);
   }
 }
 

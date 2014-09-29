@@ -191,6 +191,7 @@ void http_connection_free(http_connection_t * const connection)
 
   if (connection->buffer) {
     binary_buffer_free(connection->buffer);
+    free(connection->buffer);
   }
 
   free(connection);

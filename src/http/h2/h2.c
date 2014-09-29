@@ -439,7 +439,9 @@ void h2_free(h2_t * const h2)
   hash_table_free(h2->streams);
   hpack_context_free(h2->encoding_context);
   hpack_context_free(h2->decoding_context);
+
   binary_buffer_free(h2->write_buffer);
+  free(h2->write_buffer);
 
   free(h2);
 }
@@ -479,7 +481,6 @@ static bool h2_flush(const h2_t * const h2, size_t new_length)
     h2->writer(h2->data, buf, buf_length);
 
     ASSERT_OR_RETURN_FALSE(binary_buffer_reset(h2->write_buffer, new_length));
-
   }
 
   return true;
@@ -1826,6 +1827,8 @@ bool h2_settings_apply(h2_t * const h2, char * base64)
 
   h2_settings_parse(h2, binary_buffer_start(&buf), binary_buffer_size(&buf));
   h2->received_settings = true;
+
+  binary_buffer_free(&buf);
 
   return true;
 }

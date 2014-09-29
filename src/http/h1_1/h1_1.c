@@ -214,6 +214,7 @@ void h1_1_free(h1_1_t * const h1_1)
 {
   if (h1_1->write_buffer) {
     binary_buffer_free(h1_1->write_buffer);
+    free(h1_1->write_buffer);
   }
 
   free(h1_1);
@@ -374,7 +375,7 @@ static int hp_headers_complete_cb(http_parser * http_parser)
       h1_1_close(h1_1);
     } else {
       char * protocol = upgrade_header->field.value;
-      log_info("Upgrading to %s", protocol);
+      log_debug("Upgrading to %s", protocol);
 
       if (strncmp("h2c-14", protocol, 6) == 0) {
         h1_1->upgrade_to_h2 = true;
@@ -447,7 +448,7 @@ static void h1_1_parse(h1_1_t * const h1_1, uint8_t * const buffer, const size_t
     } else {
       header_field_t * field = &settings_header->field;
       char * settings = field->value;
-      log_info("Upgrading to h2: %s", settings);
+      log_trace("Upgrading to h2: %s", settings);
       uint8_t * http2_buf_begin = buffer + ret;
       size_t buf_length = len - ret;
       h1_1->upgrade_cb(h1_1->data, settings, h1_1->headers, http2_buf_begin, buf_length);

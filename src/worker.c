@@ -137,7 +137,6 @@ static bool worker_http_cb_write(void * data, uint8_t * buf, size_t length)
   server_t * server = client->server;
 
   if (client->eof) {
-    free(buf);
     return false;
   }
 
