@@ -396,7 +396,7 @@ struct h2_s {
   size_t buffer_position;
   bool reading_from_client;
 
-  binary_buffer_t * write_buffer;
+  binary_buffer_t write_buffer;
 
   /**
    * Connection settings

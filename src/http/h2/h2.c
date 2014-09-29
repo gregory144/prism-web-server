@@ -401,7 +401,6 @@ h2_t * h2_init(void * const data, const char * tls_version, const char * cipher,
   h2->encoding_context = NULL;
   h2->decoding_context = NULL;
   h2->streams = NULL;
-  h2->write_buffer = NULL;
 
   h2->encoding_context = hpack_context_init(DEFAULT_HEADER_TABLE_SIZE);
 
@@ -424,12 +423,7 @@ h2_t * h2_init(void * const data, const char * tls_version, const char * cipher,
     return NULL;
   }
 
-  h2->write_buffer = binary_buffer_init(NULL, 0);
-
-  if (!h2->write_buffer) {
-    h2_free(h2);
-    return NULL;
-  }
+  binary_buffer_init(&h2->write_buffer, 0);
 
   return h2;
 }
@@ -440,8 +434,7 @@ void h2_free(h2_t * const h2)
   hpack_context_free(h2->encoding_context);
   hpack_context_free(h2->decoding_context);
 
-  binary_buffer_free(h2->write_buffer);
-  free(h2->write_buffer);
+  binary_buffer_free(&h2->write_buffer);
 
   free(h2);
 }
@@ -473,14 +466,15 @@ void h2_finished_writes(h2_t * const h2)
 static bool h2_flush(const h2_t * const h2, size_t new_length)
 {
 
-  size_t buf_length = binary_buffer_size(h2->write_buffer);
+  size_t buf_length = binary_buffer_size(&h2->write_buffer);
 
   if (buf_length > 0) {
 
-    uint8_t * buf = binary_buffer_start(h2->write_buffer);
+    uint8_t * buf = binary_buffer_start(&h2->write_buffer);
     h2->writer(h2->data, buf, buf_length);
 
-    ASSERT_OR_RETURN_FALSE(binary_buffer_reset(h2->write_buffer, new_length));
+    binary_buffer_t * const wb = (binary_buffer_t * const) &h2->write_buffer;
+    ASSERT_OR_RETURN_FALSE(binary_buffer_reset(wb, new_length));
   }
 
   return true;
@@ -489,7 +483,7 @@ static bool h2_flush(const h2_t * const h2, size_t new_length)
 static bool h2_write(const h2_t * const h2, uint8_t * const buf, size_t buf_length)
 {
 
-  size_t existing_length = binary_buffer_size(h2->write_buffer);
+  size_t existing_length = binary_buffer_size(&h2->write_buffer);
 
   if (existing_length + buf_length >= MAX_CONNECTION_BUFFER_SIZE) {
     // if the write buffer doesn't have enough space to accommodate the new buffer then
@@ -505,11 +499,12 @@ static bool h2_write(const h2_t * const h2, uint8_t * const buf, size_t buf_leng
     return h2->writer(h2->data, buf, buf_length);
   }
 
+  binary_buffer_t * const wb = (binary_buffer_t * const) &h2->write_buffer;
   ASSERT_OR_RETURN_FALSE(
-    binary_buffer_write(h2->write_buffer, buf, buf_length)
+    binary_buffer_write(wb, buf, buf_length)
   );
 
-  size_t new_length = binary_buffer_size(h2->write_buffer);
+  size_t new_length = binary_buffer_size(&h2->write_buffer);
 
   if (new_length + buf_length >= MAX_CONNECTION_BUFFER_SIZE) {
     ASSERT_OR_RETURN_FALSE(
