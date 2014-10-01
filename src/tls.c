@@ -33,7 +33,7 @@ static const unsigned char supported_protocols[] = {
   HTTP2_VERSION_LENGTH, 'h', '2', '-', '1', '4',
   HTTP1_1_VERSION_LENGTH, 'h', 't', 't', 'p', '/', '1', '.', '1'
 };
-const unsigned char supported_protocols_length = HTTP2_VERSION_LENGTH + HTTP1_1_VERSION_LENGTH + 1;
+const unsigned char supported_protocols_length = HTTP2_VERSION_LENGTH + HTTP1_1_VERSION_LENGTH + 2;
 
 bool tls_init()
 {
