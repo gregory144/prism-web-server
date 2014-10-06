@@ -18,7 +18,7 @@
 #include "multimap.h"
 #include "http/http.h"
 
-#define READ_BUF_SIZE 4096 // 2^12
+#define READ_BUF_SIZE 0x100000 // 2^20
 
 typedef struct accept_param_s {
   struct accept_param_s * next;

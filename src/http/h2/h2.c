@@ -20,7 +20,7 @@
 #define SETTING_SIZE (SETTING_ID_SIZE + SETTING_VALUE_SIZE)
 
 #define MAX_WINDOW_SIZE 0x7FFFFFFF // 2^31 - 1
-#define MAX_CONNECTION_BUFFER_SIZE 0x1000000 // 2^24
+#define MAX_CONNECTION_BUFFER_SIZE 0x100000 // 2^20
 
 #define PING_OPAQUE_DATA_LENGTH 8
 
@@ -826,7 +826,8 @@ static bool h2_stream_trigger_send_data(h2_t * const h2, h2_stream_t * const str
 
     } else {
 
-      return true;
+      // make sure we dont have any queued up data that needs to be sent
+      return h2_flush(h2, 0);
 
     }
 
