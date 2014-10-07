@@ -2022,7 +2022,6 @@ void h2_read(h2_t * const h2, uint8_t * const buffer, const size_t len)
       h2->verified_tls_settings = true;
     } else {
       emit_error_and_close(h2, 0, H2_ERROR_INADEQUATE_SECURITY, "Inadequate security");
-      free(buffer);
       return;
     }
   }
