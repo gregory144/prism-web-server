@@ -70,9 +70,11 @@ void base64url_decode(binary_buffer_t * buf, char * base64)
 
     uint8_t octet1 = (triple >> 2 * 8) & 0xFF;
     binary_buffer_write_curr_index(buf, octet1);
+
     if (in_remaining >= 3) {
       uint8_t octet2 = (triple >> 1 * 8) & 0xFF;
       binary_buffer_write_curr_index(buf, octet2);
+
       if (in_remaining > 3) {
         uint8_t octet3 = (triple >> 0 * 8) & 0xFF;
         binary_buffer_write_curr_index(buf, octet3);

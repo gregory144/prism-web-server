@@ -73,9 +73,11 @@ size_t binary_buffer_size(const binary_buffer_t * const buffer)
 static bool binary_buffer_grow(binary_buffer_t * const buffer, size_t value_length)
 {
   size_t new_size = roundup_to_power_of_2((buffer->capacity + value_length) * 2);
+
   if (new_size < BINARY_BUFFER_MIN_SIZE) {
     new_size = BINARY_BUFFER_MIN_SIZE;
   }
+
   uint8_t * new_buf = realloc(buffer->buf, new_size);
   ASSERT_OR_RETURN_FALSE(new_buf);
   buffer->buf = new_buf;
