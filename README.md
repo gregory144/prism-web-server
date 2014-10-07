@@ -7,7 +7,7 @@ An interoperable HTTP2 server.
 1. ./autogen.sh
 1. ./configure CC=clang
 1. ./make
-1. ./src/conduit
+1. ./src/synapse
 
 
 ## Dependencies
