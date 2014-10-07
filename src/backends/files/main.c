@@ -1,3 +1,5 @@
+#include "config.h"
+
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -8,8 +10,6 @@
 #include <linux/limits.h>
 
 #include <uv.h>
-
-#include "config.h"
 
 #include "server.h"
 #include "backend.h"

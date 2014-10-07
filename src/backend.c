@@ -1,8 +1,10 @@
+#include "config.h"
+
 #include <uv.h>
 
 #include "backend.h"
 
-#include "util/util.h"
+#include "util.h"
 #include "http/http.h"
 
 backend_t * backend_init(backend_t * backend, char * backend_file, struct server_s * server)

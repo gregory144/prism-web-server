@@ -1,3 +1,5 @@
+#include "config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -5,8 +7,6 @@
 #include <sys/types.h>
 
 #include <uv.h>
-
-#include "config.h"
 
 #include "server.h"
 #include "backend.h"

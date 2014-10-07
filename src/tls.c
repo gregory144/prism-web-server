@@ -1,3 +1,5 @@
+#include "config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,7 +12,6 @@
 
 #include "util/util.h"
 #include "tls.h"
-#include "config.h"
 
 #define TLS_BUF_LENGTH 0x4000
 

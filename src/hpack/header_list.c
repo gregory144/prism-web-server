@@ -1,7 +1,9 @@
+#include "config.h"
+
 #include <stdlib.h>
 #include <string.h>
 
-#include "../util/util.h"
+#include "util.h"
 #include "header_list.h"
 
 header_list_t * header_list_init(header_list_t * header_list)
