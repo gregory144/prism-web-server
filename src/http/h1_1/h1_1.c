@@ -174,8 +174,9 @@ bool h1_1_detect_connection(uint8_t * buffer, size_t buffer_length)
 
 h1_1_t * h1_1_init(void * const data, const char * scheme, const char * hostname, const int port,
                    const h1_1_request_cb request_handler, const h1_1_data_cb data_handler,
-                   const h1_1_write_cb writer, const h1_1_close_cb closer,
-                   const h1_1_request_init_cb request_init, const h1_1_upgrade_cb upgrade_cb)
+                   const h1_1_write_cb writer, const h1_1_write_error_cb error_writer,
+                   const h1_1_close_cb closer, const h1_1_request_init_cb request_init,
+                   const h1_1_upgrade_cb upgrade_cb)
 {
   h1_1_t * h1_1 = malloc(sizeof(h1_1_t));
   ASSERT_OR_RETURN_NULL(h1_1);
@@ -189,6 +190,7 @@ h1_1_t * h1_1_init(void * const data, const char * scheme, const char * hostname
   h1_1->request_handler = request_handler;
   h1_1->data_handler = data_handler;
   h1_1->writer = writer;
+  h1_1->error_writer = error_writer;
   h1_1->closer = closer;
   h1_1->request_init = request_init;
   h1_1->upgrade_cb = upgrade_cb;
@@ -455,6 +457,25 @@ static int hp_message_complete_cb(http_parser * http_parser)
   return 0;
 }
 
+static bool h1_1_bad_request(h1_1_t * const h1_1)
+{
+  // TODO - can we write the error without init'ing a request
+  // and response?
+  h1_1->request = h1_1->request_init(h1_1->data, h1_1, NULL);
+
+  if (!h1_1->request) {
+    return false;
+  }
+
+  h1_1->response = http_response_init(h1_1->request);
+
+  if (!h1_1->response) {
+    return false;
+  }
+
+  return h1_1->error_writer(h1_1, h1_1->response, 400);
+}
+
 static void h1_1_parse(h1_1_t * const h1_1, uint8_t * const buffer, const size_t len)
 {
   size_t ret = http_parser_execute(&h1_1->http_parser, &http_settings, (char *) buffer, len);
@@ -481,6 +502,7 @@ static void h1_1_parse(h1_1_t * const h1_1, uint8_t * const buffer, const size_t
 
     if (err != HPE_OK) {
       log_error("Error parsing HTTP1 request: %s", http_errno_description(err));
+      h1_1_bad_request(h1_1);
     } else {
       log_error("Could not process all of buffer: %ld / %ld", ret, len);
     }

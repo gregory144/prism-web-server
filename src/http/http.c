@@ -41,6 +41,13 @@ static bool http_internal_write_cb(void * data, uint8_t * buf, size_t len)
   return connection->writer(connection->data, buf, len);
 }
 
+static bool http_internal_write_error_cb(void * data, http_response_t * response, int http_status)
+{
+  UNUSED(data);
+
+  return http_response_write_error(response, http_status);
+}
+
 static void http_connection_close(http_connection_t * connection)
 {
   if (!connection->closed) {
@@ -110,7 +117,8 @@ static void set_protocol_h1_1(http_connection_t * connection)
 {
   connection->protocol = H1_1;
   connection->handler = h1_1_init(connection, connection->scheme, connection->hostname, connection->port,
-                                  http_internal_request_cb, http_internal_data_cb, http_internal_write_cb, http_internal_close_cb,
+                                  http_internal_request_cb, http_internal_data_cb, http_internal_write_cb,
+                                  http_internal_write_error_cb, http_internal_close_cb,
                                   http_internal_request_init_cb, http_internal_upgrade_cb);
 }
 
