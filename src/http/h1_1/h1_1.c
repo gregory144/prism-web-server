@@ -200,6 +200,9 @@ h1_1_t * h1_1_init(void * const data, const char * scheme, const char * hostname
   h1_1->keep_alive = false;
 
   h1_1->write_buffer = binary_buffer_init(NULL, 0);
+  h1_1->request = NULL;
+  h1_1->response = NULL;
+  h1_1->headers = NULL;
 
   if (!h1_1->write_buffer) {
     h1_1_free(h1_1);
@@ -217,6 +220,21 @@ void h1_1_free(h1_1_t * const h1_1)
   if (h1_1->write_buffer) {
     binary_buffer_free(h1_1->write_buffer);
     free(h1_1->write_buffer);
+  }
+
+  if (h1_1->response) {
+    http_response_free(h1_1->response);
+  } else if (h1_1->request) {
+    http_request_free(h1_1->request);
+  } else if (h1_1->headers) {
+    header_list_free(h1_1->headers);
+  }
+
+  if (h1_1->curr_header_field) {
+    free(h1_1->curr_header_field);
+  }
+  if (h1_1->curr_header_value) {
+    free(h1_1->curr_header_value);
   }
 
   free(h1_1);
@@ -392,6 +410,8 @@ static int hp_headers_complete_cb(http_parser * http_parser)
   if (!h1_1->request) {
     return 1; // error
   }
+
+  h1_1->headers = NULL; // request takes ownership
 
   h1_1->response = http_response_init(h1_1->request);
 
