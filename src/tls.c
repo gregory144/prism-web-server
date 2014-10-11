@@ -494,14 +494,15 @@ bool tls_set_protocol(tls_client_ctx_t * client_ctx)
   SSL_get0_next_proto_negotiated(client_ctx->ssl, &proto, &proto_len);
 
   if (proto) {
-    log_debug("Using protocol (through NPN): %s", proto);
 
     if (proto_len == http2_protocol_version_length && memcmp(http2_protocol_version, proto, proto_len) == 0) {
+      log_debug("Using protocol (through NPN): %s", http2_protocol_version);
       client_ctx->selected_protocol = http2_protocol_version;
       return true;
     }
 
     if (proto_len == http1_1_protocol_version_length && memcmp(http1_1_protocol_version, proto, proto_len) == 0) {
+      log_debug("Using protocol (through NPN): %s", http1_1_protocol_version);
       client_ctx->selected_protocol = http1_1_protocol_version;
       return true;
     }
@@ -510,14 +511,15 @@ bool tls_set_protocol(tls_client_ctx_t * client_ctx)
     SSL_get0_alpn_selected(client_ctx->ssl, &proto, &proto_len);
 
     if (proto) {
-      log_debug("Using protocol (through ALPN): %s", proto);
 
       if (proto_len == http2_protocol_version_length && memcmp(http2_protocol_version, proto, proto_len) == 0) {
+      log_debug("Using protocol (through ALPN): %s", http2_protocol_version);
         client_ctx->selected_protocol = http2_protocol_version;
         return true;
       }
 
       if (proto_len == http1_1_protocol_version_length && memcmp(http1_1_protocol_version, proto, proto_len) == 0) {
+        log_debug("Using protocol (through ALPN): %s", http1_1_protocol_version);
         client_ctx->selected_protocol = http1_1_protocol_version;
         return true;
       }

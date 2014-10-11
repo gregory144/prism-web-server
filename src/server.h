@@ -4,6 +4,7 @@
 #include <uv.h>
 
 #include "util/blocking_queue.h"
+#include "util/atomic_int.h"
 
 #include "http/http.h"
 #include "tls.h"
@@ -63,6 +64,9 @@ typedef struct client_s {
   // has succeeded
   uv_async_t written_handle;
 
+  atomic_int_t read_counter;
+  uv_async_t read_finished_handle;
+
   size_t closed_async_handle_count;
 
   blocking_queue_t * write_queue;
@@ -76,6 +80,7 @@ typedef struct client_s {
   bool closing;
   bool uv_closed;
   bool http_closed;
+  bool reads_finished;
 
   bool eof;
 

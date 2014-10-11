@@ -78,6 +78,9 @@ static void worker_queue(client_t * client, bool eof, uint8_t * buffer, size_t l
   worker_t * worker = server->workers[client->worker_index];
   worker->assigned_reads++;
 
+  client->reads_finished = false;
+  atomic_int_increment(&client->read_counter);
+
   blocking_queue_push(worker->read_queue, worker_buffer);
 
   uv_async_send(&worker->async_handle);
@@ -221,6 +224,9 @@ static void worker_handle(uv_async_t * async_handle)
 
     free(buffer);
     buffer = NULL;
+
+    atomic_int_decrement(&client->read_counter);
+    uv_async_send(&client->read_finished_handle);
   }
 
 }

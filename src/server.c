@@ -122,7 +122,7 @@ static void client_free_close_cb(uv_handle_t * handle)
 
   // we need the count to be 2 to continue - to make sure both
   // the client's write_handle and close_handle have been closed
-  if (client->closed_async_handle_count == 2) {
+  if (client->closed_async_handle_count == 3) {
 
     open_clients--;
     log_debug("Freed client %ld (%d/%d left)", client->id, open_clients, total_clients);
@@ -142,8 +142,12 @@ static void client_free(client_t * client)
     log_trace("Freeing client but uv not finished: %ld", client->id);
   }
 
+  if (!client->reads_finished) {
+    log_trace("Freeing client but reads not finished: %ld", client->id);
+  }
+
   // wait until all threads have finished with it
-  if (client->uv_closed && client->http_closed) {
+  if (client->uv_closed && client->http_closed && client->reads_finished) {
 
     if (client->tls_ctx) {
       tls_client_free(client->tls_ctx);
@@ -151,10 +155,12 @@ static void client_free(client_t * client)
 
     http_connection_free(client->connection);
 
+    atomic_int_free(&client->read_counter);
     blocking_queue_free(client->write_queue);
 
     uv_close((uv_handle_t *) &client->write_handle, client_free_close_cb);
     uv_close((uv_handle_t *) &client->close_handle, client_free_close_cb);
+    uv_close((uv_handle_t *) &client->read_finished_handle, client_free_close_cb);
 
   }
 
@@ -225,6 +231,19 @@ static void uv_cb_read(uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf
 
   log_debug("Queueing from client: #%ld", client->id);
   worker_queue(client, false, (uint8_t *) buf->base, nread);
+
+}
+
+static void server_uv_async_cb_read_finished(uv_async_t * async_handle)
+{
+  client_t * client = async_handle->data;
+  log_debug("Read finished async callback: %ld", client->id);
+
+  if (atomic_int_value(&client->read_counter) == 0) {
+    client->reads_finished = true;
+
+    client_free(client);
+  }
 
 }
 
@@ -302,11 +321,18 @@ static void uv_cb_listen(uv_stream_t * tcp_server, int status)
   client->closed = false;
   client->uv_closed = false;
   client->http_closed = false;
+  client->reads_finished = true;
   client->eof = false;
   client->tls_ctx = NULL;
   client->octets_written = 0;
   client->octets_read = 0;
   client->worker_index = SIZE_MAX;
+
+  if (atomic_int_init(&client->read_counter) == NULL) {
+    free(client);
+    return;
+  }
+
 
   client->write_queue = blocking_queue_init();
 
@@ -315,6 +341,9 @@ static void uv_cb_listen(uv_stream_t * tcp_server, int status)
 
   uv_async_init(&server->loop, &client->close_handle, server_uv_async_cb_close);
   client->close_handle.data = client;
+
+  uv_async_init(&server->loop, &client->read_finished_handle, server_uv_async_cb_read_finished);
+  client->read_finished_handle.data = client;
 
   client->closed_async_handle_count = 0;
 
