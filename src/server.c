@@ -362,7 +362,7 @@ static void uv_cb_listen(uv_stream_t * tcp_server, int status)
   if (uv_accept(tcp_server, (uv_stream_t *) &client->tcp) == 0) {
 
     if (server->config->use_tls) {
-      client->tls_ctx = tls_client_init(server->tls_ctx, client, worker_can_continue, worker_write_to_network,
+      client->tls_ctx = tls_client_init(server->tls_ctx, client, worker_write_to_network,
                                         tls_cb_write_to_app);
     }
 

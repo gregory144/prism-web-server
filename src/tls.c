@@ -326,7 +326,7 @@ bool tls_server_free(tls_server_ctx_t * server_ctx)
   return true;
 }
 
-tls_client_ctx_t * tls_client_init(tls_server_ctx_t * server_ctx, void * data, tls_can_continue_cb can_continue,
+tls_client_ctx_t * tls_client_init(tls_server_ctx_t * server_ctx, void * data,
                                    tls_write_to_network_cb write_to_network, tls_write_to_app_cb write_to_app)
 {
 
@@ -338,7 +338,6 @@ tls_client_ctx_t * tls_client_init(tls_server_ctx_t * server_ctx, void * data, t
   tls_client_ctx->data = data;
   tls_client_ctx->write_to_network = write_to_network;
   tls_client_ctx->write_to_app = write_to_app;
-  tls_client_ctx->can_continue = can_continue;
   tls_client_ctx->ssl = NULL;
   tls_client_ctx->app_bio = NULL;
   tls_client_ctx->network_bio = NULL;
@@ -375,11 +374,6 @@ static bool tls_read_decrypted_data_and_pass_to_app(tls_client_ctx_t * client_ct
     // we're already in the process of writing to the app -
     // don't do it again until we're finished
     return true;
-  }
-
-  if (!client_ctx->can_continue(client_ctx->data)) {
-    log_debug("Requested read decrypted data and pass to app but can't continue");
-    return false;
   }
 
   log_trace("Reading decrypted data from app BIO and passing to app");

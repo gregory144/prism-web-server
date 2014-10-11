@@ -22,7 +22,6 @@
 
 typedef bool (*tls_write_to_network_cb)(void * data, uint8_t * buf, size_t length);
 typedef bool (*tls_write_to_app_cb)(void * data, uint8_t * buf, size_t length);
-typedef bool (*tls_can_continue_cb)(void * data);
 
 typedef struct {
 
@@ -48,7 +47,6 @@ typedef struct {
 
   tls_write_to_network_cb write_to_network;
   tls_write_to_app_cb write_to_app;
-  tls_can_continue_cb can_continue;
 
 } tls_client_ctx_t;
 
@@ -58,7 +56,7 @@ tls_server_ctx_t * tls_server_init(char * key_file, char * cert_file);
 
 bool tls_server_free(tls_server_ctx_t * server_ctx);
 
-tls_client_ctx_t * tls_client_init(tls_server_ctx_t * server_ctx, void * data, tls_can_continue_cb can_continue,
+tls_client_ctx_t * tls_client_init(tls_server_ctx_t * server_ctx, void * data,
                                    tls_write_to_network_cb write_to_network, tls_write_to_app_cb write_to_app);
 
 /**

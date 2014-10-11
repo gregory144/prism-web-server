@@ -87,13 +87,6 @@ static void worker_queue(client_t * client, bool eof, uint8_t * buffer, size_t l
   log_trace("Assigning to worker: #%ld with %ld reads", client->worker_index, worker->assigned_reads);
 }
 
-static bool worker_can_continue(void * data)
-{
-  client_t * client = data;
-
-  return !client->eof;
-}
-
 static bool worker_write_to_network(void * data, uint8_t * buffer, size_t length)
 {
   client_t * client = data;
@@ -210,10 +203,7 @@ static void worker_handle(uv_async_t * async_handle)
       log_trace("Passing %ld octets of data from network to TLS handler", buffer->length);
 
       if (!tls_decrypt_data_and_pass_to_app(tls_client_ctx, buffer->buffer, buffer->length)) {
-        // only try to close the client if it hasn't already received EOF
-        if (tls_client_ctx->can_continue(tls_client_ctx->data)) {
-          worker_close(client);
-        }
+        worker_close(client);
       }
 
       log_trace("Passed %ld octets of data from network to TLS handler", buffer->length);
