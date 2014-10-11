@@ -195,6 +195,11 @@ static void uv_cb_read(uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf
 
   client_t * client = stream->data;
 
+  if (client->closing) {
+    free(buf->base);
+    return;
+  }
+
   if (nread == UV_EOF) {
     free(buf->base);
 

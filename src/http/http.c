@@ -60,7 +60,7 @@ static void http_internal_close_cb(void * data)
 {
   http_connection_t * connection = data;
 
-  connection->closer(connection->data);
+  http_connection_close(connection);
 }
 
 static http_request_t * http_internal_request_init_cb(void * data, void * req_user_data, header_list_t * headers)

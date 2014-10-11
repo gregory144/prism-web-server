@@ -379,7 +379,7 @@ static bool tls_read_decrypted_data_and_pass_to_app(tls_client_ctx_t * client_ct
 
   if (!client_ctx->can_continue(client_ctx->data)) {
     log_debug("Requested read decrypted data and pass to app but can't continue");
-    return true;
+    return false;
   }
 
   log_trace("Reading decrypted data from app BIO and passing to app");
