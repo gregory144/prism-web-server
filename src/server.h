@@ -111,9 +111,6 @@ typedef struct worker_s {
   uv_async_t async_handle;
   uv_async_t stop_handle;
 
-  uv_mutex_t terminate_mutex;
-  bool terminate;
-
   blocking_queue_t * read_queue;
 
 } worker_t;

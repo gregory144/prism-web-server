@@ -14,11 +14,6 @@ static worker_t * worker_init()
   worker->read_queue = blocking_queue_init();
   worker->assigned_reads = 0;
 
-  uv_mutex_init(&worker->terminate_mutex);
-  uv_mutex_lock(&worker->terminate_mutex);
-  worker->terminate = false;
-  uv_mutex_unlock(&worker->terminate_mutex);
-
   uv_loop_init(&worker->loop);
 
   uv_async_init(&worker->loop, &worker->async_handle, worker_handle);
