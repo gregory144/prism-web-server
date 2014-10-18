@@ -285,20 +285,20 @@ static bool tls_cb_write_to_app(void * data, uint8_t * buf, size_t length)
 static void server_request_handler(void * data, http_request_t * request, http_response_t * response)
 {
   client_t * client = data;
-  backend_t * backend = &client->server->backend;
+  plugin_t * plugin = &client->server->plugin;
   worker_t * worker = client->server->workers[client->worker_index];
 
-  backend_request_handler(backend, worker, request, response);
+  plugin_request_handler(plugin, worker, request, response);
 }
 
 static void server_data_handler(void * data, http_request_t * request, http_response_t * response,
                                 uint8_t * buf, size_t length, bool last, bool free_buf)
 {
   client_t * client = data;
-  backend_t * backend = &client->server->backend;
+  plugin_t * plugin = &client->server->plugin;
   worker_t * worker = client->server->workers[client->worker_index];
 
-  backend_data_handler(backend, worker, request, response, buf, length, last, free_buf);
+  plugin_data_handler(plugin, worker, request, response, buf, length, last, free_buf);
 }
 
 static void uv_cb_listen(uv_stream_t * tcp_server, int status)
@@ -398,10 +398,10 @@ server_t * server_init(server_config_t * config)
 
   server->terminate = false;
 
-  backend_t * backend = backend_init(&server->backend, &server->config->backend_log,
-      server->config->backend_file, (struct server_s *) server);
+  plugin_t * plugin = plugin_init(&server->plugin, &server->config->plugin_log,
+      server->config->plugin_file, (struct server_s *) server);
 
-  if (!backend) {
+  if (!plugin) {
     free(server);
     return NULL;
   }
@@ -463,7 +463,7 @@ static void server_free(server_t * server)
 int server_start(server_t * server)
 {
 
-  backend_start(&server->backend);
+  plugin_start(&server->plugin);
 
   // set up workers
   size_t i;
@@ -532,7 +532,7 @@ void server_stop(server_t * server)
     uv_thread_join(&worker->thread);
   }
 
-  backend_stop(&server->backend);
+  plugin_stop(&server->plugin);
 
   uv_stop(&server->loop);
 }

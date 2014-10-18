@@ -9,52 +9,52 @@
 #include <uv.h>
 
 #include "server.h"
-#include "backend.h"
+#include "plugin.h"
 
 #include "log.h"
 #include "util.h"
 #include "http/http.h"
 #include "http/request.h"
 
-static void debug_backend_start(backend_t * backend)
+static void debug_plugin_start(plugin_t * plugin)
 {
-  log_append(backend->log, LOG_INFO, "Debug backend started");
+  log_append(plugin->log, LOG_INFO, "Debug plugin started");
 }
 
-static void debug_backend_stop(backend_t * backend)
+static void debug_plugin_stop(plugin_t * plugin)
 {
-  log_append(backend->log, LOG_INFO, "Debug backend stopped");
+  log_append(plugin->log, LOG_INFO, "Debug plugin stopped");
 }
 
-static void debug_backend_request_handler(backend_t * backend, worker_t * worker, http_request_t * request,
+static void debug_plugin_request_handler(plugin_t * plugin, worker_t * worker, http_request_t * request,
     http_response_t * response)
 {
   UNUSED(worker);
 
-  if (log_level_enabled(backend->log, LOG_DEBUG)) {
-    log_append(backend->log, LOG_DEBUG, "Method: '%s'", http_request_method(request));
-    log_append(backend->log, LOG_DEBUG, "Scheme: '%s'", http_request_scheme(request));
-    log_append(backend->log, LOG_DEBUG, "Host: '%s'", http_request_host(request));
-    log_append(backend->log, LOG_DEBUG, "Port: %d", http_request_port(request));
-    log_append(backend->log, LOG_DEBUG, "Path: '%s'", http_request_path(request));
-    log_append(backend->log, LOG_DEBUG, "Query: '%s'", http_request_query_string(request));
+  if (log_level_enabled(plugin->log, LOG_DEBUG)) {
+    log_append(plugin->log, LOG_DEBUG, "Method: '%s'", http_request_method(request));
+    log_append(plugin->log, LOG_DEBUG, "Scheme: '%s'", http_request_scheme(request));
+    log_append(plugin->log, LOG_DEBUG, "Host: '%s'", http_request_host(request));
+    log_append(plugin->log, LOG_DEBUG, "Port: %d", http_request_port(request));
+    log_append(plugin->log, LOG_DEBUG, "Path: '%s'", http_request_path(request));
+    log_append(plugin->log, LOG_DEBUG, "Query: '%s'", http_request_query_string(request));
 
-    log_append(backend->log, LOG_DEBUG, "Got headers:");
+    log_append(plugin->log, LOG_DEBUG, "Got headers:");
     header_list_iter_t iter;
     header_list_iterator_init(&iter, request->headers);
 
     while (header_list_iterate(&iter)) {
       header_field_t * field = iter.field;
-      log_append(backend->log, LOG_DEBUG, "'%s' (%ld): '%s' (%ld)",
+      log_append(plugin->log, LOG_DEBUG, "'%s' (%ld): '%s' (%ld)",
           field->name, field->name_length, field->value, field->value_length);
     }
 
-    log_append(backend->log, LOG_DEBUG, "Got parameters:");
+    log_append(plugin->log, LOG_DEBUG, "Got parameters:");
     multimap_iter_t mm_iter;
     multimap_iterator_init(&mm_iter, request->params);
 
     while (multimap_iterate(&mm_iter)) {
-      log_append(backend->log, LOG_DEBUG, "'%s' (%ld): '%s' (%ld)",
+      log_append(plugin->log, LOG_DEBUG, "'%s' (%ld): '%s' (%ld)",
           mm_iter.key, strlen(mm_iter.key), mm_iter.value, strlen(mm_iter.value));
     }
   }
@@ -194,15 +194,15 @@ static void debug_backend_request_handler(backend_t * backend, worker_t * worker
   http_response_write(response, (uint8_t *) resp_text, content_length, true);
 }
 
-static void debug_backend_data_handler(backend_t * backend, worker_t * worker, http_request_t * request,
+static void debug_plugin_data_handler(plugin_t * plugin, worker_t * worker, http_request_t * request,
                                        http_response_t * response,
                                        uint8_t * buf, size_t length, bool last, bool free_buf)
 {
-  UNUSED(backend);
+  UNUSED(plugin);
   UNUSED(worker);
   UNUSED(request);
 
-  log_append(backend->log, LOG_TRACE, "Received %ld bytes of data from client (last? %s)",
+  log_append(plugin->log, LOG_TRACE, "Received %ld bytes of data from client (last? %s)",
       length, last ? "yes" : "no");
 
   uint8_t * out = malloc(sizeof(uint8_t) * length);
@@ -221,13 +221,13 @@ static void debug_backend_data_handler(backend_t * backend, worker_t * worker, h
 
 }
 
-void backend_initialize(backend_t * backend, server_t * server)
+void plugin_initialize(plugin_t * plugin, server_t * server)
 {
   UNUSED(server);
 
-  backend->handlers->start = debug_backend_start;
-  backend->handlers->stop = debug_backend_stop;
-  backend->handlers->request = debug_backend_request_handler;
-  backend->handlers->data = debug_backend_data_handler;
+  plugin->handlers->start = debug_plugin_start;
+  plugin->handlers->stop = debug_plugin_stop;
+  plugin->handlers->request = debug_plugin_request_handler;
+  plugin->handlers->data = debug_plugin_data_handler;
 }
 

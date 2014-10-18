@@ -958,7 +958,6 @@ static bool h2_emit_data(h2_t * const h2, h2_stream_t * const stream, uint8_t * 
     }
 
     if (!h2_queue_data_frame(stream, curr_frame_data, curr_frame_length, last_in && last_frame, buf_begin)) {
-
       free(in);
       return false;
     }

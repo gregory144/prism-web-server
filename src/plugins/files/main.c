@@ -12,7 +12,7 @@
 #include <uv.h>
 
 #include "server.h"
-#include "backend.h"
+#include "plugin.h"
 
 #include "log.h"
 #include "util.h"
@@ -59,7 +59,7 @@ typedef struct {
 
   server_t * server;
 
-  backend_t * backend;
+  plugin_t * plugin;
 
   multimap_t * type_map;
 
@@ -111,7 +111,7 @@ static content_type_t * register_content_type(multimap_t * m, char * extension, 
   return t;
 }
 
-static void files_backend_init_type_map(file_server_t * fs)
+static void files_plugin_init_type_map(file_server_t * fs)
 {
   fs->type_map = multimap_init_with_string_keys();
 
@@ -133,11 +133,11 @@ static void files_backend_init_type_map(file_server_t * fs)
   fs->default_content_type = default_ct;
 }
 
-static void files_backend_start(backend_t * backend)
+static void files_plugin_start(plugin_t * plugin)
 {
-  log_append(backend->log, LOG_INFO, "Files backend starting");
+  log_append(plugin->log, LOG_INFO, "Files plugin starting");
 
-  file_server_t * file_server = backend->data;
+  file_server_t * file_server = plugin->data;
 
   size_t cwd_capacity = 256;
   char * cwd = malloc(cwd_capacity);
@@ -166,11 +166,11 @@ static void noop(void * v)
   UNUSED(v);
 }
 
-static void files_backend_stop(backend_t * backend)
+static void files_plugin_stop(plugin_t * plugin)
 {
-  log_append(backend->log, LOG_INFO, "Files backend stopped");
+  log_append(plugin->log, LOG_INFO, "Files plugin stopped");
 
-  file_server_t * file_server = backend->data;
+  file_server_t * file_server = plugin->data;
 
   multimap_free(file_server->type_map, noop, free);
 
@@ -508,10 +508,10 @@ static void file_server_uv_open_cb(uv_fs_t * req)
   uv_fs_req_cleanup(req);
 }
 
-static void files_backend_request_handler(backend_t * backend, worker_t * worker, http_request_t * request,
+static void files_plugin_request_handler(plugin_t * plugin, worker_t * worker, http_request_t * request,
     http_response_t * response)
 {
-  file_server_t * file_server = backend->data;
+  file_server_t * file_server = plugin->data;
   file_server_request_t * fs_request = malloc(sizeof(file_server_request_t));
   fs_request->response = response;
   fs_request->loop = &worker->loop;
@@ -575,11 +575,11 @@ static void files_backend_request_handler(backend_t * backend, worker_t * worker
   uv_fs_open(fs_request->loop, &fs_request->open_req, fs_request->path, O_RDONLY, 0644, file_server_uv_open_cb);
 }
 
-static void files_backend_data_handler(backend_t * backend, worker_t * worker, http_request_t * request,
+static void files_plugin_data_handler(plugin_t * plugin, worker_t * worker, http_request_t * request,
                                        http_response_t * response,
                                        uint8_t * buf, size_t length, bool last, bool free_buf)
 {
-  UNUSED(backend);
+  UNUSED(plugin);
   UNUSED(worker);
   UNUSED(request);
   UNUSED(response);
@@ -592,21 +592,21 @@ static void files_backend_data_handler(backend_t * backend, worker_t * worker, h
 
 }
 
-void backend_initialize(backend_t * backend, server_t * server)
+void plugin_initialize(plugin_t * plugin, server_t * server)
 {
-  backend->handlers->start = files_backend_start;
-  backend->handlers->stop = files_backend_stop;
-  backend->handlers->request = files_backend_request_handler;
-  backend->handlers->data = files_backend_data_handler;
+  plugin->handlers->start = files_plugin_start;
+  plugin->handlers->stop = files_plugin_stop;
+  plugin->handlers->request = files_plugin_request_handler;
+  plugin->handlers->data = files_plugin_data_handler;
 
   file_server_t * file_server = malloc(sizeof(file_server_t));
-  file_server->log = &server->config->backend_log;
+  file_server->log = &server->config->plugin_log;
 
-  backend->data = file_server;
+  plugin->data = file_server;
 
-  file_server->backend = backend;
+  file_server->plugin = plugin;
   file_server->server = server;
 
-  files_backend_init_type_map(file_server);
+  files_plugin_init_type_map(file_server);
 }
 

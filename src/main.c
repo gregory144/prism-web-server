@@ -30,7 +30,7 @@ void print_help(char * cmd)
   fprintf(stdout, "  -i\t\t\tturn off TLS\n");
   fprintf(stdout, "  -k FILE\t\tlocation of private key file (PEM)\n");
   fprintf(stdout, "  -c FILE\t\tlocation of certificate file (PEM)\n");
-  fprintf(stdout, "  -b FILE\t\tlocation of the shared library backend\n");
+  fprintf(stdout, "  -e FILE\t\tlocation of a plugin shared library\n");
 
   print_version();
 }
@@ -44,13 +44,13 @@ int main(int argc, char ** argv)
   config->num_workers = NUM_WORKERS;
   config->private_key_file = "key.pem";
   config->cert_file = "cert.pem";
-  config->backend_file = "backend.so";
+  config->plugin_file = "plugin.so";
 
   int c;
 
   opterr = 0;
 
-  while ((c = getopt(argc, argv, "b:p:n:k:c:w:ighv")) != -1) {
+  while ((c = getopt(argc, argv, "e:p:n:k:c:w:ighv")) != -1) {
     switch (c) {
       case 'p': // port
         config->port = strtol(optarg, NULL, 10);
@@ -60,8 +60,8 @@ int main(int argc, char ** argv)
         config->hostname = optarg;
         break;
 
-      case 'b': // backend file
-        config->backend_file = optarg;
+      case 'e': // plugin file
+        config->plugin_file = optarg;
         break;
 
       case 'k': // private Key
@@ -109,14 +109,14 @@ int main(int argc, char ** argv)
     exit(EXIT_FAILURE);
   }
 
-  enum log_level_e min_level = LOG_INFO;
+  enum log_level_e min_level = LOG_DEBUG;
 
   log_context_init(&config->server_log, "SERVER", stdout, min_level, true);
   log_context_init(&config->data_log, "DATA", stdout, min_level, true);
   log_context_init(&config->http_log, "HTTP", stdout, min_level, true);
   log_context_init(&config->hpack_log, "HPACK", stdout, min_level, true);
   log_context_init(&config->tls_log, "TLS", stdout, min_level, true);
-  log_context_init(&config->backend_log, "BACKEND", stdout, min_level, true);
+  log_context_init(&config->plugin_log, "PLUGIN", stdout, min_level, true);
 
   server = server_init(config);
 

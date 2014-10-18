@@ -9,7 +9,7 @@
 
 #include "http/http.h"
 #include "tls.h"
-#include "backend.h"
+#include "plugin.h"
 
 struct worker_s;
 
@@ -24,14 +24,14 @@ typedef struct {
   char * cert_file;
   char * private_key_file;
 
-  char * backend_file;
+  char * plugin_file;
 
   log_context_t server_log;
   log_context_t data_log;
   log_context_t http_log;
   log_context_t hpack_log;
   log_context_t tls_log;
-  log_context_t backend_log;
+  log_context_t plugin_log;
 
 } server_config_t;
 
@@ -42,7 +42,7 @@ typedef struct {
 
   server_config_t * config;
 
-  backend_t backend;
+  plugin_t plugin;
 
   uv_loop_t loop;
 
