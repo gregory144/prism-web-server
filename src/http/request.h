@@ -10,6 +10,8 @@ typedef struct http_request_t {
 
   void * data;
 
+  log_context_t * log;
+
   header_list_t * headers;
   multimap_t * params;
 
@@ -27,7 +29,7 @@ typedef struct http_request_t {
 
 } http_request_t;
 
-http_request_t * http_request_init(void * handler_data, header_list_t * const headers);
+http_request_t * http_request_init(void * handler_data, log_context_t * log, header_list_t * const headers);
 
 void http_request_header_add(const http_request_t * const request, char * name, char * value);
 

@@ -7,8 +7,6 @@
 
 #include "util.h"
 
-#define LOG_FILE stdout
-
 /**
  *
  * Round this value to the next highest power of 2
@@ -126,7 +124,6 @@ static const char * MONTH_NAMES[] = {
   tm = gmtime(&t);
 
   if (strftime(date_buf, buf_len, "---, %d --- %Y %H:%M:%S GMT", tm) < 1) {
-    log_fatal("Unable to get date as string");
     free(date_buf);
     return NULL;
   }
@@ -135,59 +132,4 @@ static const char * MONTH_NAMES[] = {
   memcpy(date_buf + 8, MONTH_NAMES[tm->tm_mon], 3);
 
   return date_buf;
-}
-
-#define LOG_WITH_LEVEL(level) \
-  va_list ap; \
-  char buf[256]; \
-  va_start(ap, format); \
-  if (vsnprintf(buf, 256, format, ap) < 0) { \
-    abort(); \
-  } \
-  va_end(ap); \
-  if (fprintf(LOG_FILE, "%s\t%s\n", level, buf) < 0) { \
-    abort(); \
-  } \
-  va_end(ap);
-
-void log_fatal(char * format, ...)
-{
-  if (LOG_FATAL) {
-    LOG_WITH_LEVEL("FATAL")
-  }
-}
-
-void log_warning(char * format, ...)
-{
-  if (LOG_WARN) {
-    LOG_WITH_LEVEL("WARN")
-  }
-}
-
-void log_error(char * format, ...)
-{
-  if (LOG_ERROR) {
-    LOG_WITH_LEVEL("ERROR")
-  }
-}
-
-void log_info(char * format, ...)
-{
-  if (LOG_INFO) {
-    LOG_WITH_LEVEL("INFO")
-  }
-}
-
-void log_debug(char * format, ...)
-{
-  if (LOG_DEBUG) {
-    LOG_WITH_LEVEL("DEBUG")
-  }
-}
-
-void log_trace(char * format, ...)
-{
-  if (LOG_TRACE) {
-    LOG_WITH_LEVEL("TRACE")
-  }
 }

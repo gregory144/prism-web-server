@@ -14,6 +14,7 @@
 #include "server.h"
 #include "backend.h"
 
+#include "log.h"
 #include "util.h"
 #include "multimap.h"
 #include "http/http.h"
@@ -53,6 +54,8 @@ typedef struct accept_type_s {
 } accept_type_t;
 
 typedef struct {
+
+  log_context_t * log;
 
   server_t * server;
 
@@ -132,7 +135,7 @@ static void files_backend_init_type_map(file_server_t * fs)
 
 static void files_backend_start(backend_t * backend)
 {
-  log_info("Files backend starting");
+  log_append(backend->log, LOG_INFO, "Files backend starting");
 
   file_server_t * file_server = backend->data;
 
@@ -165,7 +168,7 @@ static void noop(void * v)
 
 static void files_backend_stop(backend_t * backend)
 {
-  log_info("Files backend stopped");
+  log_append(backend->log, LOG_INFO, "Files backend stopped");
 
   file_server_t * file_server = backend->data;
 
@@ -305,7 +308,7 @@ static content_type_t * content_type_for_path(file_server_t * fs, char * path, c
   multimap_t * type_map = fs->type_map;
   char * extension = file_extension(path);
 
-  log_debug("Got extension: %s", extension);
+  log_append(fs->log, LOG_DEBUG, "Got extension: %s", extension);
 
   accept_type_t * head = NULL;
 
@@ -326,7 +329,7 @@ static content_type_t * content_type_for_path(file_server_t * fs, char * path, c
         break;
       }
 
-      log_debug("Accept Type: %s/%s", new_type->type, new_type->subtype);
+      log_append(fs->log, LOG_DEBUG, "Accept Type: %s/%s", new_type->type, new_type->subtype);
       new_type->next = head;
       head = new_type;
 
@@ -416,13 +419,14 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
 {
   file_server_request_t * fs_request = req->data;
   http_response_t * response = fs_request->response;
+  file_server_t * fs = fs_request->file_server;
 
   if (req->result != 0) {
-    log_error("Could not stat file: %d: %s", req->result, fs_request->path);
+    log_append(fs->log, LOG_ERROR, "Could not stat file: %d: %s", req->result, fs_request->path);
     http_response_write_error(response, 500);
     file_server_finish_request(fs_request);
   } else if (!S_ISREG(req->statbuf.st_mode)) {
-    log_error("Not a regular file: %d, %s", req->result, fs_request->path);
+    log_append(fs->log, LOG_ERROR, "Not a regular file: %d, %s", req->result, fs_request->path);
     abort();
     http_response_write_error(response, 404);
     file_server_finish_request(fs_request);
@@ -431,12 +435,11 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
     fs_request->bytes_read = 0;
 
     char * path = fs_request->path;
-    file_server_t * fs = fs_request->file_server;
 
     http_response_status_set(response, 200);
 
     char * accept_header = http_request_header_get(fs_request->response->request, "accept");
-    log_debug("Accept header: %s", accept_header);
+    log_append(fs->log, LOG_DEBUG, "Accept header: %s", accept_header);
     content_type_t * content_type = content_type_for_path(fs, path, accept_header);
 
     if (content_type) {
@@ -485,6 +488,7 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
 static void file_server_uv_open_cb(uv_fs_t * req)
 {
   file_server_request_t * fs_request = req->data;
+  file_server_t * fs = fs_request->file_server;
 
   if (req->result != -1) {
 
@@ -496,7 +500,7 @@ static void file_server_uv_open_cb(uv_fs_t * req)
     }
 
   } else {
-    log_error("Could not open file: %s", fs_request->path);
+    log_append(fs->log, LOG_ERROR, "Could not open file: %s", fs_request->path);
     http_response_write_error(fs_request->response, 404);
     file_server_finish_request(fs_request);
   }
@@ -526,7 +530,7 @@ static void files_backend_request_handler(backend_t * backend, worker_t * worker
   char * method = http_request_method(request);
 
   if (strcmp(method, "GET") != 0) {
-    log_error("No path provided");
+    log_append(file_server->log, LOG_ERROR, "No path provided");
     http_response_header_add(response, "allow", "GET");
     http_response_write_error(response, 405); // method not allowed
     file_server_finish_request(fs_request);
@@ -536,7 +540,7 @@ static void files_backend_request_handler(backend_t * backend, worker_t * worker
   char * input_path = http_request_path(request);
 
   if (!input_path) {
-    log_error("No path provided");
+    log_append(file_server->log, LOG_ERROR, "No path provided");
     http_response_write_error(response, 500);
     file_server_finish_request(fs_request);
     return;
@@ -548,21 +552,21 @@ static void files_backend_request_handler(backend_t * backend, worker_t * worker
   char * path = malloc(PATH_MAX);
 
   if (!realpath(relative_input_path, path)) {
-    log_error("Could not get path: %s", input_path);
+    log_append(file_server->log, LOG_ERROR, "Could not get path: %s", input_path);
     http_response_write_error(response, 404);
     file_server_finish_request(fs_request);
     free(path);
     return;
   }
 
-  log_debug("Requested file: %s", path);
+  log_append(file_server->log, LOG_DEBUG, "Requested file: %s", path);
   fs_request->path = path;
 
   size_t path_length = strlen(path);
 
   // check to make sure the file is in the current directory
   if (path_length < file_server->cwd_length || memcmp(file_server->cwd, path, file_server->cwd_length) != 0) {
-    log_error("%s (%ld) not in %s (%ld)", path, path_length, file_server->cwd, file_server->cwd_length);
+    log_append(file_server->log, LOG_ERROR, "%s (%ld) not in %s (%ld)", path, path_length, file_server->cwd, file_server->cwd_length);
     http_response_write_error(response, 404);
     file_server_finish_request(fs_request);
     return;
@@ -596,6 +600,7 @@ void backend_initialize(backend_t * backend, server_t * server)
   backend->handlers->data = files_backend_data_handler;
 
   file_server_t * file_server = malloc(sizeof(file_server_t));
+  file_server->log = &server->config->backend_log;
 
   backend->data = file_server;
 

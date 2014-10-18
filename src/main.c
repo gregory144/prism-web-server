@@ -109,6 +109,15 @@ int main(int argc, char ** argv)
     exit(EXIT_FAILURE);
   }
 
+  enum log_level_e min_level = LOG_INFO;
+
+  log_context_init(&config->server_log, "SERVER", stdout, min_level, true);
+  log_context_init(&config->data_log, "DATA", stdout, min_level, true);
+  log_context_init(&config->http_log, "HTTP", stdout, min_level, true);
+  log_context_init(&config->hpack_log, "HPACK", stdout, min_level, true);
+  log_context_init(&config->tls_log, "TLS", stdout, min_level, true);
+  log_context_init(&config->backend_log, "BACKEND", stdout, min_level, true);
+
   server = server_init(config);
 
   if (!server) {

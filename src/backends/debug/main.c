@@ -11,54 +11,51 @@
 #include "server.h"
 #include "backend.h"
 
+#include "log.h"
 #include "util.h"
 #include "http/http.h"
 #include "http/request.h"
 
 static void debug_backend_start(backend_t * backend)
 {
-  UNUSED(backend);
-
-  log_info("Debug backend started");
+  log_append(backend->log, LOG_INFO, "Debug backend started");
 }
 
 static void debug_backend_stop(backend_t * backend)
 {
-  UNUSED(backend);
-
-  log_info("Debug backend stopped");
+  log_append(backend->log, LOG_INFO, "Debug backend stopped");
 }
 
 static void debug_backend_request_handler(backend_t * backend, worker_t * worker, http_request_t * request,
     http_response_t * response)
 {
-  UNUSED(backend);
   UNUSED(worker);
 
-  if (LOG_DEBUG) {
-    log_debug("Method: '%s'", http_request_method(request));
-    log_debug("Scheme: '%s'", http_request_scheme(request));
-    log_debug("Host: '%s'", http_request_host(request));
-    log_debug("Port: %d", http_request_port(request));
-    log_debug("Path: '%s'", http_request_path(request));
-    log_debug("Query: '%s'", http_request_query_string(request));
+  if (log_level_enabled(backend->log, LOG_DEBUG)) {
+    log_append(backend->log, LOG_DEBUG, "Method: '%s'", http_request_method(request));
+    log_append(backend->log, LOG_DEBUG, "Scheme: '%s'", http_request_scheme(request));
+    log_append(backend->log, LOG_DEBUG, "Host: '%s'", http_request_host(request));
+    log_append(backend->log, LOG_DEBUG, "Port: %d", http_request_port(request));
+    log_append(backend->log, LOG_DEBUG, "Path: '%s'", http_request_path(request));
+    log_append(backend->log, LOG_DEBUG, "Query: '%s'", http_request_query_string(request));
 
-    log_debug("Got headers:");
+    log_append(backend->log, LOG_DEBUG, "Got headers:");
     header_list_iter_t iter;
     header_list_iterator_init(&iter, request->headers);
 
     while (header_list_iterate(&iter)) {
       header_field_t * field = iter.field;
-      log_debug("'%s' (%ld): '%s' (%ld)", field->name, field->name_length, field->value, field->value_length);
+      log_append(backend->log, LOG_DEBUG, "'%s' (%ld): '%s' (%ld)",
+          field->name, field->name_length, field->value, field->value_length);
     }
 
-    log_debug("Got parameters:");
-
+    log_append(backend->log, LOG_DEBUG, "Got parameters:");
     multimap_iter_t mm_iter;
     multimap_iterator_init(&mm_iter, request->params);
 
     while (multimap_iterate(&mm_iter)) {
-      log_debug("'%s' (%ld): '%s' (%ld)", mm_iter.key, strlen(mm_iter.key), mm_iter.value, strlen(mm_iter.value));
+      log_append(backend->log, LOG_DEBUG, "'%s' (%ld): '%s' (%ld)",
+          mm_iter.key, strlen(mm_iter.key), mm_iter.value, strlen(mm_iter.value));
     }
   }
 
@@ -205,9 +202,8 @@ static void debug_backend_data_handler(backend_t * backend, worker_t * worker, h
   UNUSED(worker);
   UNUSED(request);
 
-  if (LOG_TRACE) {
-    log_trace("Received %ld bytes of data from client (last? %s)", length, last ? "yes" : "no");
-  }
+  log_append(backend->log, LOG_TRACE, "Received %ld bytes of data from client (last? %s)",
+      length, last ? "yes" : "no");
 
   uint8_t * out = malloc(sizeof(uint8_t) * length);
   // convert all bytes to lowercase

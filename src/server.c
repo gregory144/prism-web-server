@@ -8,6 +8,7 @@
 
 #include <uv.h>
 
+#include "util/log.h"
 #include "util/util.h"
 #include "http/http.h"
 #include "http/request.h"
@@ -24,16 +25,14 @@ static int total_clients = 0;
 
 static void server_sigpipe_handler(uv_signal_t * sigpipe_handler, int signum)
 {
-  log_warning("Caught SIGPIPE: %d", signum);
-
-  UNUSED(sigpipe_handler);
+  server_t * server = sigpipe_handler->data;
+  log_append(server->log, LOG_WARN, "Caught SIGPIPE: %d", signum);
 }
 
 static void server_sigint_handler(uv_signal_t * sigint_handler, int signum)
 {
-  log_info("Caught SIGINT: %d", signum);
-
   server_t * server = sigint_handler->data;
+  log_append(server->log, LOG_INFO, "Caught SIGINT: %d", signum);
 
   if (!server->terminate) {
     server_stop(server);
@@ -58,7 +57,8 @@ static void uv_cb_write(uv_write_t * req, int status)
   client_t * client = write_req_data->stream->data;
 
   if (status < 0) {
-    log_error("Write error: %s, client #%ld", uv_strerror(status), client->id);
+    log_append(client->log, LOG_ERROR,
+        "Write error: %s, client #%ld", uv_strerror(status), client->id);
   }
 
   uv_async_send(&client->written_handle);
@@ -82,7 +82,7 @@ static void server_uv_async_cb_write(uv_async_t * async_handle)
 
     if (uv_is_active((uv_handle_t *) stream) && !client->eof) {
 
-      log_debug("Writing for client: #%ld", client->id);
+      log_append(client->log, LOG_DEBUG, "Writing for client: #%ld", client->id);
 
       http_write_req_data_t * write_req_data = malloc(sizeof(http_write_req_data_t));
       write_req_data->stream = (uv_stream_t *) stream;
@@ -91,12 +91,12 @@ static void server_uv_async_cb_write(uv_async_t * async_handle)
       write_req_data->buf.base = (char *) worker_buffer->buffer;
       write_req_data->buf.len = worker_buffer->length;
 
-      if (LOG_DATA) {
-        log_trace("uv_write: %s, %ld", worker_buffer->buffer, worker_buffer->length);
+      if (log_enabled(client->data_log)) {
+        log_append(client->data_log, LOG_TRACE, "uv_write: %s, %ld", worker_buffer->buffer, worker_buffer->length);
         size_t i;
 
         for (i = 0; i < worker_buffer->length; i++) {
-          log_trace("%02x", worker_buffer->buffer[i]);
+          log_append(client->data_log, LOG_TRACE, "%02x", worker_buffer->buffer[i]);
         }
       }
 
@@ -125,7 +125,7 @@ static void client_free_close_cb(uv_handle_t * handle)
   if (client->closed_async_handle_count == 3) {
 
     open_clients--;
-    log_debug("Freed client %ld (%d/%d left)", client->id, open_clients, total_clients);
+    log_append(client->log, LOG_DEBUG, "Freed client %ld (%d/%d left)", client->id, open_clients, total_clients);
     free(client);
 
   }
@@ -135,15 +135,15 @@ static void client_free(client_t * client)
 {
 
   if (!client->http_closed) {
-    log_trace("Freeing client but http not finished: %ld", client->id);
+    log_append(client->log, LOG_TRACE, "Freeing client but http not finished: %ld", client->id);
   }
 
   if (!client->uv_closed) {
-    log_trace("Freeing client but uv not finished: %ld", client->id);
+    log_append(client->log, LOG_TRACE, "Freeing client but uv not finished: %ld", client->id);
   }
 
   if (!client->reads_finished) {
-    log_trace("Freeing client but reads not finished: %ld", client->id);
+    log_append(client->log, LOG_TRACE, "Freeing client but reads not finished: %ld", client->id);
   }
 
   // wait until all threads have finished with it
@@ -171,7 +171,7 @@ static void uv_cb_close_connection(uv_handle_t * handle)
 
   client_t * client = handle->data;
 
-  log_debug("Closing connection from uv callback: %ld, reads = %ld octets, writes = %ld octets",
+  log_append(client->log, LOG_DEBUG, "Closing connection from uv callback: %ld, reads = %ld octets, writes = %ld octets",
             client->id, client->octets_read, client->octets_written);
 
   client->uv_closed = true;
@@ -185,7 +185,7 @@ static void uv_cb_shutdown(uv_shutdown_t * shutdown_req, int status)
   client_t * client = shutdown_req->data;
 
   if (status) {
-    log_error("Shutdown error, client: %ld: %s", client->id, uv_strerror(status));
+    log_append(client->log, LOG_ERROR, "Shutdown error, client: %ld: %s", client->id, uv_strerror(status));
   }
 
   if (!client->closing) {
@@ -209,7 +209,7 @@ static void uv_cb_read(uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf
   if (nread == UV_EOF) {
     free(buf->base);
 
-    log_debug("EOF, client: %ld", client->id);
+    log_append(client->log, LOG_DEBUG, "EOF, client: %ld", client->id);
 
     client->eof = true;
     worker_queue(client, true, NULL, 0);
@@ -218,7 +218,7 @@ static void uv_cb_read(uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf
   } else if (nread < 0) {
     free(buf->base);
 
-    log_error("Read error, client: %ld: %s", client->id, uv_strerror(nread));
+    log_append(client->log, LOG_ERROR, "Read error, client: %ld: %s", client->id, uv_strerror(nread));
 
     client->eof = true;
     worker_queue(client, true, NULL, 0);
@@ -229,7 +229,7 @@ static void uv_cb_read(uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf
     return;
   }
 
-  log_debug("Queueing from client: #%ld", client->id);
+  log_append(client->log, LOG_DEBUG, "Queueing from client: #%ld", client->id);
   worker_queue(client, false, (uint8_t *) buf->base, nread);
 
 }
@@ -237,7 +237,7 @@ static void uv_cb_read(uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf
 static void server_uv_async_cb_read_finished(uv_async_t * async_handle)
 {
   client_t * client = async_handle->data;
-  log_debug("Read finished async callback: %ld", client->id);
+  log_append(client->log, LOG_DEBUG, "Read finished async callback: %ld", client->id);
 
   if (atomic_int_value(&client->read_counter) == 0) {
     client->reads_finished = true;
@@ -250,7 +250,7 @@ static void server_uv_async_cb_read_finished(uv_async_t * async_handle)
 static void server_uv_async_cb_close(uv_async_t * async_handle)
 {
   client_t * client = async_handle->data;
-  log_debug("Closing connection from async callback: %ld", client->id);
+  log_append(client->log, LOG_DEBUG, "Closing connection from async callback: %ld", client->id);
 
   client->http_closed = true;
 
@@ -275,9 +275,9 @@ static bool tls_cb_write_to_app(void * data, uint8_t * buf, size_t length)
 {
   client_t * client = data;
 
-  log_trace("Passing %ld octets of data from TLS handler to application", length);
+  log_append(client->log, LOG_TRACE, "Passing %ld octets of data from TLS handler to application", length);
   worker_parse(client, (uint8_t *)buf, length);
-  log_trace("Passed %ld octets of data from TLS handler to application", length);
+  log_append(client->log, LOG_TRACE, "Passed %ld octets of data from TLS handler to application", length);
 
   return true;
 }
@@ -303,19 +303,21 @@ static void server_data_handler(void * data, http_request_t * request, http_resp
 
 static void uv_cb_listen(uv_stream_t * tcp_server, int status)
 {
+  server_t * server = tcp_server->data;
+
   if (status == -1) {
-    log_error("Listen failed: %d", status);
+    log_append(server->log, LOG_ERROR, "Listen failed: %d", status);
     // error!
     return;
   }
-
-  server_t * server = tcp_server->data;
 
   open_clients++;
   total_clients++;
   client_t * client = malloc(sizeof(client_t));
   client->id = server->client_ids++;
-  log_debug("Initializing client %ld (%d)", client->id, total_clients);
+  log_append(server->log, LOG_DEBUG, "Initializing client %ld (%d)", client->id, total_clients);
+  client->log = server->log;
+  client->data_log = server->data_log;
   client->selected_protocol = false;
   client->closing = false;
   client->closed = false;
@@ -332,7 +334,6 @@ static void uv_cb_listen(uv_stream_t * tcp_server, int status)
     free(client);
     return;
   }
-
 
   client->write_queue = blocking_queue_init();
 
@@ -353,8 +354,9 @@ static void uv_cb_listen(uv_stream_t * tcp_server, int status)
   char * hostname = server->config->hostname;
   int port = server->config->port;
 
-  client->connection = http_connection_init(client, scheme, hostname, port, server_request_handler,
-                       server_data_handler, worker_http_cb_write, worker_http_cb_close_connection);
+  client->connection = http_connection_init(client, &server->config->http_log, &server->config->hpack_log,
+      scheme, hostname, port, server_request_handler, server_data_handler, worker_http_cb_write,
+      worker_http_cb_close_connection);
 
   uv_tcp_init(&server->loop, &client->tcp);
   client->tcp.data = client;
@@ -369,12 +371,12 @@ static void uv_cb_listen(uv_stream_t * tcp_server, int status)
     int err = uv_read_start((uv_stream_t *) &client->tcp, uv_cb_alloc_buffer, uv_cb_read);
 
     if (err < 0) {
-      log_error("Read error: %s", uv_strerror(err));
+      log_append(server->log, LOG_ERROR, "Read error: %s", uv_strerror(err));
     }
   } else {
     // according to libuv docs - this should never fail as long as we're only calling uv_accept
     // once per listen callback
-    log_fatal("Accepting the connection failed");
+    log_append(server->log, LOG_FATAL, "Accepting the connection failed");
     abort();
   }
 }
@@ -391,10 +393,13 @@ server_t * server_init(server_config_t * config)
   server->tls_ctx = NULL;
   server->config = config;
   server->client_ids = 0;
+  server->log = &config->server_log;
+  server->data_log = &config->data_log;
 
   server->terminate = false;
 
-  backend_t * backend = backend_init(&server->backend, server->config->backend_file, (struct server_s *) server);
+  backend_t * backend = backend_init(&server->backend, &server->config->backend_log,
+      server->config->backend_file, (struct server_s *) server);
 
   if (!backend) {
     free(server);
@@ -402,7 +407,7 @@ server_t * server_init(server_config_t * config)
   }
 
   if (config->use_tls) {
-    server->tls_ctx = tls_server_init(config->private_key_file, config->cert_file);
+    server->tls_ctx = tls_server_init(&server->config->tls_log, config->private_key_file, config->cert_file);
 
     if (!server->tls_ctx) {
       free(server);
@@ -413,6 +418,7 @@ server_t * server_init(server_config_t * config)
   uv_loop_init(&server->loop);
 
   uv_signal_init(&server->loop, &server->sigpipe_handler);
+  server->sigpipe_handler.data = server;
   uv_signal_init(&server->loop, &server->sigint_handler);
   server->sigint_handler.data = server;
 
@@ -464,7 +470,7 @@ int server_start(server_t * server)
   server->workers = malloc(sizeof(worker_t *) * server->config->num_workers);
 
   for (i = 0; i < server->config->num_workers; i++) {
-    worker_t * worker = worker_init();
+    worker_t * worker = worker_init(server->log);
     worker->server = server;
 
     uv_thread_create(&worker->thread, worker_work, worker);
@@ -483,11 +489,11 @@ int server_start(server_t * server)
   int err = uv_listen((uv_stream_t *) &server->tcp_handler, LISTEN_BACKLOG, uv_cb_listen);
 
   if (err < 0) {
-    log_error("Listen error: %s", uv_strerror(err));
+    log_append(server->log, LOG_ERROR, "Listen error: %s", uv_strerror(err));
     return 1;
   }
 
-  log_info("Server starting on %s:%d", server->config->hostname, server->config->port);
+  log_append(server->log, LOG_INFO, "Server starting on %s:%d", server->config->hostname, server->config->port);
 
   uv_signal_start(&server->sigpipe_handler, server_sigpipe_handler, SIGPIPE);
   uv_signal_start(&server->sigint_handler, server_sigint_handler, SIGINT);
@@ -502,9 +508,9 @@ int server_start(server_t * server)
 
 void server_stop(server_t * server)
 {
-  log_info("Server shutting down...");
+  log_append(server->log, LOG_INFO, "Server shutting down...");
 
-  log_debug("Closing %ld workers", server->config->num_workers);
+  log_append(server->log, LOG_DEBUG, "Closing %ld workers", server->config->num_workers);
 
   // tell the workers to stop
   size_t i;
@@ -512,7 +518,7 @@ void server_stop(server_t * server)
   for (i = 0; i < server->config->num_workers; i++) {
     worker_t * worker = server->workers[i];
 
-    log_debug("Closing worker #%ld with %ld assigned reads (pushes: %ld, pops: %ld, length: %ld)",
+    log_append(server->log, LOG_DEBUG, "Closing worker #%ld with %ld assigned reads (pushes: %ld, pops: %ld, length: %ld)",
               i, worker->assigned_reads, worker->read_queue->num_pushes, worker->read_queue->num_pops,
               worker->read_queue->length);
 

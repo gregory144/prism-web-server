@@ -153,11 +153,12 @@ bool hpack_encode_quantity(binary_buffer_t * const buf, const uint8_t first_byte
   return true;
 }
 
-hpack_context_t * hpack_context_init(const size_t header_table_size)
+hpack_context_t * hpack_context_init(const size_t header_table_size, log_context_t * log)
 {
   hpack_context_t * context = malloc(sizeof(hpack_context_t));
   ASSERT_OR_RETURN_NULL(context);
 
+  context->log = log;
   context->max_size = header_table_size;
   context->current_size = 0;
   context->header_table = circular_buffer_init(header_table_size / ESTIMATED_HEADER_ENTRY_SIZE);
@@ -191,7 +192,7 @@ void hpack_context_free(hpack_context_t * const context)
 
 static hpack_header_table_entry_t * hpack_header_table_get(hpack_context_t * const context, const size_t index)
 {
-  log_trace("Getting from header table with adjusted index: %ld", index);
+  log_append(context->log, LOG_TRACE, "Getting from header table with adjusted index: %ld", index);
 
   if (index > 0 && index <= context->header_table->length) {
     return circular_buffer_get(context->header_table, index);
@@ -257,7 +258,7 @@ static hpack_header_table_entry_t * hpack_header_table_add(hpack_context_t * con
   // make sure it fits in the header table before adding it
   if (header->size_in_table <= context->max_size) {
 
-    log_trace("Adding to header table: '%s' (%ld): '%s' (%ld)",
+    log_append(context->log, LOG_TRACE, "Adding to header table: '%s' (%ld): '%s' (%ld)",
               header->name, header->name_length, header->value, header->value_length);
 
     context->current_size += header->size_in_table;
@@ -295,7 +296,6 @@ static bool hpack_decode_string_literal(
   hpack_context_t * const context, const uint8_t * const buf, const size_t length,
   size_t * const current, string_and_length_t * const ret)
 {
-  UNUSED(context);
   ASSERT_OR_RETURN_FALSE(ret);
   bool first_bit = get_bit(buf + (*current), 0); // is it huffman encoded?
   hpack_decode_quantity_result_t key_name_result;
@@ -303,7 +303,7 @@ static bool hpack_decode_string_literal(
   *current += key_name_result.num_bytes;
   size_t key_name_length = key_name_result.value;
 
-  log_trace("Decoding string literal length: %ld", key_name_length);
+  log_append(context->log, LOG_TRACE, "Decoding string literal length: %ld", key_name_length);
 
   char * key_name;
 
@@ -336,7 +336,7 @@ static hpack_header_table_entry_t * hpack_table_get(hpack_context_t * const cont
   }
 
   if (entry) {
-    log_trace("From index: %s: %s", entry->name, entry->value);
+    log_append(context->log, LOG_TRACE, "From index: %s: %s", entry->name, entry->value);
   }
 
   return entry;
@@ -363,7 +363,7 @@ static bool hpack_decode_literal_header(
   size_t header_table_index = index_result.value;
   *current += index_result.num_bytes;
 
-  log_trace("Adding literal header field: %ld, %ld", index_result.value, index_result.num_bytes);
+  log_append(context->log, LOG_TRACE, "Adding literal header field: %ld, %ld", index_result.value, index_result.num_bytes);
 
   char * key_name = NULL;
   size_t key_name_length = 0;
@@ -375,7 +375,7 @@ static bool hpack_decode_literal_header(
     string_and_length_t ret;
 
     if (!hpack_decode_string_literal(context, buf, length, current, &ret)) {
-      log_error("Error decoding literal header: unable to decode literal name");
+      log_append(context->log, LOG_ERROR, "Error decoding literal header: unable to decode literal name");
       return false;
     }
 
@@ -383,7 +383,7 @@ static bool hpack_decode_literal_header(
     key_name_length = ret.length;
     free_name = true;
 
-    log_trace("Literal name: '%s' (%ld)", key_name, key_name_length);
+    log_append(context->log, LOG_TRACE, "Literal name: '%s' (%ld)", key_name, key_name_length);
 
   } else {
 
@@ -392,7 +392,7 @@ static bool hpack_decode_literal_header(
 
     if (!entry) {
       // TODO protocol error - invalid index
-      log_error("Error decoding literal header with indexed name: invalid index (%d)", header_table_index);
+      log_append(context->log, LOG_ERROR, "Error decoding literal header with indexed name: invalid index (%d)", header_table_index);
       return false;
     }
 
@@ -410,7 +410,7 @@ static bool hpack_decode_literal_header(
   string_and_length_t ret;
 
   if (!hpack_decode_string_literal(context, buf, length, current, &ret)) {
-    log_error("Error decoding literal header: unable to decode literal value");
+    log_append(context->log, LOG_ERROR, "Error decoding literal header: unable to decode literal value");
 
     if (free_name) {
       free(key_name);
@@ -422,7 +422,7 @@ static bool hpack_decode_literal_header(
   char * value = ret.value;
   size_t value_length = ret.length;
 
-  log_trace("Emitting header literal value: %s (%ld), %s (%ld)", key_name, key_name_length, value, value_length);
+  log_append(context->log, LOG_TRACE, "Emitting header literal value: %s (%ld), %s (%ld)", key_name, key_name_length, value, value_length);
 
   if (add_to_header_table) {
     hpack_header_table_add(context, key_name, key_name_length, free_name, value, value_length, true);
@@ -457,7 +457,7 @@ static bool hpack_decode_indexed_header(
   if (index == 0) {
 
     // decoding error (see 4.2)
-    log_error("Error decoding indexed header: invalid index (0)");
+    log_append(context->log, LOG_ERROR, "Error decoding indexed header: invalid index (0)");
     return false;
 
   } else {
@@ -465,7 +465,7 @@ static bool hpack_decode_indexed_header(
     hpack_header_table_entry_t * entry = hpack_table_get(context, index);
 
     if (!entry) {
-      log_error("Error decoding indexed header: invalid index (%ld)", index);
+      log_append(context->log, LOG_ERROR, "Error decoding indexed header: invalid index (%ld)", index);
       return false;
     }
 
@@ -504,7 +504,7 @@ header_list_t * hpack_decode(hpack_context_t * const context, const uint8_t * co
   header_list_t * header_list = header_list_init(NULL);
   ASSERT_OR_RETURN_NULL(header_list);
 
-  log_trace("Decompressing headers: %ld, %ld", current, length);
+  log_append(context->log, LOG_TRACE, "Decompressing headers: %ld, %ld", current, length);
 
   while (current < length) {
     uint8_t first_bit = get_bits8(buf + current, 0x80);
@@ -554,8 +554,6 @@ static bool hpack_encode_string_literal(binary_buffer_t * const encoded, char * 
 binary_buffer_t * hpack_encode(hpack_context_t * const context, const header_list_t * const header_list,
                                binary_buffer_t * result)
 {
-  UNUSED(context);
-
   ASSERT_OR_RETURN_NULL(binary_buffer_init(result, 512));
 
   header_list_iter_t iter;
@@ -567,7 +565,7 @@ binary_buffer_t * hpack_encode(hpack_context_t * const context, const header_lis
     char * value = iter.field->value;
     size_t value_length = iter.field->value_length;
 
-    log_trace("Encoding Reponse Header: %s (%ld): %s (%ld)", name, name_length, value, value_length);
+    log_append(context->log, LOG_TRACE, "Encoding Reponse Header: %s (%ld): %s (%ld)", name, name_length, value, value_length);
 
     // 4.3.2 Literal Header Field without Indexing - New Name
     // First byte = all zeros
@@ -577,7 +575,7 @@ binary_buffer_t * hpack_encode(hpack_context_t * const context, const header_lis
     ASSERT_OR_RETURN_FALSE(hpack_encode_string_literal(result, value, value_length));
   }
 
-  log_trace("Encoded headers into %ld bytes", binary_buffer_size(result));
+  log_append(context->log, LOG_TRACE, "Encoded headers into %ld bytes", binary_buffer_size(result));
 
   return result;
 }

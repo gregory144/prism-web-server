@@ -7,7 +7,7 @@ static void worker_handle(uv_async_t * async_handle);
 
 static void worker_stop(uv_async_t * async_handle);
 
-static worker_t * worker_init()
+static worker_t * worker_init(log_context_t * log)
 {
   worker_t * worker = malloc(sizeof(worker_t));
 
@@ -21,6 +21,8 @@ static worker_t * worker_init()
 
   uv_async_init(&worker->loop, &worker->stop_handle, worker_stop);
   worker->stop_handle.data = worker;
+
+  worker->log = log;
 
   return worker;
 }
@@ -79,7 +81,7 @@ static void worker_queue(client_t * client, bool eof, uint8_t * buffer, size_t l
   blocking_queue_push(worker->read_queue, worker_buffer);
 
   uv_async_send(&worker->async_handle);
-  log_trace("Assigning to worker: #%ld with %ld reads", client->worker_index, worker->assigned_reads);
+  log_append(server->log, LOG_TRACE, "Assigning to worker: #%ld with %ld reads", client->worker_index, worker->assigned_reads);
 }
 
 static bool worker_write_to_network(void * data, uint8_t * buffer, size_t length)
@@ -105,7 +107,7 @@ static bool worker_write_to_network(void * data, uint8_t * buffer, size_t length
 static void worker_uv_cb_written_handle_closed(uv_handle_t * handle)
 {
   client_t * client = handle->data;
-  log_debug("Closing client: %ld", client->id);
+  log_append(client->log, LOG_DEBUG, "Closing client: %ld", client->id);
 
   uv_async_send(&client->close_handle);
 }
@@ -133,12 +135,12 @@ static bool worker_http_cb_write(void * data, uint8_t * buf, size_t length)
 
   client->octets_written += length;
 
-  log_debug("Write client #%ld (%ld octets, %ld total)", client->id, length, client->octets_written);
+  log_append(server->log, LOG_DEBUG, "Write client #%ld (%ld octets, %ld total)", client->id, length, client->octets_written);
 
   if (server->config->use_tls) {
-    log_trace("Passing %ld octets of data from application to TLS handler", length);
+  log_append(server->log, LOG_TRACE, "Passing %ld octets of data from application to TLS handler", length);
     bool ret = tls_encrypt_data_and_pass_to_network(client->tls_ctx, buf, length);
-    log_trace("Passed %ld octets of data from application to TLS handler", length);
+    log_append(server->log, LOG_TRACE, "Passed %ld octets of data from application to TLS handler", length);
     return ret;
   } else {
     return worker_write_to_network(client, buf, length);
@@ -159,7 +161,7 @@ static void worker_parse(client_t * client, uint8_t * buffer, size_t length)
     client->selected_protocol = true;
   }
 
-  log_debug("Read client #%ld (%ld octets, %ld total)", client->id, length, client->octets_read);
+  log_append(client->log, LOG_DEBUG, "Read client #%ld (%ld octets, %ld total)", client->id, length, client->octets_read);
 
   http_connection_t * connection = client->connection;
   http_connection_read(connection, buffer, length);
@@ -195,13 +197,13 @@ static void worker_handle(uv_async_t * async_handle)
 
       tls_client_ctx_t * tls_client_ctx = client->tls_ctx;
 
-      log_trace("Passing %ld octets of data from network to TLS handler", buffer->length);
+      log_append(server->log, LOG_TRACE, "Passing %ld octets of data from network to TLS handler", buffer->length);
 
       if (!tls_decrypt_data_and_pass_to_app(tls_client_ctx, buffer->buffer, buffer->length)) {
         worker_close(client);
       }
 
-      log_trace("Passed %ld octets of data from network to TLS handler", buffer->length);
+      log_append(server->log, LOG_TRACE, "Passed %ld octets of data from network to TLS handler", buffer->length);
 
     } else {
       worker_parse(client, buffer->buffer, buffer->length);
@@ -236,7 +238,7 @@ static void worker_free(worker_t * worker)
   uv_close((uv_handle_t *) &worker->stop_handle, uv_close_cb_worker_stop);
   uv_close((uv_handle_t *) &worker->async_handle, uv_close_cb_worker_stop);
 
-  log_debug("Closing worker loop");
+  log_append(worker->log, LOG_DEBUG, "Closing worker loop");
   uv_loop_close(&worker->loop);
 
   free(worker);
@@ -247,6 +249,6 @@ static void worker_work(void * arg)
   worker_t * worker = arg;
 
   uv_run(&worker->loop, UV_RUN_DEFAULT);
-  log_debug("Worker loop finished");
+  log_append(worker->log, LOG_DEBUG, "Worker loop finished");
 }
 

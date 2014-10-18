@@ -36,10 +36,7 @@ header_list_linked_field_t * header_list_get(header_list_t * list, const char * 
   }
 
   while (curr) {
-    log_trace("Comparing name %s to %s (%ld)", curr->field.name, name, curr->field.name_length);
-
     if (strncasecmp(curr->field.name, name, curr->field.name_length) == 0) {
-      log_trace("Found %s", curr->field.value);
       return curr;
     }
 

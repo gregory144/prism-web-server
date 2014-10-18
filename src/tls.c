@@ -36,6 +36,8 @@ static const unsigned char supported_protocols[] = {
 };
 const unsigned char supported_protocols_length = HTTP2_VERSION_LENGTH + HTTP1_1_VERSION_LENGTH + 2;
 
+static int ssl_ctx_app_data_index;
+
 bool tls_init()
 {
   SSL_library_init();
@@ -43,6 +45,8 @@ bool tls_init()
 
   ERR_load_BIO_strings();
   OpenSSL_add_all_algorithms();
+
+  ssl_ctx_app_data_index = SSL_get_ex_new_index(0, NULL, NULL, NULL, NULL);
 
   return true;
 }
@@ -85,45 +89,47 @@ static bool tls_ssl_zero_return(const SSL * const ssl, int retval)
 
 static bool tls_debug_error(const SSL * const ssl, int retval, char * prefix)
 {
+  tls_server_ctx_t * tls_ctx = (tls_server_ctx_t *) SSL_get_ex_data(ssl, ssl_ctx_app_data_index);
+
   int err = SSL_get_error(ssl, retval);
 
   switch (err) {
     case SSL_ERROR_WANT_READ:
-      log_trace("%s: WANT_READ", prefix);
+      log_append(tls_ctx->log, LOG_TRACE, "%s: WANT_READ", prefix);
       break; // not an error condition
 
     case SSL_ERROR_WANT_WRITE:
-      log_trace("%s: WANT_WRITE", prefix);
+      log_append(tls_ctx->log, LOG_TRACE, "%s: WANT_WRITE", prefix);
       break; // not an error condition
 
     case SSL_ERROR_NONE:
-      log_error("%s: SSL_ERROR_NONE", prefix);
+      log_append(tls_ctx->log, LOG_ERROR, "%s: SSL_ERROR_NONE", prefix);
       return false;
 
     case SSL_ERROR_ZERO_RETURN:
-      log_error("%s: SSL_ERROR_ZERO_RETURN", prefix);
+      log_append(tls_ctx->log, LOG_ERROR, "%s: SSL_ERROR_ZERO_RETURN", prefix);
       return false;
 
     case SSL_ERROR_WANT_CONNECT:
-      log_error("%s: WANT_CONNECT", prefix);
+      log_append(tls_ctx->log, LOG_ERROR, "%s: WANT_CONNECT", prefix);
       return false;
 
     case SSL_ERROR_WANT_ACCEPT:
-      log_error("%s: WANT_ACCEPT", prefix);
+      log_append(tls_ctx->log, LOG_ERROR, "%s: WANT_ACCEPT", prefix);
       return false;
 
     case SSL_ERROR_WANT_X509_LOOKUP:
-      log_error("%s: WANT_X509_LOOKUP", prefix);
+      log_append(tls_ctx->log, LOG_ERROR, "%s: WANT_X509_LOOKUP", prefix);
       return false;
 
     case SSL_ERROR_SYSCALL:
       err = ERR_get_error();
-      log_error("%s: ERROR_SYSCALL: %s", prefix, ERR_error_string(err, NULL));
+      log_append(tls_ctx->log, LOG_ERROR, "%s: ERROR_SYSCALL: %s", prefix, ERR_error_string(err, NULL));
       return false;
 
     case SSL_ERROR_SSL:
       err = ERR_get_error();
-      log_error("%s: Generic ERROR: %s", prefix, ERR_error_string(err, NULL));
+      log_append(tls_ctx->log, LOG_ERROR, "%s: Generic ERROR: %s", prefix, ERR_error_string(err, NULL));
       return false;
   }
 
@@ -132,21 +138,23 @@ static bool tls_debug_error(const SSL * const ssl, int retval, char * prefix)
 
 int servername_callback(SSL * ssl, int * al, void * arg)
 {
-  UNUSED(ssl);
   UNUSED(al);
   UNUSED(arg);
+
+  tls_server_ctx_t * tls_ctx = SSL_get_ex_data(ssl, ssl_ctx_app_data_index);
+
   const char * hostname = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
 
   if (hostname) {
-    log_trace("SNI hostname: %s", hostname);
+    log_append(tls_ctx->log, LOG_TRACE, "SNI hostname: %s", hostname);
 
     if (!global_ssl_ctx) {
-      log_trace("Could not set SSL CTX");
+      log_append(tls_ctx->log, LOG_TRACE, "Could not set SSL CTX");
     }
 
     SSL_set_SSL_CTX(ssl, global_ssl_ctx);
   } else {
-    log_trace("SNI hostname: null");
+    log_append(tls_ctx->log, LOG_TRACE, "SNI hostname: null");
   }
 
   return SSL_TLSEXT_ERR_OK;
@@ -155,10 +163,11 @@ int servername_callback(SSL * ssl, int * al, void * arg)
 // handles NPN negotiation
 static int next_proto_callback(SSL * ssl, const unsigned char ** data, unsigned int * len, void * arg)
 {
-  UNUSED(ssl);
   UNUSED(arg);
 
-  log_trace("Selecting protocol [NPN]");
+  tls_server_ctx_t * tls_ctx = SSL_get_ex_data(ssl, ssl_ctx_app_data_index);
+
+  log_append(tls_ctx->log, LOG_TRACE, "Selecting protocol [NPN]");
   *data = supported_protocols;
   *len = supported_protocols_length;
 
@@ -171,10 +180,11 @@ static int next_proto_callback(SSL * ssl, const unsigned char ** data, unsigned 
 static int alpn_callback(SSL * ssl, const unsigned char ** out, unsigned char * outlen, const unsigned char * in,
                          unsigned int inlen, void * arg)
 {
-  UNUSED(ssl);
   UNUSED(arg);
 
-  log_trace("Selecting protocol using ALPN");
+  tls_server_ctx_t * tls_ctx = SSL_get_ex_data(ssl, ssl_ctx_app_data_index);
+
+  log_append(tls_ctx->log, LOG_TRACE, "Selecting protocol using ALPN");
 
   if (SSL_select_next_proto((unsigned char **) out, outlen, supported_protocols, supported_protocols_length, in,
                             inlen) != OPENSSL_NPN_NEGOTIATED) {
@@ -226,15 +236,12 @@ static void tls_thread_setup(void)
 static void tls_thread_cleanup(void)
 {
   CRYPTO_set_locking_callback(NULL);
-  log_debug("SSL cleanup");
 
   for (int i = 0; i < CRYPTO_num_locks(); i++) {
     uv_mutex_destroy(&(lock_cs[i]));
   }
 
   OPENSSL_free(lock_cs);
-
-  log_debug("SSL cleanup finished");
 }
 
 #else
@@ -252,7 +259,7 @@ static void tls_thread_cleanup(void)
 
 #endif
 
-tls_server_ctx_t * tls_server_init(char * key_file, char * cert_file)
+tls_server_ctx_t * tls_server_init(log_context_t * log, char * key_file, char * cert_file)
 {
   SSL_CTX * ssl_ctx = SSL_CTX_new(SSLv23_server_method());
 
@@ -272,7 +279,7 @@ tls_server_ctx_t * tls_server_init(char * key_file, char * cert_file)
   SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_NONE, NULL);
 
   if (SSL_CTX_set_cipher_list(ssl_ctx, DEFAULT_CIPHERS) == 0) {
-    log_trace("SSL_CTX_set_cipher_list failed: %s", ERR_error_string(ERR_get_error(), NULL));
+    log_append(log, LOG_FATAL, "SSL_CTX_set_cipher_list failed: %s", ERR_error_string(ERR_get_error(), NULL));
     SSL_CTX_free(ssl_ctx);
     return NULL;
   }
@@ -285,7 +292,7 @@ tls_server_ctx_t * tls_server_init(char * key_file, char * cert_file)
   EC_KEY * ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
 
   if (ecdh == NULL) {
-    log_fatal("EC_KEY_new_by_curve_name failed: %s", ERR_error_string(ERR_get_error(), NULL));
+    log_append(log, LOG_FATAL, "EC_KEY_new_by_curve_name failed: %s", ERR_error_string(ERR_get_error(), NULL));
     return NULL;
   }
 
@@ -311,6 +318,7 @@ tls_server_ctx_t * tls_server_init(char * key_file, char * cert_file)
 
   tls_server_ctx_t * tls_server_ctx = malloc(sizeof(tls_server_ctx_t));
   tls_server_ctx->ssl_ctx = ssl_ctx;
+  tls_server_ctx->log = log;
 
   return tls_server_ctx;
 }
@@ -332,6 +340,7 @@ tls_client_ctx_t * tls_client_init(tls_server_ctx_t * server_ctx, void * data,
 
   tls_client_ctx_t * tls_client_ctx = malloc(sizeof(tls_client_ctx_t));
   ASSERT_OR_RETURN_NULL(tls_client_ctx);
+  tls_client_ctx->log = server_ctx->log;
   tls_client_ctx->selected_protocol = NULL;
   tls_client_ctx->handshake_complete = false;
   tls_client_ctx->writing_to_app = false;
@@ -349,13 +358,15 @@ tls_client_ctx_t * tls_client_init(tls_server_ctx_t * server_ctx, void * data,
     return NULL;
   }
 
+  SSL_set_ex_data(ssl, ssl_ctx_app_data_index, server_ctx);
+
   tls_client_ctx->ssl = ssl;
 
   // TODO - test with small bio buffer sizes
   int err = BIO_new_bio_pair(&tls_client_ctx->app_bio, 0, &tls_client_ctx->network_bio, 0); // 0 for default size
 
   if (err != 1) {
-    log_error("Unable to create BIO pair");
+    log_append(server_ctx->log, LOG_ERROR, "Unable to create BIO pair");
     tls_client_free(tls_client_ctx);
     return NULL;
   }
@@ -376,7 +387,7 @@ static bool tls_read_decrypted_data_and_pass_to_app(tls_client_ctx_t * client_ct
     return true;
   }
 
-  log_trace("Reading decrypted data from app BIO and passing to app");
+  log_append(client_ctx->log, LOG_TRACE, "Reading decrypted data from app BIO and passing to app");
 
   while (true) {
     // read decrypted data
@@ -384,26 +395,26 @@ static bool tls_read_decrypted_data_and_pass_to_app(tls_client_ctx_t * client_ct
     int retval = SSL_read(client_ctx->ssl, read_buf, TLS_BUF_LENGTH);
 
     if (retval > 0) {
-      log_trace("SSL_read returned %ld", retval);
+      log_append(client_ctx->log, LOG_TRACE, "SSL_read returned %ld", retval);
 
       client_ctx->writing_to_app = true;
 
       if (!client_ctx->write_to_app(client_ctx->data, read_buf, retval)) {
-        log_error("Could not write decrypted data to application");
+        log_append(client_ctx->log, LOG_ERROR, "Could not write decrypted data to application");
         return false;
       }
 
       client_ctx->writing_to_app = false;
     } else if (tls_ssl_wants_read(client_ctx->ssl, retval)) {
-      log_trace("SSL_read: wants read");
+      log_append(client_ctx->log, LOG_TRACE, "SSL_read: wants read");
       free(read_buf);
       break; // continue
     } else if (tls_ssl_wants_write(client_ctx->ssl, retval)) {
-      log_trace("SSL_read: wants write");
+      log_append(client_ctx->log, LOG_TRACE, "SSL_read: wants write");
       free(read_buf);
       break; // continue
     } else if (tls_ssl_zero_return(client_ctx->ssl, retval)) {
-      log_trace("SSL_read: eof");
+      log_append(client_ctx->log, LOG_TRACE, "SSL_read: eof");
       free(read_buf);
       break; // continue
     } else {
@@ -423,11 +434,11 @@ static bool tls_read_encrypted_data_and_pass_to_network(tls_client_ctx_t * clien
   do {
     // read encrypted data from network bio, write to socket
     uint8_t * read_buf = malloc(sizeof(uint8_t) * TLS_BUF_LENGTH);
-    log_trace("Reading encrypted data from network BIO");
+    log_append(client_ctx->log, LOG_TRACE, "Reading encrypted data from network BIO");
     int retval = BIO_read(client_ctx->network_bio, read_buf, TLS_BUF_LENGTH);
 
     if (retval > 0) {
-      log_trace("BIO read: %d", retval);
+      log_append(client_ctx->log, LOG_TRACE, "BIO read: %d", retval);
 
       if (!client_ctx->write_to_network(client_ctx->data, read_buf, retval)) {
         return false;
@@ -437,11 +448,11 @@ static bool tls_read_encrypted_data_and_pass_to_network(tls_client_ctx_t * clien
 
       // try to BIO_read again
     } else if (BIO_should_read(client_ctx->network_bio)) {
-      log_trace("Network BIO: should read");
+      log_append(client_ctx->log, LOG_TRACE, "Network BIO: should read");
       free(read_buf);
       break; // continue
     } else if (BIO_should_write(client_ctx->network_bio)) {
-      log_trace("Network BIO: should write");
+      log_append(client_ctx->log, LOG_TRACE, "Network BIO: should write");
       free(read_buf);
       break; // continue
     } else {
@@ -470,8 +481,9 @@ static bool tls_update(tls_client_ctx_t * client_ctx)
 
 bool tls_set_version(tls_client_ctx_t * client_ctx)
 {
-  log_debug("SSL version: %s", SSL_get_version(client_ctx->ssl));
-  log_debug("SSL cipher: %s, %d", SSL_get_cipher_name(client_ctx->ssl), SSL_get_cipher_bits(client_ctx->ssl, NULL));
+  log_append(client_ctx->log, LOG_DEBUG, "SSL version: %s", SSL_get_version(client_ctx->ssl));
+  log_append(client_ctx->log, LOG_DEBUG, "SSL cipher: %s, %d", SSL_get_cipher_name(client_ctx->ssl),
+      SSL_get_cipher_bits(client_ctx->ssl, NULL));
 
   client_ctx->selected_tls_version = SSL_get_version(client_ctx->ssl);
   client_ctx->selected_cipher = SSL_get_cipher_name(client_ctx->ssl);
@@ -490,13 +502,13 @@ bool tls_set_protocol(tls_client_ctx_t * client_ctx)
   if (proto) {
 
     if (proto_len == http2_protocol_version_length && memcmp(http2_protocol_version, proto, proto_len) == 0) {
-      log_debug("Using protocol (through NPN): %s", http2_protocol_version);
+      log_append(client_ctx->log, LOG_DEBUG, "Using protocol (through NPN): %s", http2_protocol_version);
       client_ctx->selected_protocol = http2_protocol_version;
       return true;
     }
 
     if (proto_len == http1_1_protocol_version_length && memcmp(http1_1_protocol_version, proto, proto_len) == 0) {
-      log_debug("Using protocol (through NPN): %s", http1_1_protocol_version);
+      log_append(client_ctx->log, LOG_DEBUG, "Using protocol (through NPN): %s", http1_1_protocol_version);
       client_ctx->selected_protocol = http1_1_protocol_version;
       return true;
     }
@@ -507,13 +519,13 @@ bool tls_set_protocol(tls_client_ctx_t * client_ctx)
     if (proto) {
 
       if (proto_len == http2_protocol_version_length && memcmp(http2_protocol_version, proto, proto_len) == 0) {
-      log_debug("Using protocol (through ALPN): %s", http2_protocol_version);
+        log_append(client_ctx->log, LOG_DEBUG, "Using protocol (through ALPN): %s", http2_protocol_version);
         client_ctx->selected_protocol = http2_protocol_version;
         return true;
       }
 
       if (proto_len == http1_1_protocol_version_length && memcmp(http1_1_protocol_version, proto, proto_len) == 0) {
-        log_debug("Using protocol (through ALPN): %s", http1_1_protocol_version);
+        log_append(client_ctx->log, LOG_DEBUG, "Using protocol (through ALPN): %s", http1_1_protocol_version);
         client_ctx->selected_protocol = http1_1_protocol_version;
         return true;
       }
@@ -522,7 +534,7 @@ bool tls_set_protocol(tls_client_ctx_t * client_ctx)
 #endif
   }
 
-  log_debug("Did not negotiate protocol");
+  log_append(client_ctx->log, LOG_DEBUG, "Did not negotiate protocol");
   return false;
 }
 
@@ -532,7 +544,7 @@ bool tls_set_protocol(tls_client_ctx_t * client_ctx)
 bool tls_decrypt_data_and_pass_to_app(tls_client_ctx_t * client_ctx, uint8_t * buf, size_t length)
 {
 
-  log_trace("Writing encrypted data to network BIO");
+  log_append(client_ctx->log, LOG_TRACE, "Writing encrypted data to network BIO");
 
   size_t written = 0;
 
@@ -540,13 +552,14 @@ bool tls_decrypt_data_and_pass_to_app(tls_client_ctx_t * client_ctx, uint8_t * b
     int retval = BIO_write(client_ctx->network_bio, buf + written, length - written);
 
     if (retval > 0) {
-      log_trace("Wrote %d/%ld octets of encrypted data to network BIO for decryption", retval, length);
+      log_append(client_ctx->log, LOG_TRACE, "Wrote %d/%ld octets of encrypted data to network BIO for decryption", retval, length);
       written += retval;
     } else if (BIO_should_retry(client_ctx->network_bio)) {
       // the network BIO buffer maybe full - try freeing some space by
       // reading from it and passing it on to the app
       if (!tls_read_decrypted_data_and_pass_to_app(client_ctx)) {
-        log_error("Could not write encrypted data to network BIO for decryption: %d (should retry)", retval);
+        log_append(client_ctx->log, LOG_ERROR,
+            "Could not write encrypted data to network BIO for decryption: %d (should retry)", retval);
         free(buf);
 
         return true;
@@ -555,7 +568,7 @@ bool tls_decrypt_data_and_pass_to_app(tls_client_ctx_t * client_ctx, uint8_t * b
       // otherwise try again
     } else {
       // fatal error
-      log_error("Could not write encrypted data to network BIO for decryption: %d", retval);
+      log_append(client_ctx->log, LOG_ERROR, "Could not write encrypted data to network BIO for decryption: %d", retval);
       free(buf);
 
       return false;
@@ -566,22 +579,22 @@ bool tls_decrypt_data_and_pass_to_app(tls_client_ctx_t * client_ctx, uint8_t * b
 
   if (!client_ctx->handshake_complete) {
 
-    log_trace("Attempting handshake");
+    log_append(client_ctx->log, LOG_TRACE, "Attempting handshake");
     int retval = SSL_do_handshake(client_ctx->ssl);
 
     if (retval == 1) {
       // success
       client_ctx->handshake_complete = true;
-      log_trace("Handshake complete");
+      log_append(client_ctx->log, LOG_TRACE, "Handshake complete");
 
       tls_set_version(client_ctx);
 
       tls_set_protocol(client_ctx);
 
     } else if (tls_ssl_wants_read(client_ctx->ssl, retval)) {
-      log_trace("Handshake not yet complete, should read");
+      log_append(client_ctx->log, LOG_TRACE, "Handshake not yet complete, should read");
     } else if (tls_ssl_wants_write(client_ctx->ssl, retval)) {
-      log_trace("Handshake not yet complete, should write");
+      log_append(client_ctx->log, LOG_TRACE, "Handshake not yet complete, should write");
     } else {
       tls_debug_error(client_ctx->ssl, retval, "Handshake failed");
       return false;
@@ -595,7 +608,7 @@ bool tls_decrypt_data_and_pass_to_app(tls_client_ctx_t * client_ctx, uint8_t * b
 bool tls_encrypt_data_and_pass_to_network(tls_client_ctx_t * client_ctx, uint8_t * buf, size_t length)
 {
 
-  log_trace("Encrypting %ld octets of data from application", length);
+  log_append(client_ctx->log, LOG_TRACE, "Encrypting %ld octets of data from application", length);
 
   size_t written = 0;
   size_t remaining_length = length;
@@ -604,10 +617,10 @@ bool tls_encrypt_data_and_pass_to_network(tls_client_ctx_t * client_ctx, uint8_t
     int retval = SSL_write(client_ctx->ssl, buf + written, length - written);
 
     if (retval > 0) {
-      log_trace("SSL_write returned: %ld", retval);
+      log_append(client_ctx->log, LOG_TRACE, "SSL_write returned: %ld", retval);
       written += retval;
     } else if (tls_ssl_wants_read(client_ctx->ssl, retval)) {
-      log_trace("SSL_write: wants read with %ld bytes remaining", remaining_length);
+      log_append(client_ctx->log, LOG_TRACE, "SSL_write: wants read with %ld bytes remaining", remaining_length);
 
       // the ssl write buffer may be full, try to clear it out by
       // reading the already encrypted data from it
@@ -617,7 +630,7 @@ bool tls_encrypt_data_and_pass_to_network(tls_client_ctx_t * client_ctx, uint8_t
 
       // try again
     } else if (tls_ssl_wants_write(client_ctx->ssl, retval)) {
-      log_debug("SSL_write: wants write with %ld bytes remaining", remaining_length);
+      log_append(client_ctx->log, LOG_DEBUG, "SSL_write: wants write with %ld bytes remaining", remaining_length);
 
       if (!tls_read_encrypted_data_and_pass_to_network(client_ctx)) {
         return false;

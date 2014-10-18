@@ -172,16 +172,17 @@ bool h1_1_detect_connection(uint8_t * buffer, size_t buffer_length)
   return false;
 }
 
-h1_1_t * h1_1_init(void * const data, const char * scheme, const char * hostname, const int port,
-                   const h1_1_request_cb request_handler, const h1_1_data_cb data_handler,
-                   const h1_1_write_cb writer, const h1_1_write_error_cb error_writer,
-                   const h1_1_close_cb closer, const h1_1_request_init_cb request_init,
-                   const h1_1_upgrade_cb upgrade_cb)
+h1_1_t * h1_1_init(void * const data, log_context_t * log, const char * scheme, const char * hostname,
+    const int port, const h1_1_request_cb request_handler, const h1_1_data_cb data_handler,
+    const h1_1_write_cb writer, const h1_1_write_error_cb error_writer,
+    const h1_1_close_cb closer, const h1_1_request_init_cb request_init,
+    const h1_1_upgrade_cb upgrade_cb)
 {
   h1_1_t * h1_1 = malloc(sizeof(h1_1_t));
   ASSERT_OR_RETURN_NULL(h1_1);
 
   h1_1->data = data;
+  h1_1->log = log;
 
   h1_1->scheme = scheme;
   h1_1->hostname = hostname;
@@ -254,7 +255,7 @@ static void h1_1_close(h1_1_t * const h1_1)
 
 void h1_1_finished_writes(h1_1_t * const h1_1)
 {
-  log_trace("Finished write");
+  log_append(h1_1->log, LOG_TRACE, "Finished write");
   h1_1_close(h1_1);
 }
 
@@ -392,12 +393,12 @@ static int hp_headers_complete_cb(http_parser * http_parser)
     header_list_linked_field_t * upgrade_header = header_list_get(h1_1->headers, "upgrade", NULL);
 
     if (!upgrade_header) {
-      log_error("Parser indicated upgrade without upgrade header");
+      log_append(h1_1->log, LOG_ERROR, "Parser indicated upgrade without upgrade header");
       // settings header is required
       h1_1_close(h1_1);
     } else {
       char * protocol = upgrade_header->field.value;
-      log_debug("Upgrading to %s", protocol);
+      log_append(h1_1->log, LOG_DEBUG, "Upgrading to %s", protocol);
 
       if (strncmp("h2c-14", protocol, 6) == 0) {
         h1_1->upgrade_to_h2 = true;
@@ -485,13 +486,13 @@ static void h1_1_parse(h1_1_t * const h1_1, uint8_t * const buffer, const size_t
     header_list_linked_field_t * settings_header = header_list_get(h1_1->headers, "http2-settings", NULL);
 
     if (!settings_header) {
-      log_error("Tried to upgrade without settings header");
+      log_append(h1_1->log, LOG_ERROR, "Tried to upgrade without settings header");
       // settings header is required
       h1_1_close(h1_1);
     } else {
       header_field_t * field = &settings_header->field;
       char * settings = field->value;
-      log_trace("Upgrading to h2: %s", settings);
+      log_append(h1_1->log, LOG_TRACE, "Upgrading to h2: %s", settings);
       uint8_t * http2_buf_begin = buffer + ret;
       size_t buf_length = len - ret;
       h1_1->upgrade_cb(h1_1->data, settings, h1_1->headers, http2_buf_begin, buf_length);
@@ -501,10 +502,10 @@ static void h1_1_parse(h1_1_t * const h1_1, uint8_t * const buffer, const size_t
     enum http_errno err = h1_1->http_parser.http_errno;
 
     if (err != HPE_OK) {
-      log_error("Error parsing HTTP1 request: %s", http_errno_description(err));
+      log_append(h1_1->log, LOG_ERROR, "Error parsing HTTP1 request: %s", http_errno_description(err));
       h1_1_bad_request(h1_1);
     } else {
-      log_error("Could not process all of buffer: %ld / %ld", ret, len);
+      log_append(h1_1->log, LOG_ERROR, "Could not process all of buffer: %ld / %ld", ret, len);
     }
 
     h1_1_close(h1_1);

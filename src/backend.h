@@ -1,6 +1,8 @@
 #ifndef HTTP_BACKEND_H
 #define HTTP_BACKEND_H
 
+#include "log.h"
+
 #include "http/http.h"
 
 struct server_s;
@@ -8,6 +10,8 @@ struct server_s;
 struct worker_s;
 
 typedef struct {
+
+  log_context_t * log;
 
   char * backend_file;
 
@@ -41,7 +45,8 @@ typedef struct backend_handlers_s {
 
 typedef void (*backend_initializer)(backend_t * backend, struct server_s * server);
 
-backend_t * backend_init(backend_t * backend, char * backend_file, struct server_s * server);
+backend_t * backend_init(backend_t * backend, log_context_t * log, char * backend_file,
+    struct server_s * server);
 
 void backend_request_handler(backend_t * backend, struct worker_s * worker, http_request_t * request,
                              http_response_t * response);

@@ -7,7 +7,8 @@
 #include "util.h"
 #include "http/http.h"
 
-backend_t * backend_init(backend_t * backend, char * backend_file, struct server_s * server)
+backend_t * backend_init(backend_t * backend, log_context_t * log, char * backend_file,
+    struct server_s * server)
 {
   bool free_backend = false;
 
@@ -16,13 +17,14 @@ backend_t * backend_init(backend_t * backend, char * backend_file, struct server
     backend = malloc(sizeof(backend_t));
   }
 
+  backend->log = log;
   backend->handlers = malloc(sizeof(backend_handlers_t));
 
   backend->data = NULL;
   uv_lib_t * lib = &backend->lib;
 
   if (uv_dlopen(backend_file, lib)) {
-    log_fatal("Error loading backend: %s", uv_dlerror(&backend->lib));
+    log_append(backend->log, LOG_FATAL, "Error loading backend: %s", uv_dlerror(&backend->lib));
 
     if (free_backend) {
       free(backend);
@@ -30,13 +32,13 @@ backend_t * backend_init(backend_t * backend, char * backend_file, struct server
 
     return NULL;
   } else {
-    log_debug("Backend loaded");
+    log_append(backend->log, LOG_DEBUG, "Backend loaded");
   }
 
   backend_initializer init;
 
   if (uv_dlsym(lib, "backend_initialize", (void **) &init)) {
-    log_fatal("Error loading backend initializer: %s", uv_dlerror(lib));
+    log_append(backend->log, LOG_FATAL, "Error loading backend initializer: %s", uv_dlerror(lib));
 
     if (free_backend) {
       free(backend);

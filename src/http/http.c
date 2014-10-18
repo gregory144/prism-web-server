@@ -65,16 +65,17 @@ static void http_internal_close_cb(void * data)
 
 static http_request_t * http_internal_request_init_cb(void * data, void * req_user_data, header_list_t * headers)
 {
+  http_connection_t * connection = data;
   http_request_data_t * req_data = malloc(sizeof(http_request_data_t));
-  req_data->connection = data;
+  req_data->connection = connection;
   req_data->data = req_user_data;
-  return http_request_init(req_data, headers);
+  return http_request_init(req_data, connection->log, headers);
 }
 
 static void set_protocol_h2(http_connection_t * connection)
 {
   connection->protocol = H2;
-  connection->handler = h2_init(connection, connection->tls_version, connection->cipher,
+  connection->handler = h2_init(connection, connection->log, connection->hpack_log, connection->tls_version, connection->cipher,
                                 connection->cipher_key_size_in_bits,
                                 http_internal_request_cb, http_internal_data_cb, http_internal_write_cb, http_internal_close_cb,
                                 http_internal_request_init_cb);
@@ -116,19 +117,21 @@ static bool http_internal_upgrade_cb(void * data, char * settings_base64, header
 static void set_protocol_h1_1(http_connection_t * connection)
 {
   connection->protocol = H1_1;
-  connection->handler = h1_1_init(connection, connection->scheme, connection->hostname, connection->port,
-                                  http_internal_request_cb, http_internal_data_cb, http_internal_write_cb,
-                                  http_internal_write_error_cb, http_internal_close_cb,
-                                  http_internal_request_init_cb, http_internal_upgrade_cb);
+  connection->handler = h1_1_init(connection, connection->log, connection->scheme, connection->hostname,
+      connection->port, http_internal_request_cb, http_internal_data_cb, http_internal_write_cb,
+      http_internal_write_error_cb, http_internal_close_cb, http_internal_request_init_cb, http_internal_upgrade_cb);
 }
 
-http_connection_t * http_connection_init(void * const data, const char * scheme, const char * hostname, const int port,
-    const request_cb request_handler, const data_cb data_handler, const write_cb writer, const close_cb closer)
+http_connection_t * http_connection_init(void * const data, log_context_t * log, log_context_t * hpack_log,
+    const char * scheme, const char * hostname, const int port, const request_cb request_handler,
+    const data_cb data_handler, const write_cb writer, const close_cb closer)
 {
   http_connection_t * connection = malloc(sizeof(http_connection_t));
   ASSERT_OR_RETURN_NULL(connection);
 
   connection->data = data;
+  connection->log = log;
+  connection->hpack_log = hpack_log;
 
   connection->scheme = scheme;
   connection->hostname = hostname;
@@ -154,17 +157,17 @@ http_connection_t * http_connection_init(void * const data, const char * scheme,
 
 void http_connection_set_protocol(http_connection_t * const connection, const char * selected_protocol)
 {
-  log_debug("Selecting protocol: %s", selected_protocol);
+  log_append(connection->log, LOG_DEBUG, "Selecting protocol: %s", selected_protocol);
 
   if (selected_protocol) {
     if (strcmp(selected_protocol, "h2-14") == 0) {
-      log_debug("Selected 2.0");
+      log_append(connection->log, LOG_DEBUG, "Selected 2.0");
       set_protocol_h2(connection);
     } else if (strcmp(selected_protocol, "http/1.1") == 0) {
-      log_debug("Selected 1.1");
+      log_append(connection->log, LOG_DEBUG, "Selected 1.1");
       set_protocol_h1_1(connection);
     } else if (strcmp(selected_protocol, "http/1.0") == 0) {
-      log_debug("Selected 1.0");
+      log_append(connection->log, LOG_DEBUG, "Selected 1.0");
       set_protocol_h1_1(connection);
     }
   }
@@ -293,7 +296,7 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
   if (connection->protocol == NOT_SELECTED) {
     // auto select protocol
     if (!detect_protocol(connection, buffer, len)) {
-      log_error("Unrecognized protocol");
+      log_append(connection->log, LOG_ERROR, "Unrecognized protocol");
       free(buffer);
       http_connection_close(connection);
       return;

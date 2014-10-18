@@ -31,6 +31,9 @@ typedef struct {
 
   void * data;
 
+  log_context_t * log;
+  log_context_t * hpack_log;
+
   const char * scheme;
   const char * hostname;
   int port;
@@ -61,8 +64,9 @@ typedef struct {
 
 } http_request_data_t;
 
-http_connection_t * http_connection_init(void * const data, const char * scheme, const char * hostname, const int port,
-    const request_cb request_handler, const data_cb data_handler, const write_cb writer, const close_cb closer);
+http_connection_t * http_connection_init(void * const data, log_context_t * log, log_context_t * hpack_log,
+    const char * scheme, const char * hostname, const int port, const request_cb request_handler,
+    const data_cb data_handler, const write_cb writer, const close_cb closer);
 
 void http_connection_set_protocol(http_connection_t * const connection, const char * selected_protocol);
 

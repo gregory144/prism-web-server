@@ -1,5 +1,5 @@
 lib_LTLIBRARIES = libhttp_util.la
-libhttp_util_la_SOURCES = util.c base64url.c multimap.c binary_buffer.c hash_table.c blocking_queue.c atomic_int.c
+libhttp_util_la_SOURCES = log.c util.c base64url.c multimap.c binary_buffer.c hash_table.c blocking_queue.c atomic_int.c
 
 TESTS = check_util check_multimap check_binary_buffer check_hash_table check_priority_queue check_blocking_queue check_base64url
 check_PROGRAMS = check_util check_multimap check_binary_buffer check_hash_table check_priority_queue check_blocking_queue check_base64url

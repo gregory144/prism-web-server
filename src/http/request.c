@@ -41,7 +41,7 @@ static bool parse_path(http_request_t * const request)
   char * path = http_request_header_get(request, ":path");
 
   if (!path) {
-    log_error("No :path header provided");
+    log_append(request->log, LOG_ERROR, "No :path header provided");
     return false;
   }
 
@@ -159,12 +159,13 @@ static void parse_parameters(multimap_t * const params, char * query_string)
   }
 }
 
-http_request_t * http_request_init(void * handler_data, header_list_t * const header_list)
+http_request_t * http_request_init(void * handler_data, log_context_t * log, header_list_t * const header_list)
 {
   http_request_t * request = malloc(sizeof(http_request_t));
 
   request->handler_data = handler_data;
   request->data = NULL;
+  request->log = log;
 
   request->params = multimap_init_with_string_keys();
 
@@ -181,7 +182,7 @@ http_request_t * http_request_init(void * handler_data, header_list_t * const he
     char * method = http_request_header_get(request, ":method");
 
     if (!method) {
-      log_error("Missing :method header");
+      log_append(request->log, LOG_ERROR, "Missing :method header");
       http_request_free(request);
       return NULL;
     }
@@ -191,7 +192,7 @@ http_request_t * http_request_init(void * handler_data, header_list_t * const he
     char * scheme = http_request_header_get(request, ":scheme");
 
     if (!scheme) {
-      log_error("Missing :scheme header");
+      log_append(request->log, LOG_ERROR, "Missing :scheme header");
       http_request_free(request);
       return NULL;
     }

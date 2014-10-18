@@ -7,66 +7,6 @@
 #include <stdarg.h>
 #include <time.h>
 
-#define LOG_LEVEL_INFO true
-#define LOG_DATA false
-
-#if defined LOG_LEVEL_FATAL
-
-#define LOG_FATAL true
-#define LOG_ERROR false
-#define LOG_WARN false
-#define LOG_INFO false
-#define LOG_DEBUG false
-#define LOG_TRACE false
-
-#elif defined LOG_LEVEL_ERROR
-
-#define LOG_FATAL true
-#define LOG_ERROR true
-#define LOG_WARN false
-#define LOG_INFO false
-#define LOG_DEBUG false
-#define LOG_TRACE false
-
-#elif defined LOG_LEVEL_WARN
-
-#define LOG_FATAL true
-#define LOG_ERROR true
-#define LOG_WARN true
-#define LOG_INFO false
-#define LOG_DEBUG false
-#define LOG_TRACE false
-
-#elif defined LOG_LEVEL_INFO
-
-#define LOG_FATAL true
-#define LOG_ERROR true
-#define LOG_WARN true
-#define LOG_INFO true
-#define LOG_DEBUG false
-#define LOG_TRACE false
-
-#elif defined LOG_LEVEL_DEBUG
-
-#define LOG_FATAL true
-#define LOG_ERROR true
-#define LOG_WARN true
-#define LOG_INFO true
-#define LOG_DEBUG true
-#define LOG_TRACE false
-
-#elif defined LOG_LEVEL_TRACE
-
-#define LOG_FATAL true
-#define LOG_ERROR true
-#define LOG_WARN true
-#define LOG_INFO true
-#define LOG_DEBUG true
-#define LOG_TRACE true
-
-#endif
-
-
 #define UNUSED(expr) do { (void)(expr); } while (0)
 
 /**
@@ -114,17 +54,5 @@ uint32_t get_bits32(const uint8_t * const buf, const uint32_t mask);
 /*@null@*/ char * current_date_rfc1123(char * date_buf, size_t buf_len);
 
 /*@null@*/ char * date_rfc1123(char * date_buf, size_t buf_len, time_t t);
-
-void log_fatal(char * format, ...);
-
-void log_error(char * format, ...);
-
-void log_warning(char * format, ...);
-
-void log_info(char * format, ...);
-
-void log_debug(char * format, ...);
-
-void log_trace(char * format, ...);
 
 #endif

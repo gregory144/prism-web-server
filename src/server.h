@@ -3,6 +3,7 @@
 
 #include <uv.h>
 
+#include "util/log.h"
 #include "util/blocking_queue.h"
 #include "util/atomic_int.h"
 
@@ -25,9 +26,19 @@ typedef struct {
 
   char * backend_file;
 
+  log_context_t server_log;
+  log_context_t data_log;
+  log_context_t http_log;
+  log_context_t hpack_log;
+  log_context_t tls_log;
+  log_context_t backend_log;
+
 } server_config_t;
 
 typedef struct {
+
+  log_context_t * log;
+  log_context_t * data_log;
 
   server_config_t * config;
 
@@ -50,6 +61,10 @@ typedef struct {
 } server_t;
 
 typedef struct client_s {
+
+  log_context_t * log;
+  log_context_t * data_log;
+
   uv_tcp_t tcp;
 
   // used to nofity the server thread
@@ -100,6 +115,8 @@ typedef struct client_s {
 } client_t;
 
 typedef struct worker_s {
+
+  log_context_t * log;
 
   server_t * server;
 
