@@ -44,7 +44,7 @@ void log_append(log_context_t * ctx, enum log_level_e level, char * format, ...)
       abort();
     }
     va_end(ap);
-    if (fprintf(ctx->fp, "%s\t%s\n", LEVEL_STR[level], buf) < 0) {
+    if (fprintf(ctx->fp, "%s\t%s\t%s\n", ctx->name, LEVEL_STR[level], buf) < 0) {
       abort();
     }
     va_end(ap);
