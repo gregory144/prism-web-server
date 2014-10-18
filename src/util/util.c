@@ -152,8 +152,8 @@ static const char * MONTH_NAMES[] = {
   gettimeofday(&tv, NULL);
   nowtime = tv.tv_sec;
   nowtm = localtime(&nowtime);
-  int written = strftime(date_buf, sizeof tmbuf, "%Y-%m-%dT%H:%M:%S", nowtm);
-  snprintf(date_buf + written, buf_len - written, ".%06d", (int) tv.tv_usec);
+  int written = strftime(date_buf, sizeof tmbuf, "%Y-%m-%d %H:%M:%S", nowtm);
+  snprintf(date_buf + written, buf_len - written, ".%03d", (int) tv.tv_usec);
 
   return date_buf;
 }
