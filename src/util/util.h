@@ -55,4 +55,8 @@ uint32_t get_bits32(const uint8_t * const buf, const uint32_t mask);
 
 /*@null@*/ char * date_rfc1123(char * date_buf, size_t buf_len, time_t t);
 
+#define TIME_WITH_MS_LEN 24
+
+/*@null@*/ char * current_time_with_milliseconds(char * date_buf, size_t buf_len);
+
 #endif

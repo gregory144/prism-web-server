@@ -3,8 +3,10 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/time.h>
 
 #include "log.h"
+#include "util.h"
 
 static char * LEVEL_STR[] = {
   "FATAL",
@@ -44,7 +46,12 @@ void log_append(log_context_t * ctx, enum log_level_e level, char * format, ...)
       abort();
     }
     va_end(ap);
-    if (fprintf(ctx->fp, "%s\t%s\t%s\n", ctx->name, LEVEL_STR[level], buf) < 0) {
+
+    size_t date_buf_length = TIME_WITH_MS_LEN + 1;
+    char date_buf[date_buf_length];
+    char * time_str = current_time_with_milliseconds(date_buf, date_buf_length);
+
+    if (fprintf(ctx->fp, "%s\t%s\t[%s]\t%s\n", ctx->name, LEVEL_STR[level], time_str, buf) < 0) {
       abort();
     }
     va_end(ap);

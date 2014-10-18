@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/time.h>
 #include <time.h>
 
 #include "util.h"
@@ -133,3 +134,27 @@ static const char * MONTH_NAMES[] = {
 
   return date_buf;
 }
+
+/*@null@*/ char * current_time_with_milliseconds(char * date_buf, size_t buf_len)
+{
+  if (date_buf == NULL) {
+    date_buf = malloc(sizeof(char) * buf_len);
+    buf_len = TIME_WITH_MS_LEN + 1;
+  }
+
+  ASSERT_OR_RETURN_NULL(date_buf);
+
+  struct timeval tv;
+  time_t nowtime;
+  struct tm *nowtm;
+  char tmbuf[64];
+
+  gettimeofday(&tv, NULL);
+  nowtime = tv.tv_sec;
+  nowtm = localtime(&nowtime);
+  int written = strftime(date_buf, sizeof tmbuf, "%Y-%m-%dT%H:%M:%S", nowtm);
+  snprintf(date_buf + written, buf_len - written, ".%06d", (int) tv.tv_usec);
+
+  return date_buf;
+}
+
