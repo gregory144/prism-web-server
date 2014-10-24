@@ -57,16 +57,6 @@ bool plugin_handler_va(plugin_t * plugin, struct worker_s * worker, enum plugin_
   return plugin->handlers->handle(plugin, worker, cb, args);
 }
 
-bool plugin_handler(plugin_t * plugin, struct worker_s * worker, enum plugin_callback_e cb, ...)
-{
-  abort();
-  va_list list;
-  va_start(list, cb);
-  bool ret = plugin->handlers->handle(plugin, worker, cb, list);
-  va_end(list);
-  return ret;
-}
-
 void plugin_start(plugin_t * plugin)
 {
   plugin->handlers->start(plugin);
