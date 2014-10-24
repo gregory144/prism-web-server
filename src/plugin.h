@@ -1,9 +1,11 @@
-#ifndef HTTP_plugin_H
-#define HTTP_plugin_H
+#ifndef HTTP_PLUGIN_H
+#define HTTP_PLUGIN_H
+
+#include <uv.h>
 
 #include "log.h"
 
-#include "http/http.h"
+#include "plugin_callbacks.h"
 
 struct server_s;
 
@@ -27,18 +29,16 @@ typedef void (*plugin_start_cb)(plugin_t * plugin);
 
 typedef void (*plugin_stop_cb)(plugin_t * plugin);
 
-typedef void (*plugin_request_cb)(plugin_t * plugin, struct worker_s * worker, http_request_t * request,
-                                   http_response_t * response);
-
-typedef void (*plugin_data_cb)(plugin_t * plugin, struct worker_s * worker, http_request_t * request,
-                                http_response_t * response,
-                                uint8_t * buf, size_t len, bool last, bool free_buf);
+typedef bool (*plugin_internal_handler_cb)(plugin_t * plugin, struct worker_s * worker,
+    enum plugin_callback_e cb, va_list args);
+typedef bool (*plugin_internal_handler_va_cb)(plugin_t * plugin, struct worker_s * worker,
+    enum plugin_callback_e cb, ...);
 
 typedef struct plugin_handlers_s {
 
-  plugin_request_cb request;
-  plugin_data_cb data;
   plugin_start_cb start;
+  plugin_internal_handler_cb handle;
+  plugin_internal_handler_va_cb handle_va;
   plugin_stop_cb stop;
 
 } plugin_handlers_t;
@@ -48,12 +48,8 @@ typedef void (*plugin_initializer)(plugin_t * plugin, struct server_s * server);
 plugin_t * plugin_init(plugin_t * plugin, log_context_t * log, char * plugin_file,
     struct server_s * server);
 
-void plugin_request_handler(plugin_t * plugin, struct worker_s * worker, http_request_t * request,
-                             http_response_t * response);
-
-void plugin_data_handler(plugin_t * plugin, struct worker_s * worker, http_request_t * request,
-                          http_response_t * response,
-                          uint8_t * buf, size_t length, bool last, bool free_buf);
+bool plugin_handler(plugin_t * plugin, struct worker_s * worker, enum plugin_callback_e cb, ...);
+bool plugin_handler_va(plugin_t * plugin, struct worker_s * worker, enum plugin_callback_e cb, va_list args);
 
 void plugin_start(plugin_t * plugin);
 

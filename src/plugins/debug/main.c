@@ -14,6 +14,7 @@
 #include "log.h"
 #include "util.h"
 #include "http/http.h"
+#include "http/h2/h2.h"
 #include "http/request.h"
 
 static void debug_plugin_start(plugin_t * plugin)
@@ -221,13 +222,39 @@ static void debug_plugin_data_handler(plugin_t * plugin, worker_t * worker, http
 
 }
 
+static bool debug_plugin_handler(plugin_t * plugin, worker_t * worker, enum plugin_callback_e cb, va_list args)
+{
+  switch (cb) {
+    case HANDLE_REQUEST:
+    {
+      http_request_t * request = va_arg(args, http_request_t *);
+      http_response_t * response = va_arg(args, http_response_t *);
+      debug_plugin_request_handler(plugin, worker, request, response);
+      return true;
+    }
+    case HANDLE_DATA:
+    {
+      http_request_t * request = va_arg(args, http_request_t *);
+      http_response_t * response = va_arg(args, http_response_t *);
+      uint8_t * buf = va_arg(args, uint8_t *);
+      size_t length = va_arg(args, size_t);
+      bool last = (bool) va_arg(args, int);
+      bool free_buf = (bool) va_arg(args, int);
+      debug_plugin_data_handler(plugin, worker, request, response, buf, length, last, free_buf);
+      return true;
+    }
+    case POST_CONSTRUCT_FRAME:
+    default:
+      return false;
+  }
+}
+
 void plugin_initialize(plugin_t * plugin, server_t * server)
 {
   UNUSED(server);
 
   plugin->handlers->start = debug_plugin_start;
   plugin->handlers->stop = debug_plugin_stop;
-  plugin->handlers->request = debug_plugin_request_handler;
-  plugin->handlers->data = debug_plugin_data_handler;
+  plugin->handlers->handle = debug_plugin_handler;
 }
 

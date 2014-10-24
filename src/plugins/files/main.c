@@ -592,12 +592,38 @@ static void files_plugin_data_handler(plugin_t * plugin, worker_t * worker, http
 
 }
 
+static bool files_plugin_handler(plugin_t * plugin, worker_t * worker, enum plugin_callback_e cb, va_list args)
+{
+  switch (cb) {
+    case HANDLE_REQUEST:
+    {
+      http_request_t * request = va_arg(args, http_request_t *);
+      http_response_t * response = va_arg(args, http_response_t *);
+      files_plugin_request_handler(plugin, worker, request, response);
+      return true;
+    }
+    case HANDLE_DATA:
+    {
+      http_request_t * request = va_arg(args, http_request_t *);
+      http_response_t * response = va_arg(args, http_response_t *);
+      uint8_t * buf = va_arg(args, uint8_t *);
+      size_t length = va_arg(args, size_t);
+      bool last = (bool) va_arg(args, int);
+      bool free_buf = (bool) va_arg(args, int);
+      files_plugin_data_handler(plugin, worker, request, response, buf, length, last, free_buf);
+      return true;
+    }
+    case POST_CONSTRUCT_FRAME:
+    default:
+      return false;
+  }
+}
+
 void plugin_initialize(plugin_t * plugin, server_t * server)
 {
   plugin->handlers->start = files_plugin_start;
   plugin->handlers->stop = files_plugin_stop;
-  plugin->handlers->request = files_plugin_request_handler;
-  plugin->handlers->data = files_plugin_data_handler;
+  plugin->handlers->handle = files_plugin_handler;
 
   file_server_t * file_server = malloc(sizeof(file_server_t));
   file_server->log = &server->config->plugin_log;

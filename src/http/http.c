@@ -19,19 +19,11 @@
 #define MAX_CONNECTION_BUFFER_SIZE 0x1000000 // 2^24
 #define MAX_DETECT_LENGTH 4096
 
-static void http_internal_request_cb(void * data, http_request_t * request, http_response_t * response)
+static bool http_internal_plugin_cb(void * data, enum plugin_callback_e cb, va_list args)
 {
   http_connection_t * connection = data;
 
-  connection->request_handler(connection->data, request, response);
-}
-
-static void http_internal_data_cb(void * data, http_request_t * request, http_response_t * response, uint8_t * buf,
-                                  size_t len, bool last, bool free_buf)
-{
-  http_connection_t * connection = data;
-
-  connection->data_handler(connection->data, request, response, buf, len, last, free_buf);
+  return connection->plugin_handler(connection->data, cb, args);
 }
 
 static bool http_internal_write_cb(void * data, uint8_t * buf, size_t len)
@@ -77,7 +69,7 @@ static void set_protocol_h2(http_connection_t * connection)
   connection->protocol = H2;
   connection->handler = h2_init(connection, connection->log, connection->hpack_log, connection->tls_version, connection->cipher,
                                 connection->cipher_key_size_in_bits,
-                                http_internal_request_cb, http_internal_data_cb, http_internal_write_cb, http_internal_close_cb,
+                                http_internal_plugin_cb, http_internal_write_cb, http_internal_close_cb,
                                 http_internal_request_init_cb);
 }
 
@@ -118,13 +110,13 @@ static void set_protocol_h1_1(http_connection_t * connection)
 {
   connection->protocol = H1_1;
   connection->handler = h1_1_init(connection, connection->log, connection->scheme, connection->hostname,
-      connection->port, http_internal_request_cb, http_internal_data_cb, http_internal_write_cb,
-      http_internal_write_error_cb, http_internal_close_cb, http_internal_request_init_cb, http_internal_upgrade_cb);
+      connection->port, http_internal_plugin_cb, http_internal_write_cb, http_internal_write_error_cb,
+      http_internal_close_cb, http_internal_request_init_cb, http_internal_upgrade_cb);
 }
 
 http_connection_t * http_connection_init(void * const data, log_context_t * log, log_context_t * hpack_log,
-    const char * scheme, const char * hostname, const int port, const request_cb request_handler,
-    const data_cb data_handler, const write_cb writer, const close_cb closer)
+    const char * scheme, const char * hostname, const int port, const plugin_handler_va_cb plugin_handler,
+    const write_cb writer, const close_cb closer)
 {
   http_connection_t * connection = malloc(sizeof(http_connection_t));
   ASSERT_OR_RETURN_NULL(connection);
@@ -137,8 +129,7 @@ http_connection_t * http_connection_init(void * const data, log_context_t * log,
   connection->hostname = hostname;
   connection->port = port;
 
-  connection->request_handler = request_handler;
-  connection->data_handler = data_handler;
+  connection->plugin_handler = plugin_handler;
   connection->writer = writer;
   connection->closer = closer;
 

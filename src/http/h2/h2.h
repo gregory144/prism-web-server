@@ -3,6 +3,8 @@
 
 #include <stdbool.h>
 
+#include "plugin_callbacks.h"
+
 #include "hash_table.h"
 #include "hpack/hpack.h"
 
@@ -10,11 +12,6 @@
 #include "http/response.h"
 
 #define PUSH_ENABLED false
-
-typedef void (*h2_request_cb)(void * data, http_request_t * request, http_response_t * response);
-
-typedef void (*h2_data_cb)(void * data, http_request_t * request, http_response_t * response, uint8_t * buf,
-                           size_t len, bool last, bool free_buf);
 
 typedef bool (*h2_write_cb)(void * data, uint8_t * buf, size_t len);
 
@@ -355,8 +352,7 @@ struct h2_s {
 
   h2_write_cb writer;
   h2_close_cb closer;
-  h2_request_cb request_handler;
-  h2_data_cb data_handler;
+  plugin_handler_va_cb plugin_handler;
   h2_request_init_cb request_init;
 
   /**
@@ -420,9 +416,8 @@ struct h2_s {
 bool h2_detect_connection(uint8_t * buffer, size_t len);
 
 h2_t * h2_init(void * const data, log_context_t * log, log_context_t * hpack_log, const char * tls_version,
-    const char * cipher, int cipher_key_size_in_bits, const h2_request_cb request_handler,
-    const h2_data_cb data_handler, const h2_write_cb writer, const h2_close_cb closer,
-    const h2_request_init_cb request_init);
+    const char * cipher, int cipher_key_size_in_bits, const plugin_handler_va_cb plugin_handler,
+    const h2_write_cb writer, const h2_close_cb closer, const h2_request_init_cb request_init);
 
 bool h2_settings_apply(h2_t * const h2, char * base64);
 

@@ -282,23 +282,13 @@ static bool tls_cb_write_to_app(void * data, uint8_t * buf, size_t length)
   return true;
 }
 
-static void server_request_handler(void * data, http_request_t * request, http_response_t * response)
+static bool server_plugin_handler(void * data, enum plugin_callback_e cb, va_list args)
 {
   client_t * client = data;
   plugin_t * plugin = &client->server->plugin;
   worker_t * worker = client->server->workers[client->worker_index];
 
-  plugin_request_handler(plugin, worker, request, response);
-}
-
-static void server_data_handler(void * data, http_request_t * request, http_response_t * response,
-                                uint8_t * buf, size_t length, bool last, bool free_buf)
-{
-  client_t * client = data;
-  plugin_t * plugin = &client->server->plugin;
-  worker_t * worker = client->server->workers[client->worker_index];
-
-  plugin_data_handler(plugin, worker, request, response, buf, length, last, free_buf);
+  return plugin_handler_va(plugin, worker, cb, args);
 }
 
 static void uv_cb_listen(uv_stream_t * tcp_server, int status)
@@ -355,8 +345,7 @@ static void uv_cb_listen(uv_stream_t * tcp_server, int status)
   int port = server->config->port;
 
   client->connection = http_connection_init(client, &server->config->http_log, &server->config->hpack_log,
-      scheme, hostname, port, server_request_handler, server_data_handler, worker_http_cb_write,
-      worker_http_cb_close_connection);
+      scheme, hostname, port, server_plugin_handler, worker_http_cb_write, worker_http_cb_close_connection);
 
   uv_tcp_init(&server->loop, &client->tcp);
   client->tcp.data = client;

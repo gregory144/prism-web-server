@@ -52,17 +52,19 @@ plugin_t * plugin_init(plugin_t * plugin, log_context_t * log, char * plugin_fil
   return plugin;
 }
 
-void plugin_request_handler(plugin_t * plugin, struct worker_s * worker, http_request_t * request,
-                             http_response_t * response)
+bool plugin_handler_va(plugin_t * plugin, struct worker_s * worker, enum plugin_callback_e cb, va_list args)
 {
-  plugin->handlers->request(plugin, worker, request, response);
+  return plugin->handlers->handle(plugin, worker, cb, args);
 }
 
-void plugin_data_handler(plugin_t * plugin, struct worker_s * worker, http_request_t * request,
-                          http_response_t * response,
-                          uint8_t * buf, size_t length, bool last, bool free_buf)
+bool plugin_handler(plugin_t * plugin, struct worker_s * worker, enum plugin_callback_e cb, ...)
 {
-  plugin->handlers->data(plugin, worker, request, response, buf, length, last, free_buf);
+  abort();
+  va_list list;
+  va_start(list, cb);
+  bool ret = plugin->handlers->handle(plugin, worker, cb, list);
+  va_end(list);
+  return ret;
 }
 
 void plugin_start(plugin_t * plugin)

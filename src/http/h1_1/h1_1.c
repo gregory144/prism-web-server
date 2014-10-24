@@ -173,10 +173,9 @@ bool h1_1_detect_connection(uint8_t * buffer, size_t buffer_length)
 }
 
 h1_1_t * h1_1_init(void * const data, log_context_t * log, const char * scheme, const char * hostname,
-    const int port, const h1_1_request_cb request_handler, const h1_1_data_cb data_handler,
-    const h1_1_write_cb writer, const h1_1_write_error_cb error_writer,
-    const h1_1_close_cb closer, const h1_1_request_init_cb request_init,
-    const h1_1_upgrade_cb upgrade_cb)
+    const int port, const plugin_handler_va_cb plugin_handler, const h1_1_write_cb writer,
+    const h1_1_write_error_cb error_writer, const h1_1_close_cb closer,
+    const h1_1_request_init_cb request_init, const h1_1_upgrade_cb upgrade_cb)
 {
   h1_1_t * h1_1 = malloc(sizeof(h1_1_t));
   ASSERT_OR_RETURN_NULL(h1_1);
@@ -188,8 +187,7 @@ h1_1_t * h1_1_init(void * const data, log_context_t * log, const char * scheme, 
   h1_1->hostname = hostname;
   h1_1->port = port;
 
-  h1_1->request_handler = request_handler;
-  h1_1->data_handler = data_handler;
+  h1_1->plugin_handler = plugin_handler;
   h1_1->writer = writer;
   h1_1->error_writer = error_writer;
   h1_1->closer = closer;
@@ -359,6 +357,16 @@ static int hp_header_value_cb(http_parser * http_parser, const char * at, size_t
   return 0;
 }
 
+static bool h1_1_plugin_invoke(h1_1_t * h1_1, void * data, enum plugin_callback_e cb, ...)
+{
+  va_list args;
+  va_start(args, cb);
+  bool ret = h1_1->plugin_handler(data, cb, args);
+  va_end(args);
+
+  return ret;
+}
+
 static int hp_headers_complete_cb(http_parser * http_parser)
 {
   h1_1_t * h1_1 = http_parser->data;
@@ -422,7 +430,7 @@ static int hp_headers_complete_cb(http_parser * http_parser)
     return 1; // error
   }
 
-  h1_1->request_handler(h1_1->data, h1_1->request, h1_1->response);
+  h1_1_plugin_invoke(h1_1, h1_1->data, HANDLE_REQUEST, h1_1->request, h1_1->response);
 
   return 0;
 }
@@ -436,7 +444,8 @@ static int hp_body_cb(http_parser * http_parser, const char * at, size_t length)
     return 0;
   }
 
-  h1_1->data_handler(h1_1->data, h1_1->request, h1_1->response, (uint8_t *) at, length, false, false);
+  h1_1_plugin_invoke(h1_1, h1_1->data, HANDLE_DATA, h1_1->request, h1_1->response,
+      (uint8_t *) at, length, false, false);
 
   return 0;
 }
@@ -452,7 +461,8 @@ static int hp_message_complete_cb(http_parser * http_parser)
 
   // the request may have already been handled
   if (h1_1->request) {
-    h1_1->data_handler(h1_1->data, h1_1->request, h1_1->response, NULL, 0, true, false);
+    h1_1_plugin_invoke(h1_1, h1_1->data, HANDLE_DATA, h1_1->request, h1_1->response,
+        NULL, 0, true, false);
   }
 
   return 0;
