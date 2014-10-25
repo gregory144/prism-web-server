@@ -1908,6 +1908,8 @@ static bool h2_add_from_buffer(h2_t * const h2)
       return false;
     }
 
+    plugin_invoke(h2->plugin_invoker, PREPROCESS_INCOMING_FRAME, frame);
+
     h2->buffer_position += FRAME_HEADER_SIZE;
     // TODO off-by-one?
     bool success = false;
@@ -1966,6 +1968,8 @@ static bool h2_add_from_buffer(h2_t * const h2)
           return false;
       }
     }
+
+    plugin_invoke(h2->plugin_invoker, POSTPROCESS_INCOMING_FRAME, frame);
 
     h2->buffer_position += frame->length;
     free(frame);

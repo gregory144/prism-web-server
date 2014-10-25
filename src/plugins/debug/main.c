@@ -5,6 +5,7 @@
 #include <string.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
+#include <inttypes.h>
 
 #include <uv.h>
 
@@ -27,7 +28,7 @@ static void debug_plugin_stop(plugin_t * plugin)
   log_append(plugin->log, LOG_INFO, "Debug plugin stopped");
 }
 
-static void debug_plugin_request_handler(plugin_t * plugin, client_t * client, http_request_t * request,
+static bool debug_plugin_request_handler(plugin_t * plugin, client_t * client, http_request_t * request,
     http_response_t * response)
 {
   UNUSED(client);
@@ -83,7 +84,7 @@ static void debug_plugin_request_handler(plugin_t * plugin, client_t * client, h
 
     http_response_write(response, NULL, 0, false);
 
-    return;
+    return true;
   }
 
   char * resp_text;
@@ -193,9 +194,11 @@ static void debug_plugin_request_handler(plugin_t * plugin, client_t * client, h
   }
 
   http_response_write(response, (uint8_t *) resp_text, content_length, true);
+
+  return true;
 }
 
-static void debug_plugin_data_handler(plugin_t * plugin, client_t * client, http_request_t * request,
+static bool debug_plugin_data_handler(plugin_t * plugin, client_t * client, http_request_t * request,
                                        http_response_t * response,
                                        uint8_t * buf, size_t length, bool last, bool free_buf)
 {
@@ -220,6 +223,46 @@ static void debug_plugin_data_handler(plugin_t * plugin, client_t * client, http
     free(buf);
   }
 
+  return true;
+
+}
+
+
+char * frame_type_to_string(enum frame_type_e t)
+{
+  switch (t) {
+    case FRAME_TYPE_DATA:
+      return "DATA";
+    case FRAME_TYPE_HEADERS:
+      return "HEADERS";
+    case FRAME_TYPE_PRIORITY:
+      return "PRIORITY";
+    case FRAME_TYPE_RST_STREAM:
+      return "RST_STREAM";
+    case FRAME_TYPE_SETTINGS:
+      return "SETTINGS";
+    case FRAME_TYPE_PUSH_PROMISE:
+      return "PUSH_PROMISE";
+    case FRAME_TYPE_PING:
+      return "PING";
+    case FRAME_TYPE_GOAWAY:
+      return "GOAWAY";
+    case FRAME_TYPE_WINDOW_UPDATE:
+      return "WINDOW_UPDATE";
+    case FRAME_TYPE_CONTINUATION:
+      return "CONTINUATION";
+  }
+  return "UNKNOWN";
+
+}
+
+static void debug_plugin_preprocess_incoming_frame(plugin_t * plugin, client_t * client,
+    h2_frame_t * frame)
+{
+  log_append(plugin->log, LOG_INFO, "RECEIVED FRAME %s [client: %" PRIu64 ", length: %" PRIu16
+      ", stream id: %" PRIu32 "]",
+      frame_type_to_string(frame->type), client->id, frame->length, frame->stream_id
+  );
 }
 
 static bool debug_plugin_handler(plugin_t * plugin, client_t * client, enum plugin_callback_e cb, va_list args)
@@ -229,8 +272,7 @@ static bool debug_plugin_handler(plugin_t * plugin, client_t * client, enum plug
     {
       http_request_t * request = va_arg(args, http_request_t *);
       http_response_t * response = va_arg(args, http_response_t *);
-      debug_plugin_request_handler(plugin, client, request, response);
-      return true;
+      return debug_plugin_request_handler(plugin, client, request, response);
     }
     case HANDLE_DATA:
     {
@@ -240,10 +282,14 @@ static bool debug_plugin_handler(plugin_t * plugin, client_t * client, enum plug
       size_t length = va_arg(args, size_t);
       bool last = (bool) va_arg(args, int);
       bool free_buf = (bool) va_arg(args, int);
-      debug_plugin_data_handler(plugin, client, request, response, buf, length, last, free_buf);
-      return true;
+      return debug_plugin_data_handler(plugin, client, request, response, buf, length, last, free_buf);
     }
-    case POST_CONSTRUCT_FRAME:
+    case PREPROCESS_INCOMING_FRAME:
+    {
+      h2_frame_t * frame = va_arg(args, h2_frame_t *);
+      debug_plugin_preprocess_incoming_frame(plugin, client, frame);
+      return false;
+    }
     default:
       return false;
   }

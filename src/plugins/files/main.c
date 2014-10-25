@@ -614,7 +614,6 @@ static bool files_plugin_handler(plugin_t * plugin, client_t * client, enum plug
       files_plugin_data_handler(plugin, client, request, response, buf, length, last, free_buf);
       return true;
     }
-    case POST_CONSTRUCT_FRAME:
     default:
       return false;
   }

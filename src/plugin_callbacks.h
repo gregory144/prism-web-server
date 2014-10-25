@@ -4,7 +4,8 @@
 enum plugin_callback_e {
   HANDLE_REQUEST,
   HANDLE_DATA,
-  POST_CONSTRUCT_FRAME
+  PREPROCESS_INCOMING_FRAME,
+  POSTPROCESS_INCOMING_FRAME,
 };
 
 struct plugin_invoker_t;
