@@ -68,6 +68,7 @@ AC_SUBST(UTIL_DIR, `pwd`/src/util)
 
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([Makefile
+                 src/plugins/framer/Makefile
                  src/plugins/debug/Makefile
                  src/plugins/files/Makefile
                  src/plugins/Makefile

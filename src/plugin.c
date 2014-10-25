@@ -54,9 +54,6 @@ plugin_t * plugin_init(plugin_t * plugin, log_context_t * log, char * plugin_fil
 
 bool plugin_invoke(struct plugin_invoker_t * invoker, enum plugin_callback_e cb, ...)
 {
-
-
-
   plugin_invoker_t * invoker_def = (plugin_invoker_t *)invoker;
 
   va_list args;

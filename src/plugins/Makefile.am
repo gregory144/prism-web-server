@@ -1,1 +1,1 @@
-SUBDIRS = debug files .
+SUBDIRS = framer debug files .
