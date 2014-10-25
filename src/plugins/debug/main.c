@@ -27,10 +27,10 @@ static void debug_plugin_stop(plugin_t * plugin)
   log_append(plugin->log, LOG_INFO, "Debug plugin stopped");
 }
 
-static void debug_plugin_request_handler(plugin_t * plugin, worker_t * worker, http_request_t * request,
+static void debug_plugin_request_handler(plugin_t * plugin, client_t * client, http_request_t * request,
     http_response_t * response)
 {
-  UNUSED(worker);
+  UNUSED(client);
 
   if (log_level_enabled(plugin->log, LOG_DEBUG)) {
     log_append(plugin->log, LOG_DEBUG, "Method: '%s'", http_request_method(request));
@@ -195,12 +195,12 @@ static void debug_plugin_request_handler(plugin_t * plugin, worker_t * worker, h
   http_response_write(response, (uint8_t *) resp_text, content_length, true);
 }
 
-static void debug_plugin_data_handler(plugin_t * plugin, worker_t * worker, http_request_t * request,
+static void debug_plugin_data_handler(plugin_t * plugin, client_t * client, http_request_t * request,
                                        http_response_t * response,
                                        uint8_t * buf, size_t length, bool last, bool free_buf)
 {
   UNUSED(plugin);
-  UNUSED(worker);
+  UNUSED(client);
   UNUSED(request);
 
   log_append(plugin->log, LOG_TRACE, "Received %ld bytes of data from client (last? %s)",
@@ -222,14 +222,14 @@ static void debug_plugin_data_handler(plugin_t * plugin, worker_t * worker, http
 
 }
 
-static bool debug_plugin_handler(plugin_t * plugin, worker_t * worker, enum plugin_callback_e cb, va_list args)
+static bool debug_plugin_handler(plugin_t * plugin, client_t * client, enum plugin_callback_e cb, va_list args)
 {
   switch (cb) {
     case HANDLE_REQUEST:
     {
       http_request_t * request = va_arg(args, http_request_t *);
       http_response_t * response = va_arg(args, http_response_t *);
-      debug_plugin_request_handler(plugin, worker, request, response);
+      debug_plugin_request_handler(plugin, client, request, response);
       return true;
     }
     case HANDLE_DATA:
@@ -240,7 +240,7 @@ static bool debug_plugin_handler(plugin_t * plugin, worker_t * worker, enum plug
       size_t length = va_arg(args, size_t);
       bool last = (bool) va_arg(args, int);
       bool free_buf = (bool) va_arg(args, int);
-      debug_plugin_data_handler(plugin, worker, request, response, buf, length, last, free_buf);
+      debug_plugin_data_handler(plugin, client, request, response, buf, length, last, free_buf);
       return true;
     }
     case POST_CONSTRUCT_FRAME:

@@ -172,8 +172,37 @@ bool h1_1_detect_connection(uint8_t * buffer, size_t buffer_length)
   return false;
 }
 
+static bool h1_1_respond_with_error_code(h1_1_t * const h1_1, int code)
+{
+  // TODO - can we write the error without init'ing a request
+  // and response?
+  h1_1->request = h1_1->request_init(h1_1->data, h1_1, NULL);
+
+  if (!h1_1->request) {
+    return false;
+  }
+
+  h1_1->response = http_response_init(h1_1->request);
+
+  if (!h1_1->response) {
+    return false;
+  }
+
+  return h1_1->error_writer(h1_1, h1_1->response, code);
+}
+
+static bool h1_1_internal_error(h1_1_t * const h1_1)
+{
+  return h1_1_respond_with_error_code(h1_1, 500);
+}
+
+static bool h1_1_bad_request(h1_1_t * const h1_1)
+{
+  return h1_1_respond_with_error_code(h1_1, 400);
+}
+
 h1_1_t * h1_1_init(void * const data, log_context_t * log, const char * scheme, const char * hostname,
-    const int port, const plugin_handler_va_cb plugin_handler, const h1_1_write_cb writer,
+    const int port, struct plugin_invoker_t * plugin_invoker, const h1_1_write_cb writer,
     const h1_1_write_error_cb error_writer, const h1_1_close_cb closer,
     const h1_1_request_init_cb request_init, const h1_1_upgrade_cb upgrade_cb)
 {
@@ -187,7 +216,7 @@ h1_1_t * h1_1_init(void * const data, log_context_t * log, const char * scheme, 
   h1_1->hostname = hostname;
   h1_1->port = port;
 
-  h1_1->plugin_handler = plugin_handler;
+  h1_1->plugin_invoker = plugin_invoker;
   h1_1->writer = writer;
   h1_1->error_writer = error_writer;
   h1_1->closer = closer;
@@ -357,16 +386,6 @@ static int hp_header_value_cb(http_parser * http_parser, const char * at, size_t
   return 0;
 }
 
-static bool h1_1_plugin_invoke(h1_1_t * h1_1, void * data, enum plugin_callback_e cb, ...)
-{
-  va_list args;
-  va_start(args, cb);
-  bool ret = h1_1->plugin_handler(data, cb, args);
-  va_end(args);
-
-  return ret;
-}
-
 static int hp_headers_complete_cb(http_parser * http_parser)
 {
   h1_1_t * h1_1 = http_parser->data;
@@ -430,7 +449,13 @@ static int hp_headers_complete_cb(http_parser * http_parser)
     return 1; // error
   }
 
-  h1_1_plugin_invoke(h1_1, h1_1->data, HANDLE_REQUEST, h1_1->request, h1_1->response);
+  if (!plugin_invoke(h1_1->plugin_invoker, HANDLE_REQUEST, h1_1->request, h1_1->response)) {
+    http_response_free(h1_1->response);
+
+    log_append(h1_1->log, LOG_ERROR, "No plugin handled this request");
+    h1_1_internal_error(h1_1);
+    return 1;
+  }
 
   return 0;
 }
@@ -444,7 +469,7 @@ static int hp_body_cb(http_parser * http_parser, const char * at, size_t length)
     return 0;
   }
 
-  h1_1_plugin_invoke(h1_1, h1_1->data, HANDLE_DATA, h1_1->request, h1_1->response,
+  plugin_invoke(h1_1->plugin_invoker, HANDLE_DATA, h1_1->request, h1_1->response,
       (uint8_t *) at, length, false, false);
 
   return 0;
@@ -461,30 +486,11 @@ static int hp_message_complete_cb(http_parser * http_parser)
 
   // the request may have already been handled
   if (h1_1->request) {
-    h1_1_plugin_invoke(h1_1, h1_1->data, HANDLE_DATA, h1_1->request, h1_1->response,
+    plugin_invoke(h1_1->plugin_invoker, HANDLE_DATA, h1_1->request, h1_1->response,
         NULL, 0, true, false);
   }
 
   return 0;
-}
-
-static bool h1_1_bad_request(h1_1_t * const h1_1)
-{
-  // TODO - can we write the error without init'ing a request
-  // and response?
-  h1_1->request = h1_1->request_init(h1_1->data, h1_1, NULL);
-
-  if (!h1_1->request) {
-    return false;
-  }
-
-  h1_1->response = http_response_init(h1_1->request);
-
-  if (!h1_1->response) {
-    return false;
-  }
-
-  return h1_1->error_writer(h1_1, h1_1->response, 400);
 }
 
 static void h1_1_parse(h1_1_t * const h1_1, uint8_t * const buffer, const size_t len)
@@ -519,6 +525,8 @@ static void h1_1_parse(h1_1_t * const h1_1, uint8_t * const buffer, const size_t
     }
 
     h1_1_close(h1_1);
+  } else {
+    log_append(h1_1->log, LOG_DEBUG, "Parsed request");
   }
 }
 

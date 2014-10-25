@@ -8,7 +8,7 @@
 #include "http/http.h"
 
 plugin_t * plugin_init(plugin_t * plugin, log_context_t * log, char * plugin_file,
-    struct server_s * server)
+    struct server_t * server)
 {
   bool free_plugin = false;
 
@@ -52,9 +52,48 @@ plugin_t * plugin_init(plugin_t * plugin, log_context_t * log, char * plugin_fil
   return plugin;
 }
 
-bool plugin_handler_va(plugin_t * plugin, struct worker_s * worker, enum plugin_callback_e cb, va_list args)
+/*bool plugin_handler_va(plugin_t * plugin, struct client_t * client, enum plugin_callback_e cb, va_list args)*/
+/*{*/
+/*}*/
+
+bool plugin_invoke(struct plugin_invoker_t * invoker, enum plugin_callback_e cb, ...)
 {
-  return plugin->handlers->handle(plugin, worker, cb, args);
+
+/*static bool server_plugin_handler(void * data, enum plugin_callback_e cb, va_list args)*/
+/*{*/
+  /*client_t * client = data;*/
+
+  /*plugin_list_t * current = client->server->plugins;*/
+  /*while (current) {*/
+    /*plugin_t * plugin = current->plugin;*/
+    /*bool handled = plugin_handler_va((plugin_t *) plugin, client, cb, args);*/
+    /*if (handled) {*/
+      /*return true;*/
+    /*}*/
+    /*current = current->next;*/
+  /*}*/
+  /*return false;*/
+/*}*/
+
+
+
+  plugin_invoker_t * invoker_def = (plugin_invoker_t *)invoker;
+
+  va_list args;
+  plugin_list_t * current = invoker_def->plugins;
+  while (current) {
+    va_start(args, cb);
+    plugin_t * plugin = current->plugin;
+    bool ret = plugin->handlers->handle(plugin, invoker_def->client, cb, args);
+    va_end(args);
+
+    if (ret) {
+      return true;
+    }
+
+    current = current->next;
+  }
+  return false;
 }
 
 void plugin_start(plugin_t * plugin)
@@ -65,7 +104,11 @@ void plugin_start(plugin_t * plugin)
 void plugin_stop(plugin_t * plugin)
 {
   plugin->handlers->stop(plugin);
+}
 
+void plugin_free(plugin_t * plugin)
+{
   free(plugin->handlers);
+  free(plugin);
 }
 

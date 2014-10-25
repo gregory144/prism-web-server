@@ -7,7 +7,8 @@ enum plugin_callback_e {
   POST_CONSTRUCT_FRAME
 };
 
-typedef bool (*plugin_handler_va_cb)(void * plugin, enum plugin_callback_e cb, va_list args);
-typedef bool (*plugin_handler_cb)(void * plugin, enum plugin_callback_e cb, ...);
+struct plugin_invoker_t;
+
+bool plugin_invoke(struct plugin_invoker_t * invoker, enum plugin_callback_e cb, ...);
 
 #endif

@@ -42,7 +42,7 @@ typedef struct {
 
   write_cb writer;
   close_cb closer;
-  plugin_handler_va_cb plugin_handler;
+  struct plugin_invoker_t * plugin_invoker;
 
   void * handler;
 
@@ -61,7 +61,7 @@ typedef struct {
 } http_request_data_t;
 
 http_connection_t * http_connection_init(void * const data, log_context_t * log, log_context_t * hpack_log,
-    const char * scheme, const char * hostname, const int port, const plugin_handler_va_cb plugin_handler,
+    const char * scheme, const char * hostname, const int port, struct plugin_invoker_t * plugin_invoker,
     const write_cb writer, const close_cb closer);
 
 void http_connection_set_protocol(http_connection_t * const connection, const char * selected_protocol);

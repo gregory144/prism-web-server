@@ -135,8 +135,6 @@ static void files_plugin_init_type_map(file_server_t * fs)
 
 static void files_plugin_start(plugin_t * plugin)
 {
-  log_append(plugin->log, LOG_INFO, "Files plugin starting");
-
   file_server_t * file_server = plugin->data;
 
   size_t cwd_capacity = 256;
@@ -159,6 +157,8 @@ static void files_plugin_start(plugin_t * plugin)
 
   file_server->cwd = cwd;
   file_server->cwd_length = cwd_length;
+
+  log_append(plugin->log, LOG_INFO, "Files plugin started");
 }
 
 static void noop(void * v)
@@ -508,12 +508,13 @@ static void file_server_uv_open_cb(uv_fs_t * req)
   uv_fs_req_cleanup(req);
 }
 
-static void files_plugin_request_handler(plugin_t * plugin, worker_t * worker, http_request_t * request,
+static void files_plugin_request_handler(plugin_t * plugin, client_t * client, http_request_t * request,
     http_response_t * response)
 {
   file_server_t * file_server = plugin->data;
   file_server_request_t * fs_request = malloc(sizeof(file_server_request_t));
   fs_request->response = response;
+  worker_t * worker = client->server->workers[client->worker_index];
   fs_request->loop = &worker->loop;
   fs_request->file_server = file_server;
   fs_request->stat_req.data = fs_request;
@@ -575,12 +576,12 @@ static void files_plugin_request_handler(plugin_t * plugin, worker_t * worker, h
   uv_fs_open(fs_request->loop, &fs_request->open_req, fs_request->path, O_RDONLY, 0644, file_server_uv_open_cb);
 }
 
-static void files_plugin_data_handler(plugin_t * plugin, worker_t * worker, http_request_t * request,
+static void files_plugin_data_handler(plugin_t * plugin, client_t * client, http_request_t * request,
                                        http_response_t * response,
                                        uint8_t * buf, size_t length, bool last, bool free_buf)
 {
   UNUSED(plugin);
-  UNUSED(worker);
+  UNUSED(client);
   UNUSED(request);
   UNUSED(response);
   UNUSED(length);
@@ -592,14 +593,14 @@ static void files_plugin_data_handler(plugin_t * plugin, worker_t * worker, http
 
 }
 
-static bool files_plugin_handler(plugin_t * plugin, worker_t * worker, enum plugin_callback_e cb, va_list args)
+static bool files_plugin_handler(plugin_t * plugin, client_t * client, enum plugin_callback_e cb, va_list args)
 {
   switch (cb) {
     case HANDLE_REQUEST:
     {
       http_request_t * request = va_arg(args, http_request_t *);
       http_response_t * response = va_arg(args, http_response_t *);
-      files_plugin_request_handler(plugin, worker, request, response);
+      files_plugin_request_handler(plugin, client, request, response);
       return true;
     }
     case HANDLE_DATA:
@@ -610,7 +611,7 @@ static bool files_plugin_handler(plugin_t * plugin, worker_t * worker, enum plug
       size_t length = va_arg(args, size_t);
       bool last = (bool) va_arg(args, int);
       bool free_buf = (bool) va_arg(args, int);
-      files_plugin_data_handler(plugin, worker, request, response, buf, length, last, free_buf);
+      files_plugin_data_handler(plugin, client, request, response, buf, length, last, free_buf);
       return true;
     }
     case POST_CONSTRUCT_FRAME:

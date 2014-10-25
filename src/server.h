@@ -13,6 +13,14 @@
 
 struct worker_s;
 
+typedef struct plugin_config_s {
+
+  char * filename;
+
+  struct plugin_config_s * next;
+
+} plugin_config_t;
+
 typedef struct {
 
   long port;
@@ -24,7 +32,7 @@ typedef struct {
   char * cert_file;
   char * private_key_file;
 
-  char * plugin_file;
+  plugin_config_t * plugin_configs;
 
   log_context_t server_log;
   log_context_t data_log;
@@ -42,7 +50,7 @@ typedef struct {
 
   server_config_t * config;
 
-  plugin_t plugin;
+  plugin_list_t * plugins;
 
   uv_loop_t loop;
 
@@ -60,12 +68,14 @@ typedef struct {
 
 } server_t;
 
-typedef struct client_s {
+typedef struct client_t {
 
   log_context_t * log;
   log_context_t * data_log;
 
   uv_tcp_t tcp;
+
+  plugin_invoker_t plugin_invoker;
 
   // used to nofity the server thread
   // that a write has been queued
@@ -137,7 +147,7 @@ typedef struct worker_s {
  */
 typedef struct {
 
-  struct client_s * client;
+  struct client_t * client;
 
   uint8_t * buffer;
 

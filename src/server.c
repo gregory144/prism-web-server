@@ -282,15 +282,6 @@ static bool tls_cb_write_to_app(void * data, uint8_t * buf, size_t length)
   return true;
 }
 
-static bool server_plugin_handler(void * data, enum plugin_callback_e cb, va_list args)
-{
-  client_t * client = data;
-  plugin_t * plugin = &client->server->plugin;
-  worker_t * worker = client->server->workers[client->worker_index];
-
-  return plugin_handler_va(plugin, worker, cb, args);
-}
-
 static void uv_cb_listen(uv_stream_t * tcp_server, int status)
 {
   server_t * server = tcp_server->data;
@@ -319,6 +310,8 @@ static void uv_cb_listen(uv_stream_t * tcp_server, int status)
   client->octets_written = 0;
   client->octets_read = 0;
   client->worker_index = SIZE_MAX;
+  client->plugin_invoker.plugins = server->plugins;
+  client->plugin_invoker.client = client;
 
   if (atomic_int_init(&client->read_counter) == NULL) {
     free(client);
@@ -345,7 +338,7 @@ static void uv_cb_listen(uv_stream_t * tcp_server, int status)
   int port = server->config->port;
 
   client->connection = http_connection_init(client, &server->config->http_log, &server->config->hpack_log,
-      scheme, hostname, port, server_plugin_handler, worker_http_cb_write, worker_http_cb_close_connection);
+      scheme, hostname, port, (struct plugin_invoker_t *)&client->plugin_invoker, worker_http_cb_write, worker_http_cb_close_connection);
 
   uv_tcp_init(&server->loop, &client->tcp);
   client->tcp.data = client;
@@ -381,18 +374,34 @@ server_t * server_init(server_config_t * config)
   ASSERT_OR_RETURN_NULL(server);
   server->tls_ctx = NULL;
   server->config = config;
+  server->plugins = NULL;
   server->client_ids = 0;
   server->log = &config->server_log;
   server->data_log = &config->data_log;
 
   server->terminate = false;
 
-  plugin_t * plugin = plugin_init(&server->plugin, &server->config->plugin_log,
-      server->config->plugin_file, (struct server_s *) server);
+  plugin_config_t * plugin_config = server->config->plugin_configs;
+  plugin_list_t * last = NULL;
+  while (plugin_config) {
+    plugin_list_t * current = malloc(sizeof(plugin_list_t));
+    current->plugin = plugin_init(NULL, &server->config->plugin_log, plugin_config->filename,
+        (struct server_t *) server);
+    current->next = NULL;
 
-  if (!plugin) {
-    free(server);
-    return NULL;
+    if (!current->plugin) {
+      free(server);
+      return NULL;
+    }
+
+    if (!server->plugins) {
+      server->plugins = current;
+    } else {
+      last->next = current;
+    }
+    last = current;
+
+    plugin_config = plugin_config->next;
   }
 
   if (config->use_tls) {
@@ -431,6 +440,13 @@ static void server_free(server_t * server)
     worker_free(worker);
   }
 
+  while (server->plugins) {
+    plugin_list_t * current = server->plugins;
+    server->plugins = server->plugins->next;
+    plugin_free(current->plugin);
+    free(current);
+  }
+
   free(server->workers);
 
   if (server->tls_ctx) {
@@ -452,7 +468,11 @@ static void server_free(server_t * server)
 int server_start(server_t * server)
 {
 
-  plugin_start(&server->plugin);
+  plugin_list_t * current = server->plugins;
+  while (current != NULL) {
+    plugin_start(current->plugin);
+    current = current->next;
+  }
 
   // set up workers
   size_t i;
@@ -521,7 +541,11 @@ void server_stop(server_t * server)
     uv_thread_join(&worker->thread);
   }
 
-  plugin_stop(&server->plugin);
+  plugin_list_t * current = server->plugins;
+  while (current) {
+    plugin_stop(current->plugin);
+    current = current->next;
+  }
 
   uv_stop(&server->loop);
 }

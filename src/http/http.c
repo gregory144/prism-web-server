@@ -19,13 +19,6 @@
 #define MAX_CONNECTION_BUFFER_SIZE 0x1000000 // 2^24
 #define MAX_DETECT_LENGTH 4096
 
-static bool http_internal_plugin_cb(void * data, enum plugin_callback_e cb, va_list args)
-{
-  http_connection_t * connection = data;
-
-  return connection->plugin_handler(connection->data, cb, args);
-}
-
 static bool http_internal_write_cb(void * data, uint8_t * buf, size_t len)
 {
   http_connection_t * connection = data;
@@ -69,7 +62,7 @@ static void set_protocol_h2(http_connection_t * connection)
   connection->protocol = H2;
   connection->handler = h2_init(connection, connection->log, connection->hpack_log, connection->tls_version, connection->cipher,
                                 connection->cipher_key_size_in_bits,
-                                http_internal_plugin_cb, http_internal_write_cb, http_internal_close_cb,
+                                connection->plugin_invoker, http_internal_write_cb, http_internal_close_cb,
                                 http_internal_request_init_cb);
 }
 
@@ -110,12 +103,12 @@ static void set_protocol_h1_1(http_connection_t * connection)
 {
   connection->protocol = H1_1;
   connection->handler = h1_1_init(connection, connection->log, connection->scheme, connection->hostname,
-      connection->port, http_internal_plugin_cb, http_internal_write_cb, http_internal_write_error_cb,
+      connection->port, connection->plugin_invoker, http_internal_write_cb, http_internal_write_error_cb,
       http_internal_close_cb, http_internal_request_init_cb, http_internal_upgrade_cb);
 }
 
 http_connection_t * http_connection_init(void * const data, log_context_t * log, log_context_t * hpack_log,
-    const char * scheme, const char * hostname, const int port, const plugin_handler_va_cb plugin_handler,
+    const char * scheme, const char * hostname, const int port, struct plugin_invoker_t * plugin_invoker,
     const write_cb writer, const close_cb closer)
 {
   http_connection_t * connection = malloc(sizeof(http_connection_t));
@@ -129,7 +122,7 @@ http_connection_t * http_connection_init(void * const data, log_context_t * log,
   connection->hostname = hostname;
   connection->port = port;
 
-  connection->plugin_handler = plugin_handler;
+  connection->plugin_invoker = plugin_invoker;
   connection->writer = writer;
   connection->closer = closer;
 

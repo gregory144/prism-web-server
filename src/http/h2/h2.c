@@ -350,7 +350,7 @@ static void h2_stream_mark_closing(h2_t * const h2, h2_stream_t * const stream)
 }
 
 h2_t * h2_init(void * const data, log_context_t * log, log_context_t * hpack_log, const char * tls_version,
-    const char * cipher, int cipher_key_size_in_bits, const plugin_handler_va_cb plugin_handler,
+    const char * cipher, int cipher_key_size_in_bits, struct plugin_invoker_t * plugin_invoker,
     const h2_write_cb writer, const h2_close_cb closer, const h2_request_init_cb request_init)
 {
   h2_t * h2 = malloc(sizeof(h2_t));
@@ -359,7 +359,7 @@ h2_t * h2_init(void * const data, log_context_t * log, log_context_t * hpack_log
   h2->data = data;
   h2->log = log;
 
-  h2->plugin_handler = plugin_handler;
+  h2->plugin_invoker = plugin_invoker;
   h2->writer = writer;
   h2->closer = closer;
   h2->request_init = request_init;
@@ -1196,26 +1196,10 @@ static h2_stream_t * h2_stream_init(h2_t * const h2, const uint32_t stream_id)
   return stream;
 }
 
-static bool h2_plugin_invoke(h2_t * h2, void * data, enum plugin_callback_e cb, ...)
-{
-  va_list args;
-  va_start(args, cb);
-  bool ret = h2->plugin_handler(data, cb, args);
-  va_end(args);
-
-  return ret;
-}
-
 static bool h2_trigger_request(h2_t * const h2, h2_stream_t * const stream)
 {
   if (!h2->request_init) {
     log_append(h2->log, LOG_FATAL, "No request initializer set up");
-
-    abort();
-  }
-
-  if (!h2->plugin_handler) {
-    log_append(h2->log, LOG_FATAL, "No request handler set up");
 
     abort();
   }
@@ -1238,7 +1222,12 @@ static bool h2_trigger_request(h2_t * const h2, h2_stream_t * const stream)
     h2->last_stream_id = stream->id;
   }
 
-  h2_plugin_invoke(h2, h2->data, HANDLE_REQUEST, request, response);
+  if (!plugin_invoke(h2->plugin_invoker, HANDLE_REQUEST, request, response)) {
+    http_response_free(response);
+
+    log_append(h2->log, LOG_ERROR, "No plugin handled this request");
+    return false;
+  }
 
   return true;
 }
@@ -1278,12 +1267,6 @@ static bool strip_padding(h2_t * const h2, uint8_t ** payload, size_t * payload_
 
 static bool h2_parse_frame_data(h2_t * const h2, const h2_frame_data_t * const frame)
 {
-  if (!h2->plugin_handler) {
-    log_append(h2->log, LOG_FATAL, "No data handler set up");
-
-    abort();
-  }
-
   h2_stream_t * stream = h2_stream_get(h2, frame->stream_id);
 
   if (!stream) {
@@ -1309,7 +1292,7 @@ static bool h2_parse_frame_data(h2_t * const h2, const h2_frame_data_t * const f
     return false;
   }
 
-  h2_plugin_invoke(h2, h2->data, HANDLE_DATA, stream->request, stream->response,
+  plugin_invoke(h2->plugin_invoker, HANDLE_DATA, stream->request, stream->response,
       buf, buf_length, last_data_frame, false);
 
   // do we need to send WINDOW_UPDATE?

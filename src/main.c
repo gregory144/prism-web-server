@@ -44,7 +44,9 @@ int main(int argc, char ** argv)
   config->num_workers = NUM_WORKERS;
   config->private_key_file = "key.pem";
   config->cert_file = "cert.pem";
-  config->plugin_file = "plugin.so";
+  config->plugin_configs = NULL;
+
+  plugin_config_t * current_plugin = NULL;
 
   int c;
 
@@ -61,9 +63,19 @@ int main(int argc, char ** argv)
         break;
 
       case 'e': // plugin file
-        config->plugin_file = optarg;
+      {
+        plugin_config_t * last = current_plugin;
+        current_plugin = malloc(sizeof(plugin_config_t));
+        if (last) {
+          last->next = current_plugin;
+        }
+        if (!config->plugin_configs) {
+          config->plugin_configs = current_plugin;
+        }
+        current_plugin->filename = optarg;
+        current_plugin->next = NULL;
         break;
-
+      }
       case 'k': // private Key
         config->private_key_file = optarg;
         break;
