@@ -52,28 +52,8 @@ plugin_t * plugin_init(plugin_t * plugin, log_context_t * log, char * plugin_fil
   return plugin;
 }
 
-/*bool plugin_handler_va(plugin_t * plugin, struct client_t * client, enum plugin_callback_e cb, va_list args)*/
-/*{*/
-/*}*/
-
 bool plugin_invoke(struct plugin_invoker_t * invoker, enum plugin_callback_e cb, ...)
 {
-
-/*static bool server_plugin_handler(void * data, enum plugin_callback_e cb, va_list args)*/
-/*{*/
-  /*client_t * client = data;*/
-
-  /*plugin_list_t * current = client->server->plugins;*/
-  /*while (current) {*/
-    /*plugin_t * plugin = current->plugin;*/
-    /*bool handled = plugin_handler_va((plugin_t *) plugin, client, cb, args);*/
-    /*if (handled) {*/
-      /*return true;*/
-    /*}*/
-    /*current = current->next;*/
-  /*}*/
-  /*return false;*/
-/*}*/
 
 
 
