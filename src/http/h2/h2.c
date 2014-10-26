@@ -1908,10 +1908,10 @@ static bool h2_add_from_buffer(h2_t * const h2)
       return false;
     }
 
-    plugin_invoke(h2->plugin_invoker, PREPROCESS_INCOMING_FRAME, frame);
-
     h2->buffer_position += FRAME_HEADER_SIZE;
-    // TODO off-by-one?
+
+    plugin_invoke(h2->plugin_invoker, PREPROCESS_INCOMING_FRAME, frame, h2->buffer_position);
+
     bool success = false;
 
     if (!h2->received_settings && frame->type != FRAME_TYPE_SETTINGS) {

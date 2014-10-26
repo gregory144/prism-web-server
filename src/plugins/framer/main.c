@@ -28,7 +28,10 @@ static void framer_plugin_stop(plugin_t * plugin)
   log_append(plugin->log, LOG_INFO, "framer plugin stopped");
 }
 
-char * frame_type_to_string(enum frame_type_e t)
+/**
+ * Caller should not free the returned string
+ */
+static char * frame_type_to_string(enum frame_type_e t)
 {
   switch (t) {
     case FRAME_TYPE_DATA:
@@ -53,15 +56,115 @@ char * frame_type_to_string(enum frame_type_e t)
       return "CONTINUATION";
   }
   return "UNKNOWN";
-
 }
 
-static void framer_plugin_preprocess_incoming_frame(plugin_t * plugin, client_t * client,
-    h2_frame_t * frame)
+#define FLAGS_TO_STRING_BUF_LEN 128
+
+static void flags_to_string(char * buf, size_t buf_len, h2_frame_t * frame)
 {
-  log_append(plugin->log, LOG_INFO, "RECEIVED FRAME %s [client: %" PRIu64 ", length: %" PRIu16
-      ", stream id: %" PRIu32 "]",
-      frame_type_to_string(frame->type), client->id, frame->length, frame->stream_id
+  buf[0] = '\0';
+  uint8_t flags = frame->flags;
+  switch (frame->type) {
+    case FRAME_TYPE_DATA:
+      if (flags & FLAG_END_STREAM) { strncat(buf, "END_STREAM, ", buf_len); }
+      if (flags & FLAG_END_SEGMENT) { strncat(buf, "END_SEGMENT, ", buf_len); }
+      if (flags & FLAG_PADDED) { strncat(buf, "END_PADDED, ", buf_len); }
+      break;
+    case FRAME_TYPE_HEADERS:
+      if (flags & FLAG_END_STREAM) { strncat(buf, "END_STREAM, ", buf_len); }
+      if (flags & FLAG_END_SEGMENT) { strncat(buf, "END_SEGMENT, ", buf_len); }
+      if (flags & FLAG_END_HEADERS) { strncat(buf, "END_HEADERS, ", buf_len); }
+      if (flags & FLAG_PADDED) { strncat(buf, "PADDED, ", buf_len); }
+      if (flags & FLAG_PRIORITY) { strncat(buf, "PRIORITY, ", buf_len); }
+      break;
+    case FRAME_TYPE_SETTINGS:
+    case FRAME_TYPE_PING:
+      if (flags & FLAG_ACK) { strncat(buf, "ACK, ", buf_len); }
+      break;
+    case FRAME_TYPE_PUSH_PROMISE:
+      if (flags & FLAG_END_HEADERS) { strncat(buf, "END_HEADERS, ", buf_len); }
+      if (flags & FLAG_PADDED) { strncat(buf, "PADDED, ", buf_len); }
+      break;
+    case FRAME_TYPE_CONTINUATION:
+      if (flags & FLAG_END_HEADERS) { strncat(buf, "END_HEADERS, ", buf_len); }
+      break;
+    default:
+      break;
+  }
+  if (buf[0] == '\0') {
+    strncat(buf, "none", buf_len);
+  } else {
+    // remove the last ", "
+    buf[strlen(buf) - 2] = '\0';
+  }
+}
+
+/*#define FRAME_TO_STRING_BUF_LEN 1024*/
+
+/*static void frame_to_string(char * buf, size_t buf_len, h2_frame_t * frame, uint8_t * payload)*/
+/*{*/
+  /*buf[0] = '\0';*/
+  /*uint8_t flags = frame->flags;*/
+  /*switch (frame->type) {*/
+    /*case FRAME_TYPE_DATA:*/
+    /*{*/
+      /*if (flags & FLAG_PADDED) {*/
+        /*uint8_t padding_length = get_bits8(payload, 0xFF);*/
+        /*snprintf(buf, buf_len, "padding length: %" PRIu8, padding_length);*/
+      /*}*/
+      /*break;*/
+    /*}*/
+    /*case FRAME_TYPE_HEADERS:*/
+    /*{*/
+      /*if (flags & FLAG_PADDED) {*/
+        /*uint8_t padding_length = get_bits8(payload, 0xFF);*/
+        /*snprintf(buf, buf_len, "padding length: %" PRIu8, padding_length);*/
+      /*}*/
+      /*if (flags & FLAG_PRIORITY) {*/
+        /*uint32_t dependency = get_bits32(payload, 0xFF);*/
+        /*snprintf(buf, buf_len, "padding length: %" PRIu8, padding_length);*/
+      /*}*/
+      /*break;*/
+    /*}*/
+    /*case FRAME_TYPE_SETTINGS:*/
+    /*case FRAME_TYPE_PING:*/
+      /*if (flags & FLAG_ACK) { strncat(buf, "ACK, ", buf_len); }*/
+      /*break;*/
+    /*case FRAME_TYPE_PUSH_PROMISE:*/
+      /*if (flags & FLAG_END_HEADERS) { strncat(buf, "END_HEADERS, ", buf_len); }*/
+      /*if (flags & FLAG_PADDED) { strncat(buf, "PADDED, ", buf_len); }*/
+      /*break;*/
+    /*case FRAME_TYPE_CONTINUATION:*/
+      /*if (flags & FLAG_END_HEADERS) { strncat(buf, "END_HEADERS, ", buf_len); }*/
+      /*break;*/
+    /*default:*/
+      /*break;*/
+  /*}*/
+/*}*/
+
+static void framer_plugin_preprocess_incoming_frame(plugin_t * plugin, client_t * client,
+    h2_frame_t * frame, uint8_t * payload)
+{
+
+  UNUSED(payload);
+
+  char frame_flags[FLAGS_TO_STRING_BUF_LEN];
+  flags_to_string(frame_flags, FLAGS_TO_STRING_BUF_LEN, frame);
+
+  char * type = frame_type_to_string(frame->type);
+
+  /*char frame_options[FRAME_TO_STRING_BUF_LEN];*/
+  /*frame_to_string(frame_options, FRAME_TO_STRING_BUF_LEN, frame, payload);*/
+
+  /*log_append(plugin->log, LOG_INFO, "> %s [client: %" PRIu64 ", length: %" PRIu16*/
+      /*", stream id: %" PRIu32 ", flags: %s (%#02x)] [%s]",*/
+      /*type, client->id, frame->length, frame->stream_id, frame_flags, frame->flags,*/
+      /*frame_options*/
+  /*);*/
+
+  log_append(plugin->log, LOG_INFO, "> %s [client: %" PRIu64 ", length: %" PRIu16
+      ", stream id: %" PRIu32 ", flags: %s (%" PRIu8 ", 0x%02x)]",
+      type, client->id, frame->length, frame->stream_id, frame_flags, frame->flags, frame->flags
   );
 }
 
@@ -71,7 +174,8 @@ static bool framer_plugin_handler(plugin_t * plugin, client_t * client, enum plu
     case PREPROCESS_INCOMING_FRAME:
     {
       h2_frame_t * frame = va_arg(args, h2_frame_t *);
-      framer_plugin_preprocess_incoming_frame(plugin, client, frame);
+      uint8_t * payload = va_arg(args, uint8_t *);
+      framer_plugin_preprocess_incoming_frame(plugin, client, frame, payload);
       return false;
     }
     default:
