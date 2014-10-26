@@ -5,6 +5,7 @@ AC_GNU_SOURCE
 
 # archiver for libraries
 AM_PROG_AR
+AM_SILENT_RULES([yes])
 
 AC_PROG_CC
 AC_PROG_CC_C99
