@@ -567,7 +567,8 @@ static void files_plugin_request_handler(plugin_t * plugin, client_t * client, h
 
   // check to make sure the file is in the current directory
   if (path_length < file_server->cwd_length || memcmp(file_server->cwd, path, file_server->cwd_length) != 0) {
-    log_append(file_server->log, LOG_ERROR, "%s (%ld) not in %s (%ld)", path, path_length, file_server->cwd, file_server->cwd_length);
+    log_append(file_server->log, LOG_ERROR, "%s (%ld) not in %s (%ld)", path, path_length, file_server->cwd,
+               file_server->cwd_length);
     http_response_write_error(response, 404);
     file_server_finish_request(fs_request);
     return;
@@ -577,8 +578,8 @@ static void files_plugin_request_handler(plugin_t * plugin, client_t * client, h
 }
 
 static void files_plugin_data_handler(plugin_t * plugin, client_t * client, http_request_t * request,
-                                       http_response_t * response,
-                                       uint8_t * buf, size_t length, bool last, bool free_buf)
+                                      http_response_t * response,
+                                      uint8_t * buf, size_t length, bool last, bool free_buf)
 {
   UNUSED(plugin);
   UNUSED(client);
@@ -597,23 +598,25 @@ static bool files_plugin_handler(plugin_t * plugin, client_t * client, enum plug
 {
   switch (cb) {
     case HANDLE_REQUEST:
-    {
-      http_request_t * request = va_arg(args, http_request_t *);
-      http_response_t * response = va_arg(args, http_response_t *);
-      files_plugin_request_handler(plugin, client, request, response);
-      return true;
-    }
+      {
+        http_request_t * request = va_arg(args, http_request_t *);
+        http_response_t * response = va_arg(args, http_response_t *);
+        files_plugin_request_handler(plugin, client, request, response);
+        return true;
+      }
+
     case HANDLE_DATA:
-    {
-      http_request_t * request = va_arg(args, http_request_t *);
-      http_response_t * response = va_arg(args, http_response_t *);
-      uint8_t * buf = va_arg(args, uint8_t *);
-      size_t length = va_arg(args, size_t);
-      bool last = (bool) va_arg(args, int);
-      bool free_buf = (bool) va_arg(args, int);
-      files_plugin_data_handler(plugin, client, request, response, buf, length, last, free_buf);
-      return true;
-    }
+      {
+        http_request_t * request = va_arg(args, http_request_t *);
+        http_response_t * response = va_arg(args, http_response_t *);
+        uint8_t * buf = va_arg(args, uint8_t *);
+        size_t length = va_arg(args, size_t);
+        bool last = (bool) va_arg(args, int);
+        bool free_buf = (bool) va_arg(args, int);
+        files_plugin_data_handler(plugin, client, request, response, buf, length, last, free_buf);
+        return true;
+      }
+
     default:
       return false;
   }

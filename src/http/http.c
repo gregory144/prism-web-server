@@ -60,7 +60,8 @@ static http_request_t * http_internal_request_init_cb(void * data, void * req_us
 static void set_protocol_h2(http_connection_t * connection)
 {
   connection->protocol = H2;
-  connection->handler = h2_init(connection, connection->log, connection->hpack_log, connection->tls_version, connection->cipher,
+  connection->handler = h2_init(connection, connection->log, connection->hpack_log, connection->tls_version,
+                                connection->cipher,
                                 connection->cipher_key_size_in_bits,
                                 connection->plugin_invoker, http_internal_write_cb, http_internal_close_cb,
                                 http_internal_request_init_cb);
@@ -84,15 +85,16 @@ static bool http_internal_upgrade_cb(void * data, char * settings_base64, header
   set_protocol_h2(connection);
   h2_t * h2_handler = connection->handler;
 
-  if (!h2_settings_apply(h2_handler, settings_base64)) {
-    return false;
-  }
-
   if (!send_upgrade_response(connection)) {
     return false;
   }
 
+  if (!h2_settings_apply(h2_handler, settings_base64)) {
+    return false;
+  }
+
   bool result = h2_request_begin(h2_handler, headers, buffer, buffer_length);
+  h1_1_handler->headers = NULL;
 
   h1_1_free(h1_1_handler);
 
@@ -103,8 +105,8 @@ static void set_protocol_h1_1(http_connection_t * connection)
 {
   connection->protocol = H1_1;
   connection->handler = h1_1_init(connection, connection->log, connection->scheme, connection->hostname,
-      connection->port, connection->plugin_invoker, http_internal_write_cb, http_internal_write_error_cb,
-      http_internal_close_cb, http_internal_request_init_cb, http_internal_upgrade_cb);
+                                  connection->port, connection->plugin_invoker, http_internal_write_cb, http_internal_write_error_cb,
+                                  http_internal_close_cb, http_internal_request_init_cb, http_internal_upgrade_cb);
 }
 
 http_connection_t * http_connection_init(void * const data, log_context_t * log, log_context_t * hpack_log,
@@ -411,18 +413,18 @@ http_request_t * http_push_init(http_request_t * const original_request)
   }
 }
 
-bool http_push_promise(http_request_t * const request)
+bool http_push_promise(http_request_t * const pushed_request)
 {
-  http_request_data_t * req_data = request->handler_data;
+  http_request_data_t * req_data = pushed_request->handler_data;
   void * data = req_data->data;
   http_connection_t * connection = req_data->connection;
 
   switch (connection->protocol) {
     case H2:
-      return h2_push_promise((h2_stream_t *) data, request);
+      return h2_push_promise((h2_stream_t *) data, pushed_request);
 
     case H1_1:
-      return h1_1_push_promise((h1_1_t *) data, request);
+      return h1_1_push_promise((h1_1_t *) data, pushed_request);
 
     default:
       abort();

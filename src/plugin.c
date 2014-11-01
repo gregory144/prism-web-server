@@ -8,7 +8,7 @@
 #include "http/http.h"
 
 plugin_t * plugin_init(plugin_t * plugin, log_context_t * log, char * plugin_file,
-    struct server_t * server)
+                       struct server_t * server)
 {
   bool free_plugin = false;
 
@@ -58,6 +58,7 @@ bool plugin_invoke(struct plugin_invoker_t * invoker, enum plugin_callback_e cb,
 
   va_list args;
   plugin_list_t * current = invoker_def->plugins;
+
   while (current) {
     va_start(args, cb);
     plugin_t * plugin = current->plugin;
@@ -70,6 +71,7 @@ bool plugin_invoke(struct plugin_invoker_t * invoker, enum plugin_callback_e cb,
 
     current = current->next;
   }
+
   return false;
 }
 

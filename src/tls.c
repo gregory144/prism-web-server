@@ -483,7 +483,7 @@ bool tls_set_version(tls_client_ctx_t * client_ctx)
 {
   log_append(client_ctx->log, LOG_DEBUG, "SSL version: %s", SSL_get_version(client_ctx->ssl));
   log_append(client_ctx->log, LOG_DEBUG, "SSL cipher: %s, %d", SSL_get_cipher_name(client_ctx->ssl),
-      SSL_get_cipher_bits(client_ctx->ssl, NULL));
+             SSL_get_cipher_bits(client_ctx->ssl, NULL));
 
   client_ctx->selected_tls_version = SSL_get_version(client_ctx->ssl);
   client_ctx->selected_cipher = SSL_get_cipher_name(client_ctx->ssl);
@@ -552,14 +552,15 @@ bool tls_decrypt_data_and_pass_to_app(tls_client_ctx_t * client_ctx, uint8_t * b
     int retval = BIO_write(client_ctx->network_bio, buf + written, length - written);
 
     if (retval > 0) {
-      log_append(client_ctx->log, LOG_TRACE, "Wrote %d/%ld octets of encrypted data to network BIO for decryption", retval, length);
+      log_append(client_ctx->log, LOG_TRACE, "Wrote %d/%ld octets of encrypted data to network BIO for decryption", retval,
+                 length);
       written += retval;
     } else if (BIO_should_retry(client_ctx->network_bio)) {
       // the network BIO buffer maybe full - try freeing some space by
       // reading from it and passing it on to the app
       if (!tls_read_decrypted_data_and_pass_to_app(client_ctx)) {
         log_append(client_ctx->log, LOG_ERROR,
-            "Could not write encrypted data to network BIO for decryption: %d (should retry)", retval);
+                   "Could not write encrypted data to network BIO for decryption: %d (should retry)", retval);
         free(buf);
 
         return true;

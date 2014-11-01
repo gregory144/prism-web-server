@@ -48,7 +48,7 @@ static bool debug_plugin_request_handler(plugin_t * plugin, client_t * client, h
     while (header_list_iterate(&iter)) {
       header_field_t * field = iter.field;
       log_append(plugin->log, LOG_DEBUG, "'%s' (%ld): '%s' (%ld)",
-          field->name, field->name_length, field->value, field->value_length);
+                 field->name, field->name_length, field->value, field->value_length);
     }
 
     log_append(plugin->log, LOG_DEBUG, "Got parameters:");
@@ -57,7 +57,7 @@ static bool debug_plugin_request_handler(plugin_t * plugin, client_t * client, h
 
     while (multimap_iterate(&mm_iter)) {
       log_append(plugin->log, LOG_DEBUG, "'%s' (%ld): '%s' (%ld)",
-          mm_iter.key, strlen(mm_iter.key), mm_iter.value, strlen(mm_iter.value));
+                 mm_iter.key, strlen(mm_iter.key), mm_iter.value, strlen(mm_iter.value));
     }
   }
 
@@ -160,54 +160,68 @@ static bool debug_plugin_request_handler(plugin_t * plugin, client_t * client, h
     http_response_header_add(response, "date", date);
   }
 
-  http_request_t * pushed_request = http_push_init(request);
+  http_request_t * pushed_request = NULL;
 
-  if (pushed_request) {
-    http_request_header_add(pushed_request, ":method", "GET");
-    http_request_header_add(pushed_request, ":scheme", "http");
-    http_request_header_add(pushed_request, ":authority", "localhost:7000");
-    http_request_header_add(pushed_request, ":path", "/pushed_resource.txt");
+  bool push_enabled = false;
+  if (http_request_param_get(request, "push")) {
+    push_enabled = true;
+  }
 
-    if (http_push_promise(pushed_request)) {
+  if (push_enabled) {
+    pushed_request = http_push_init(request);
 
-      http_response_t * pushed_response = http_push_response_get(pushed_request);
-      http_response_status_set(pushed_response, 200);
+    if (pushed_request) {
+      http_request_header_add(pushed_request, ":method", "GET");
+      http_request_header_add(pushed_request, ":scheme", "http");
+      http_request_header_add(pushed_request, ":authority", "localhost:7000");
+      http_request_header_add(pushed_request, ":path", "/pushed_resource.txt");
 
-      char push_text[256];
-      snprintf(push_text, 255, "Pushed Response at %s\n", date);
-
-      size_t push_content_length = strlen(push_text);
-
-      char push_content_length_s[256];
-      snprintf(push_content_length_s, 255, "%ld", push_content_length);
-      http_response_header_add(pushed_response, "content-length", push_content_length_s);
-
-      http_response_header_add(pushed_response, "server", PACKAGE_STRING);
-
-      if (date) {
-        http_response_header_add(pushed_response, "date", date);
+      if (!http_push_promise(pushed_request)) {
+        http_request_free(pushed_request);
+        pushed_request = NULL;
       }
-
-      http_response_write(pushed_response, (uint8_t *) strdup(push_text), push_content_length, true);
     }
-
   }
 
   http_response_write(response, (uint8_t *) resp_text, content_length, true);
+
+  if (pushed_request) {
+    http_response_t * pushed_response = http_push_response_get(pushed_request);
+    http_response_status_set(pushed_response, 200);
+
+    char push_text[256];
+    snprintf(push_text, 255, "Pushed Response at %s\n", date);
+
+    size_t push_content_length = strlen(push_text);
+
+    char push_content_length_s[256];
+    snprintf(push_content_length_s, 255, "%ld", push_content_length);
+    http_response_header_add(pushed_response, "content-length", push_content_length_s);
+
+    http_response_header_add(pushed_response, "server", PACKAGE_STRING);
+
+    if (date) {
+      http_response_header_add(pushed_response, "date", date);
+    }
+
+    printf("Writing push promise response\n");
+    http_response_write(pushed_response, (uint8_t *) strdup(push_text), push_content_length, true);
+  }
+
 
   return true;
 }
 
 static bool debug_plugin_data_handler(plugin_t * plugin, client_t * client, http_request_t * request,
-                                       http_response_t * response,
-                                       uint8_t * buf, size_t length, bool last, bool free_buf)
+                                      http_response_t * response,
+                                      uint8_t * buf, size_t length, bool last, bool free_buf)
 {
   UNUSED(plugin);
   UNUSED(client);
   UNUSED(request);
 
   log_append(plugin->log, LOG_TRACE, "Received %ld bytes of data from client (last? %s)",
-      length, last ? "yes" : "no");
+             length, last ? "yes" : "no");
 
   uint8_t * out = malloc(sizeof(uint8_t) * length);
   // convert all bytes to lowercase
@@ -231,23 +245,25 @@ static bool debug_plugin_handler(plugin_t * plugin, client_t * client, enum plug
 {
   switch (cb) {
     case HANDLE_REQUEST:
-    {
-      http_request_t * request = va_arg(args, http_request_t *);
-      http_response_t * response = va_arg(args, http_response_t *);
-      return debug_plugin_request_handler(plugin, client, request, response);
-    }
+      {
+        http_request_t * request = va_arg(args, http_request_t *);
+        http_response_t * response = va_arg(args, http_response_t *);
+        return debug_plugin_request_handler(plugin, client, request, response);
+      }
+
     case HANDLE_DATA:
-    {
-      http_request_t * request = va_arg(args, http_request_t *);
-      http_response_t * response = va_arg(args, http_response_t *);
-      uint8_t * buf = va_arg(args, uint8_t *);
-      size_t length = va_arg(args, size_t);
-      bool last = (bool) va_arg(args, int);
-      bool free_buf = (bool) va_arg(args, int);
-      return debug_plugin_data_handler(plugin, client, request, response, buf, length, last, free_buf);
-    }
-    default:
-      return false;
+      {
+        http_request_t * request = va_arg(args, http_request_t *);
+        http_response_t * response = va_arg(args, http_response_t *);
+        uint8_t * buf = va_arg(args, uint8_t *);
+        size_t length = va_arg(args, size_t);
+        bool last = (bool) va_arg(args, int);
+        bool free_buf = (bool) va_arg(args, int);
+        return debug_plugin_data_handler(plugin, client, request, response, buf, length, last, free_buf);
+      }
+
+      default:
+          return false;
   }
 }
 

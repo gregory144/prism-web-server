@@ -42,8 +42,10 @@ void http_response_status_set(http_response_t * const response, const uint16_t s
 void http_response_free(http_response_t * const response)
 {
   http_request_free(response->request);
+  response->request = NULL;
 
   header_list_free(response->headers);
+  response->headers = NULL;
 
   free(response);
 }

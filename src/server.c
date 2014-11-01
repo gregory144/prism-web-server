@@ -58,7 +58,7 @@ static void uv_cb_write(uv_write_t * req, int status)
 
   if (status < 0) {
     log_append(client->log, LOG_ERROR,
-        "Write error: %s, client #%ld", uv_strerror(status), client->id);
+               "Write error: %s, client #%ld", uv_strerror(status), client->id);
   }
 
   uv_async_send(&client->written_handle);
@@ -172,7 +172,7 @@ static void uv_cb_close_connection(uv_handle_t * handle)
   client_t * client = handle->data;
 
   log_append(client->log, LOG_DEBUG, "Closing connection from uv callback: %ld, reads = %ld octets, writes = %ld octets",
-            client->id, client->octets_read, client->octets_written);
+             client->id, client->octets_read, client->octets_written);
 
   client->uv_closed = true;
 
@@ -338,7 +338,8 @@ static void uv_cb_listen(uv_stream_t * tcp_server, int status)
   int port = server->config->port;
 
   client->connection = http_connection_init(client, &server->config->http_log, &server->config->hpack_log,
-      scheme, hostname, port, (struct plugin_invoker_t *)&client->plugin_invoker, worker_http_cb_write, worker_http_cb_close_connection);
+                       scheme, hostname, port, (struct plugin_invoker_t *)&client->plugin_invoker, worker_http_cb_write,
+                       worker_http_cb_close_connection);
 
   uv_tcp_init(&server->loop, &client->tcp);
   client->tcp.data = client;
@@ -383,10 +384,11 @@ server_t * server_init(server_config_t * config)
 
   plugin_config_t * plugin_config = server->config->plugin_configs;
   plugin_list_t * last = NULL;
+
   while (plugin_config) {
     plugin_list_t * current = malloc(sizeof(plugin_list_t));
     current->plugin = plugin_init(NULL, &server->config->plugin_log, plugin_config->filename,
-        (struct server_t *) server);
+                                  (struct server_t *) server);
     current->next = NULL;
 
     if (!current->plugin) {
@@ -399,6 +401,7 @@ server_t * server_init(server_config_t * config)
     } else {
       last->next = current;
     }
+
     last = current;
 
     plugin_config = plugin_config->next;
@@ -469,6 +472,7 @@ int server_start(server_t * server)
 {
 
   plugin_list_t * current = server->plugins;
+
   while (current != NULL) {
     plugin_start(current->plugin);
     current = current->next;
@@ -528,8 +532,8 @@ void server_stop(server_t * server)
     worker_t * worker = server->workers[i];
 
     log_append(server->log, LOG_DEBUG, "Closing worker #%ld with %ld assigned reads (pushes: %ld, pops: %ld, length: %ld)",
-              i, worker->assigned_reads, worker->read_queue->num_pushes, worker->read_queue->num_pops,
-              worker->read_queue->length);
+               i, worker->assigned_reads, worker->read_queue->num_pushes, worker->read_queue->num_pops,
+               worker->read_queue->length);
 
     uv_async_send(&worker->stop_handle);
   }
@@ -542,6 +546,7 @@ void server_stop(server_t * server)
   }
 
   plugin_list_t * current = server->plugins;
+
   while (current) {
     plugin_stop(current->plugin);
     current = current->next;

@@ -62,20 +62,23 @@ int main(int argc, char ** argv)
         config->hostname = optarg;
         break;
 
-      case 'e': // plugin file
-      {
+      case 'e': { // plugin file
         plugin_config_t * last = current_plugin;
         current_plugin = malloc(sizeof(plugin_config_t));
+
         if (last) {
           last->next = current_plugin;
         }
+
         if (!config->plugin_configs) {
           config->plugin_configs = current_plugin;
         }
+
         current_plugin->filename = optarg;
         current_plugin->next = NULL;
         break;
       }
+
       case 'k': // private Key
         config->private_key_file = optarg;
         break;
@@ -121,7 +124,7 @@ int main(int argc, char ** argv)
     exit(EXIT_FAILURE);
   }
 
-  enum log_level_e min_level = LOG_DEBUG;
+  enum log_level_e min_level = LOG_INFO;
 
   log_context_init(&config->server_log, "SERVER", stdout, min_level, true);
   log_context_init(&config->data_log, "DATA", stdout, min_level, true);

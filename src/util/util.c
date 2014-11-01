@@ -146,7 +146,7 @@ static const char * MONTH_NAMES[] = {
 
   struct timeval tv;
   time_t nowtime;
-  struct tm *nowtm;
+  struct tm * nowtm;
   char tmbuf[64];
 
   gettimeofday(&tv, NULL);

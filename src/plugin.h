@@ -59,7 +59,7 @@ typedef struct plugin_handlers_s {
 typedef void (*plugin_initializer)(plugin_t * plugin, struct server_t * server);
 
 plugin_t * plugin_init(plugin_t * plugin, log_context_t * log, char * plugin_file,
-    struct server_t * server);
+                       struct server_t * server);
 
 bool plugin_handler_va(plugin_t * plugin, struct client_t * client, enum plugin_callback_e cb, va_list args);
 

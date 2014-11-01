@@ -11,7 +11,7 @@
 #include "http/request.h"
 #include "http/response.h"
 
-#define PUSH_ENABLED false
+#define PUSH_ENABLED true
 
 typedef bool (*h2_write_cb)(void * data, uint8_t * buf, size_t len);
 
@@ -234,6 +234,16 @@ typedef struct {
 
   H2_FRAME_FIELDS
 
+  /**
+   * See the note about padding lengths in the definition of h2_frame_data_t
+   */
+  size_t padding_length;
+
+  uint32_t promised_stream_id;
+
+  uint8_t * header_block_fragment;
+  uint16_t header_block_fragment_length;
+
 } h2_frame_push_promise_t;
 
 typedef struct {
@@ -344,11 +354,11 @@ typedef struct h2_queued_frame_s {
 
 } h2_queued_frame_t;
 
-typedef struct h2_s h2_t;
+struct h2_t;
 
 typedef struct {
 
-  h2_t * h2;
+  struct h2_t * h2;
 
   /**
    * Stream identifier
@@ -397,7 +407,7 @@ typedef struct {
 
 } h2_stream_t;
 
-struct h2_s {
+typedef struct h2_t {
 
   void * data;
 
@@ -464,13 +474,13 @@ struct h2_s {
   hpack_context_t * encoding_context;
   hpack_context_t * decoding_context;
 
-};
+} h2_t;
 
 bool h2_detect_connection(uint8_t * buffer, size_t len);
 
 h2_t * h2_init(void * const data, log_context_t * log, log_context_t * hpack_log, const char * tls_version,
-    const char * cipher, int cipher_key_size_in_bits, struct plugin_invoker_t * plugin_invoker,
-    const h2_write_cb writer, const h2_close_cb closer, const h2_request_init_cb request_init);
+               const char * cipher, int cipher_key_size_in_bits, struct plugin_invoker_t * plugin_invoker,
+               const h2_write_cb writer, const h2_close_cb closer, const h2_request_init_cb request_init);
 
 bool h2_settings_apply(h2_t * const h2, char * base64);
 

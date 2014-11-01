@@ -202,9 +202,9 @@ static bool h1_1_bad_request(h1_1_t * const h1_1)
 }
 
 h1_1_t * h1_1_init(void * const data, log_context_t * log, const char * scheme, const char * hostname,
-    const int port, struct plugin_invoker_t * plugin_invoker, const h1_1_write_cb writer,
-    const h1_1_write_error_cb error_writer, const h1_1_close_cb closer,
-    const h1_1_request_init_cb request_init, const h1_1_upgrade_cb upgrade_cb)
+                   const int port, struct plugin_invoker_t * plugin_invoker, const h1_1_write_cb writer,
+                   const h1_1_write_error_cb error_writer, const h1_1_close_cb closer,
+                   const h1_1_request_init_cb request_init, const h1_1_upgrade_cb upgrade_cb)
 {
   h1_1_t * h1_1 = malloc(sizeof(h1_1_t));
   ASSERT_OR_RETURN_NULL(h1_1);
@@ -254,6 +254,7 @@ void h1_1_free(h1_1_t * const h1_1)
 
   if (h1_1->response) {
     http_response_free(h1_1->response);
+    h1_1->response = NULL;
   } else if (h1_1->request) {
     http_request_free(h1_1->request);
   } else if (h1_1->headers) {
@@ -263,6 +264,7 @@ void h1_1_free(h1_1_t * const h1_1)
   if (h1_1->curr_header_field) {
     free(h1_1->curr_header_field);
   }
+
   if (h1_1->curr_header_value) {
     free(h1_1->curr_header_value);
   }
@@ -451,6 +453,7 @@ static int hp_headers_complete_cb(http_parser * http_parser)
 
   if (!plugin_invoke(h1_1->plugin_invoker, HANDLE_REQUEST, h1_1->request, h1_1->response)) {
     http_response_free(h1_1->response);
+    h1_1->response = NULL;
 
     log_append(h1_1->log, LOG_ERROR, "No plugin handled this request");
     h1_1_internal_error(h1_1);
@@ -470,7 +473,7 @@ static int hp_body_cb(http_parser * http_parser, const char * at, size_t length)
   }
 
   plugin_invoke(h1_1->plugin_invoker, HANDLE_DATA, h1_1->request, h1_1->response,
-      (uint8_t *) at, length, false, false);
+                (uint8_t *) at, length, false, false);
 
   return 0;
 }
@@ -487,7 +490,7 @@ static int hp_message_complete_cb(http_parser * http_parser)
   // the request may have already been handled
   if (h1_1->request) {
     plugin_invoke(h1_1->plugin_invoker, HANDLE_DATA, h1_1->request, h1_1->response,
-        NULL, 0, true, false);
+                  NULL, 0, true, false);
   }
 
   return 0;
@@ -555,6 +558,7 @@ static void finish_response(h1_1_t * h1_1)
   http_response_free(h1_1->response);
   h1_1->response = NULL;
   h1_1->request = NULL;
+  h1_1->headers = NULL;
 }
 
 bool h1_1_response_write(h1_1_t * h1_1, http_response_t * const response, uint8_t * data, const size_t data_length,

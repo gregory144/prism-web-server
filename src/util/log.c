@@ -42,9 +42,11 @@ void log_append(log_context_t * ctx, enum log_level_e level, char * format, ...)
     va_list ap;
     char buf[256];
     va_start(ap, format);
+
     if (vsnprintf(buf, 256, format, ap) < 0) {
       abort();
     }
+
     va_end(ap);
 
     size_t date_buf_length = TIME_WITH_MS_LEN + 1;
@@ -54,6 +56,7 @@ void log_append(log_context_t * ctx, enum log_level_e level, char * format, ...)
     if (fprintf(ctx->fp, "%s\t%s\t[%s]\t%s\n", ctx->name, LEVEL_STR[level], time_str, buf) < 0) {
       abort();
     }
+
     va_end(ap);
   }
 }
