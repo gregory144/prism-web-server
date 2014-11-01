@@ -194,13 +194,31 @@ typedef struct {
 
 typedef struct {
 
+  enum settings_e id;
+  uint32_t value;
+
+} h2_setting_t;
+
+typedef struct {
+
   H2_FRAME_FIELDS
+
+  size_t num_settings;
+
+  h2_setting_t settings[6];
 
 } h2_frame_settings_t;
 
 typedef struct {
 
   H2_FRAME_FIELDS
+
+  bool priority_exclusive;
+  uint32_t priority_stream_dependency;
+  // This is a value from 0 - 255.
+  // The priority weight is usually refered to as a value
+  // from 1 - 256. We may need to add 1 to this value when using it.
+  uint8_t priority_weight;
 
 } h2_frame_priority_t;
 
@@ -222,6 +240,8 @@ typedef struct {
 
   H2_FRAME_FIELDS
 
+  uint8_t * opaque_data;
+
 } h2_frame_ping_t;
 
 typedef struct {
@@ -232,6 +252,7 @@ typedef struct {
   uint32_t error_code;
 
   uint8_t * debug_data;
+  size_t debug_data_length;
 
 } h2_frame_goaway_t;
 
@@ -242,6 +263,38 @@ typedef struct {
   uint32_t increment;
 
 } h2_frame_window_update_t;
+
+typedef struct {
+
+  H2_FRAME_FIELDS
+
+  uint8_t * header_block_fragment;
+  uint16_t header_block_fragment_length;
+
+} h2_frame_continuation_t;
+
+typedef struct {
+
+  H2_FRAME_FIELDS
+
+  /**
+   * There are 2 potential values that this could represent:
+   * 1. The value transmitted over the wire in the padding length field
+   * 2. The "actual" amount of padding in this frame, which is:
+   *    transmitted value + 1
+   *
+   * Since the padding length field takes up one byte itself, there is
+   * always an extra octet of padding.
+   *
+   * This value represents the transmitted value.
+   *
+   */
+  uint8_t padding_length;
+
+  uint8_t * payload;
+  uint16_t payload_length;
+
+} h2_frame_data_t;
 
 typedef struct h2_header_fragment_s {
 
@@ -255,22 +308,22 @@ typedef struct {
 
   H2_FRAME_FIELDS
 
-  size_t header_block_fragment_size;
+  /**
+   * See the note about padding lengths in the definition of h2_frame_data_t
+   */
+  size_t padding_length;
+
+  bool priority_exclusive;
+  uint32_t priority_stream_dependency;
+  // This is a value from 0 - 255.
+  // The priority weight is usually refered to as a value
+  // from 1 - 256. We may need to add 1 to this value when using it.
+  uint8_t priority_weight;
+
   uint8_t * header_block_fragment;
+  uint16_t header_block_fragment_length;
 
 } h2_frame_headers_t;
-
-typedef struct {
-
-  H2_FRAME_FIELDS
-
-} h2_frame_continuation_t;
-
-typedef struct {
-
-  H2_FRAME_FIELDS
-
-} h2_frame_data_t;
 
 typedef struct h2_queued_frame_s {
   struct h2_queued_frame_s * next;
@@ -338,7 +391,7 @@ typedef struct {
    */
   uint32_t associated_stream_id;
 
-  uint32_t priority_dependency;
+  uint32_t priority_stream_dependency;
   uint8_t priority_weight;
   bool priority_exclusive;
 
@@ -442,5 +495,11 @@ http_request_t * h2_push_init(h2_stream_t * stream, http_request_t * const reque
 bool h2_push_promise(h2_stream_t * stream, http_request_t * const request);
 
 http_response_t * h2_push_response_get(h2_stream_t * stream, http_request_t * const request);
+
+/* streams */
+
+h2_stream_t * h2_stream_get(h2_t * const h2, const uint32_t stream_id);
+
+bool h2_stream_closed(h2_t * const h2, const uint32_t stream_id);
 
 #endif

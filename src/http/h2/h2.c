@@ -294,10 +294,15 @@ static void h2_stream_free(void * value)
 
   }
 
+  if (stream->response) {
+    http_response_free(stream->response);
+    stream->response = NULL;
+  }
+
   free(stream);
 }
 
-static h2_stream_t * h2_stream_get(h2_t * const h2, const uint32_t stream_id)
+h2_stream_t * h2_stream_get(h2_t * const h2, const uint32_t stream_id)
 {
 
   return hash_table_get(h2->streams, &stream_id);
@@ -320,7 +325,7 @@ static void h2_stream_close(h2_t * const h2, h2_stream_t * const stream, bool fo
 
 }
 
-static bool h2_stream_closed(h2_t * const h2, const uint32_t stream_id)
+bool h2_stream_closed(h2_t * const h2, const uint32_t stream_id)
 {
 
   h2_stream_t * stream = h2_stream_get(h2, stream_id);
@@ -1089,11 +1094,12 @@ static void h2_adjust_initial_window_size(h2_t * const h2, const long difference
   }
 }
 
-static bool h2_setting_set(h2_t * const h2, const enum settings_e id, const uint32_t value)
+static bool h2_setting_set(h2_t * const h2, const h2_setting_t * setting)
 {
-  log_append(h2->log, LOG_TRACE, "Settings: %d: %d", id, value);
+  log_append(h2->log, LOG_TRACE, "Settings: %d: %d", setting->id, setting->value);
 
-  switch (id) {
+  enum settings_e value = setting->value;
+  switch (setting->id) {
     case SETTINGS_HEADER_TABLE_SIZE:
       log_append(h2->log, LOG_TRACE, "Settings: Got table size: %d", value);
 
@@ -1134,7 +1140,7 @@ static bool h2_setting_set(h2_t * const h2, const enum settings_e id, const uint
       break;
 
     default:
-      emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR, "Invalid setting: %d", id);
+      emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR, "Invalid setting: %d", setting->id);
       return false;
   }
 
@@ -1185,7 +1191,7 @@ static h2_stream_t * h2_stream_init(h2_t * const h2, const uint32_t stream_id)
   stream->headers = NULL;
 
   stream->priority_exclusive = DEFAULT_STREAM_EXCLUSIVE_FLAG;
-  stream->priority_dependency = DEFAULT_STREAM_DEPENDENCY;
+  stream->priority_stream_dependency = DEFAULT_STREAM_DEPENDENCY;
   stream->priority_weight = DEFAULT_STREAM_WEIGHT;
 
   stream->outgoing_window_size = h2->initial_window_size;
@@ -1224,6 +1230,7 @@ static bool h2_trigger_request(h2_t * const h2, h2_stream_t * const stream)
 
   if (!plugin_invoke(h2->plugin_invoker, HANDLE_REQUEST, request, response)) {
     http_response_free(response);
+    stream->response = NULL;
 
     log_append(h2->log, LOG_ERROR, "No plugin handled this request");
     return false;
@@ -1251,21 +1258,48 @@ bool h2_request_begin(h2_t * const h2, header_list_t * headers, uint8_t * buf, s
   return true;
 }
 
-static bool strip_padding(h2_t * const h2, uint8_t ** payload, size_t * payload_length, bool padded_on)
+static bool strip_padding(h2_t * const h2, uint8_t * padding_length, uint8_t ** payload, size_t * payload_length, bool padded_on)
 {
   if (padded_on) {
-    size_t padding_length = get_bits8(*payload, 0xFF);
+    // padding length is actually 1 less than you would expect because the padding length field
+    // is one octet as well. So to pad 100 octets, the padding length field is 99 + the implicit
+    // one octet from the padding length field
+    *padding_length = get_bits8(*payload, 0xFF);
 
     (*payload_length)--;
     (*payload)++;
-    *payload_length -= padding_length;
+    *payload_length -= *padding_length;
     log_append(h2->log, LOG_TRACE, "Stripped %ld octets of padding from frame", padding_length);
   }
 
   return true;
 }
 
-static bool h2_parse_frame_data(h2_t * const h2, const h2_frame_data_t * const frame)
+static bool h2_parse_frame_data(h2_t * const h2, h2_frame_data_t * const frame)
+{
+  // pass on to application
+  uint8_t * buf = h2->buffer + h2->buffer_position;
+  size_t buf_length = frame->length;
+
+  bool padded = FRAME_FLAG(frame, FLAG_PADDED);
+  uint8_t padding_length = 0;
+
+  if (!strip_padding(h2, &padding_length, &buf, &buf_length, padded)) {
+    emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR,
+                         "Problem with padding on data frame");
+    return false;
+  }
+
+  frame->padding_length = padding_length;
+
+  frame->payload = buf;
+  frame->payload_length = buf_length;
+
+
+  return true;
+}
+
+static bool h2_incoming_frame_data(h2_t * const h2, const h2_frame_data_t * const frame)
 {
   h2_stream_t * stream = h2_stream_get(h2, frame->stream_id);
 
@@ -1280,20 +1314,10 @@ static bool h2_parse_frame_data(h2_t * const h2, const h2_frame_data_t * const f
   stream->incoming_window_size -= frame->length;
 
   // pass on to application
-  uint8_t * buf = h2->buffer + h2->buffer_position;
-  size_t buf_length = frame->length;
   bool last_data_frame = FRAME_FLAG(frame, FLAG_END_STREAM);
 
-  bool padded = FRAME_FLAG(frame, FLAG_PADDED);
-
-  if (!strip_padding(h2, &buf, &buf_length, padded)) {
-    emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR,
-                         "Problem with padding on data frame");
-    return false;
-  }
-
   plugin_invoke(h2->plugin_invoker, HANDLE_DATA, stream->request, stream->response,
-      buf, buf_length, last_data_frame, false);
+      frame->payload, frame->payload_length, last_data_frame, false);
 
   // do we need to send WINDOW_UPDATE?
   if (h2->incoming_window_size < 0) {
@@ -1428,40 +1452,54 @@ static bool h2_parse_header_fragments(h2_t * const h2, h2_stream_t * const strea
   return true;
 }
 
-static bool h2_parse_frame_headers(h2_t * const h2, const h2_frame_headers_t * const frame)
+static bool h2_parse_frame_headers(h2_t * const h2, h2_frame_headers_t * const frame)
 {
   uint8_t * buf = h2->buffer + h2->buffer_position;
   size_t buf_length = frame->length;
+
+  bool padded = FRAME_FLAG(frame, FLAG_PADDED);
+  uint8_t padding_length = 0;
+
+  if (!strip_padding(h2, &padding_length, &buf, &buf_length, padded)) {
+    emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR,
+                         "Problem with padding on header frame");
+    return false;
+  }
+  frame->padding_length = padding_length;
+
+  if (FRAME_FLAG(frame, FLAG_PRIORITY)) {
+
+    frame->priority_exclusive = get_bit(buf, 0);
+    frame->priority_stream_dependency = get_bits32(buf, 0x7FFFFFFF);
+    // this is the transmitted value - we'll need to add 1 to get a value between 1 and 256
+    frame->priority_weight = get_bits8(buf + 4, 0xFF);
+
+    buf += 5;
+    buf_length -= 5;
+  }
+
+  frame->header_block_fragment = buf;
+  frame->header_block_fragment_length = buf_length;
+
+  return true;
+}
+
+static bool h2_incoming_frame_headers(h2_t * const h2, const h2_frame_headers_t * const frame)
+{
   h2_stream_t * stream = h2_stream_init(h2, frame->stream_id);
 
   if (!stream) {
     return false;
   }
 
-  bool padded = FRAME_FLAG(frame, FLAG_PADDED);
-
-  if (!strip_padding(h2, &buf, &buf_length, padded)) {
-    emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR,
-                         "Problem with padding on header frame");
-    return false;
-  }
-
   if (FRAME_FLAG(frame, FLAG_PRIORITY)) {
-
-    stream->priority_exclusive = get_bit(buf, 0);
-    stream->priority_dependency = get_bits32(buf, 0x7FFFFFFF);
-    // add 1 to get a value between 1 and 256
-    stream->priority_weight = get_bits8(buf + 4, 0xFF) + 1;
-
-    log_append(h2->log, LOG_TRACE, "Stream #%d priority: exclusive: %s, dependency: %d, weight: %d",
-              stream->id, stream->priority_exclusive ? "yes" : "no", stream->priority_dependency,
-              stream->priority_weight);
-
-    buf += 5;
-    buf_length -= 5;
+    stream->priority_exclusive = frame->priority_exclusive;
+    stream->priority_stream_dependency = frame->priority_stream_dependency;
+    stream->priority_weight = frame->priority_weight;
   }
 
-  if (!h2_stream_add_header_fragment(stream, buf, buf_length)) {
+  if (!h2_stream_add_header_fragment(stream, frame->header_block_fragment,
+        frame->header_block_fragment_length)) {
     return false;
   }
 
@@ -1482,21 +1520,23 @@ static bool h2_parse_frame_headers(h2_t * const h2, const h2_frame_headers_t * c
 }
 
 static bool h2_parse_frame_continuation(h2_t * const h2,
-                                        const h2_frame_continuation_t * const frame)
+                                        h2_frame_continuation_t * const frame)
 {
   uint8_t * buf = h2->buffer + h2->buffer_position;
   size_t buf_length = frame->length;
+
+  frame->header_block_fragment = buf;
+  frame->header_block_fragment_length = buf_length;
+
+  return true;
+}
+
+static bool h2_incoming_frame_continuation(h2_t * const h2,
+                                        const h2_frame_continuation_t * const frame)
+{
   h2_stream_t * stream = h2_stream_get(h2, frame->stream_id);
 
-  bool padded = FRAME_FLAG(frame, FLAG_PADDED);
-
-  if (!strip_padding(h2, &buf, &buf_length, padded)) {
-    emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR,
-                         "Problem with padding on data frame");
-    return false;
-  }
-
-  if (!h2_stream_add_header_fragment(stream, buf, buf_length)) {
+  if (!h2_stream_add_header_fragment(stream, frame->header_block_fragment, frame->header_block_fragment_length)) {
     return false;
   }
 
@@ -1511,33 +1551,41 @@ static bool h2_parse_frame_continuation(h2_t * const h2,
   return true;
 }
 
-static bool h2_settings_parse(h2_t * const h2, uint8_t * pos, size_t buf_length)
+static bool h2_parse_settings_payload(h2_t * const h2, uint8_t * buffer, size_t buffer_length, size_t * num_settings, h2_setting_t * settings)
 {
-  size_t num_settings = buf_length / SETTING_SIZE;
-
-  log_append(h2->log, LOG_TRACE, "Settings: Found %ld settings", num_settings);
-
-  size_t i;
-
-  for (i = 0; i < num_settings; i++) {
-    uint8_t * curr_setting = pos + (i * SETTING_SIZE);
-    uint16_t setting_id = get_bits16(curr_setting, 0xFFFF);
-    uint32_t setting_value = get_bits32(curr_setting + SETTING_ID_SIZE, 0xFFFFFFFF);
-
-    if (!h2_setting_set(h2, setting_id, setting_value)) {
-      return false;
-    }
+  *num_settings = buffer_length / SETTING_SIZE;
+  if (*num_settings > 6) {
+    emit_error_and_close(h2, 0, H2_ERROR_INTERNAL_ERROR, "Up to 6 settings per frame supported: %ld",
+                         *num_settings);
+    return false;
   }
 
-  h2->received_settings = true;
+  log_append(h2->log, LOG_TRACE, "Settings: Found %ld settings", *num_settings);
 
-  log_append(h2->log, LOG_TRACE, "Settings: %ld, %d, %ld, %ld", h2->header_table_size, h2->enable_push,
-            h2->max_concurrent_streams, h2->initial_window_size);
+  for (size_t i = 0; i < *num_settings; i++) {
+    h2_setting_t * curr = &settings[i];
+    uint8_t * curr_setting = buffer + (i * SETTING_SIZE);
+    curr->id = get_bits16(curr_setting, 0xFFFF);
+    curr->value = get_bits32(curr_setting + SETTING_ID_SIZE, 0xFFFFFFFF);
+  }
 
   return true;
 }
 
-static bool h2_parse_frame_settings(h2_t * const h2, const h2_frame_settings_t * const frame)
+static bool h2_parse_frame_settings(h2_t * const h2, h2_frame_settings_t * const frame)
+{
+  if (!FRAME_FLAG(frame, FLAG_ACK)) {
+    uint8_t * pos = h2->buffer + h2->buffer_position;
+
+    return h2_parse_settings_payload(h2, pos, frame->length, &frame->num_settings, frame->settings);
+  } else {
+    frame->num_settings = 0;
+  }
+
+  return true;
+}
+
+static bool h2_incoming_frame_settings(h2_t * const h2, const h2_frame_settings_t * const frame)
 {
 
   if (FRAME_FLAG(frame, FLAG_ACK)) {
@@ -1556,26 +1604,35 @@ static bool h2_parse_frame_settings(h2_t * const h2, const h2_frame_settings_t *
     return true;
 
   } else {
-    uint8_t * pos = h2->buffer + h2->buffer_position;
-    h2_settings_parse(h2, pos, frame->length);
+    for (size_t i = 0; i < frame->num_settings; i++) {
+      const h2_setting_t * setting = &frame->settings[i];
+      h2_setting_set(h2, setting);
+    }
 
     h2->received_settings = true;
 
     log_append(h2->log, LOG_TRACE, "Settings: %ld, %d, %ld, %ld", h2->header_table_size, h2->enable_push,
               h2->max_concurrent_streams, h2->initial_window_size);
 
-    return h2_emit_settings_ack(h2);
+    bool ret = h2_emit_settings_ack(h2);
+
+    h2_flush(h2, 0);
+
+    return ret;
   }
 
 }
 
-static bool h2_parse_frame_ping(h2_t * const h2, const h2_frame_ping_t * const frame)
+static bool h2_parse_frame_ping(h2_t * const h2, h2_frame_ping_t * const frame)
 {
-  UNUSED(frame);
+  frame->opaque_data = h2->buffer + h2->buffer_position;
 
-  uint8_t * opaque_data = h2->buffer + h2->buffer_position;
-  return h2_emit_ping_ack(h2, opaque_data);
+  return true;
+}
 
+static bool h2_incoming_frame_ping(h2_t * const h2, const h2_frame_ping_t * const frame)
+{
+  return h2_emit_ping_ack(h2, frame->opaque_data);
 }
 
 static bool h2_increment_connection_window_size(h2_t * const h2, const uint32_t increment)
@@ -1619,6 +1676,12 @@ static bool h2_parse_frame_window_update(h2_t * const h2,
   uint8_t * buf = h2->buffer + h2->buffer_position;
   frame->increment = get_bits32(buf, 0x7FFFFFFF);
 
+  return true;
+}
+
+static bool h2_incoming_frame_window_update(h2_t * const h2,
+    h2_frame_window_update_t * const frame)
+{
   bool success = false;
 
   if (frame->stream_id > 0) {
@@ -1638,6 +1701,11 @@ static bool h2_parse_frame_rst_stream(h2_t * const h2, h2_frame_rst_stream_t * c
   uint8_t * buf = h2->buffer + h2->buffer_position;
   frame->error_code = get_bits32(buf, 0xFFFFFFFF);
 
+  return true;
+}
+
+static bool h2_incoming_frame_rst_stream(h2_t * const h2, h2_frame_rst_stream_t * const frame)
+{
   log_append(h2->log, LOG_WARN, "Received reset stream: stream #%d, error code: %s (%d)",
               frame->stream_id, H2_ERRORS[frame->error_code], frame->error_code);
 
@@ -1652,6 +1720,16 @@ static bool h2_parse_frame_priority(h2_t * const h2, h2_frame_priority_t * const
 {
   uint8_t * buf = h2->buffer + h2->buffer_position;
 
+  frame->priority_exclusive = get_bit(buf, 0);
+  frame->priority_stream_dependency = get_bits32(buf, 0x7FFFFFFF);
+  // this is the transmitted value - we'll need to add 1 to get a value between 1 and 256
+  frame->priority_weight = get_bits8(buf + 4, 0xFF);
+
+  return true;
+}
+
+static bool h2_incoming_frame_priority(h2_t * const h2, h2_frame_priority_t * const frame)
+{
   h2_stream_t * stream = h2_stream_get(h2, frame->stream_id);
 
   if (!stream) {
@@ -1660,10 +1738,9 @@ static bool h2_parse_frame_priority(h2_t * const h2, h2_frame_priority_t * const
     return true;
   }
 
-  stream->priority_exclusive = get_bit(buf, 0);
-  stream->priority_dependency = get_bits32(buf, 0x7FFFFFFF);
-  // add 1 to get a value between 1 and 256
-  stream->priority_weight = get_bits8(buf + 4, 0xFF) + 1;
+  stream->priority_exclusive = frame->priority_exclusive;
+  stream->priority_stream_dependency = frame->priority_stream_dependency;
+  stream->priority_weight = frame->priority_weight;
 
   return true;
 }
@@ -1674,13 +1751,17 @@ static bool h2_parse_frame_goaway(h2_t * const h2, h2_frame_goaway_t * const fra
   uint8_t * buf = h2->buffer + h2->buffer_position;
   frame->last_stream_id = get_bits32(buf, 0x7FFFFFFF);
   frame->error_code = get_bits32(buf + 4, 0xFFFFFFFF);
-  size_t debug_data_length = (frame->length - 8);
+  frame->debug_data_length = (frame->length - 8);
 
-  uint8_t debug_data[debug_data_length + 1];
-  memcpy(debug_data, buf + 8, debug_data_length);
-  debug_data[debug_data_length] = '\0';
-  frame->debug_data = debug_data;
+  frame->debug_data = malloc(frame->debug_data_length + 1);
+  memcpy(frame->debug_data, buf + 8, frame->debug_data_length);
+  frame->debug_data[frame->debug_data_length] = '\0';
 
+  return true;
+}
+
+static bool h2_incoming_frame_goaway(h2_t * const h2, h2_frame_goaway_t * const frame)
+{
   if (frame->error_code == H2_ERROR_NO_ERROR) {
     log_append(h2->log, LOG_TRACE, "Received goaway, last stream: %d, error code: %s (%d), debug_data: %s",
               frame->last_stream_id, H2_ERRORS[frame->error_code],
@@ -1692,7 +1773,7 @@ static bool h2_parse_frame_goaway(h2_t * const h2, h2_frame_goaway_t * const fra
               frame->error_code, frame->debug_data);
   }
 
-  frame->debug_data = NULL;
+  free(frame->debug_data);
 
   return true;
 }
@@ -1812,10 +1893,18 @@ bool h2_settings_apply(h2_t * const h2, char * base64)
 
   base64url_decode(&buf, base64);
 
-  h2_settings_parse(h2, binary_buffer_start(&buf), binary_buffer_size(&buf));
-  h2->received_settings = true;
+  h2_frame_settings_t frame;
+  frame.type = FRAME_TYPE_SETTINGS;
+  frame.flags = 0;
+  frame.length = strlen(base64);
+  frame.stream_id = 0;
 
+  h2_parse_settings_payload(h2, binary_buffer_start(&buf), binary_buffer_size(&buf), &frame.num_settings, frame.settings);
   binary_buffer_free(&buf);
+  plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_SETTINGS, &frame);
+  h2_incoming_frame_settings(h2, &frame);
+
+  h2->received_settings = true;
 
   return true;
 }
@@ -1910,7 +1999,7 @@ static bool h2_add_from_buffer(h2_t * const h2)
 
     h2->buffer_position += FRAME_HEADER_SIZE;
 
-    plugin_invoke(h2->plugin_invoker, PREPROCESS_INCOMING_FRAME, frame, h2->buffer_position);
+    plugin_invoke(h2->plugin_invoker, INCOMING_FRAME, frame, h2->buffer_position);
 
     bool success = false;
 
@@ -1925,22 +2014,37 @@ static bool h2_add_from_buffer(h2_t * const h2)
       switch (frame->type) {
         case FRAME_TYPE_DATA:
           success = h2_parse_frame_data(h2, (h2_frame_data_t *) frame);
+          if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_DATA,
+              frame, h2->buffer_position);
+          success = success && h2_incoming_frame_data(h2, (h2_frame_data_t *) frame);
           break;
 
         case FRAME_TYPE_HEADERS:
           success = h2_parse_frame_headers(h2, (h2_frame_headers_t *) frame);
+          if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_HEADERS,
+              frame, h2->buffer_position);
+          success = success && h2_incoming_frame_headers(h2, (h2_frame_headers_t *) frame);
           break;
 
         case FRAME_TYPE_PRIORITY:
           success = h2_parse_frame_priority(h2, (h2_frame_priority_t *) frame);
+          if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_PRIORITY,
+              frame, h2->buffer_position);
+          success = success && h2_incoming_frame_priority(h2, (h2_frame_priority_t *) frame);
           break;
 
         case FRAME_TYPE_RST_STREAM:
           success = h2_parse_frame_rst_stream(h2, (h2_frame_rst_stream_t *) frame);
+          if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_RST_STREAM,
+              frame, h2->buffer_position);
+          success = success && h2_incoming_frame_rst_stream(h2, (h2_frame_rst_stream_t *) frame);
           break;
 
         case FRAME_TYPE_SETTINGS:
           success = h2_parse_frame_settings(h2, (h2_frame_settings_t *) frame);
+          if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_SETTINGS,
+              frame, h2->buffer_position);
+          success = success && h2_incoming_frame_settings(h2, (h2_frame_settings_t *) frame);
           break;
 
         case FRAME_TYPE_PUSH_PROMISE:
@@ -1949,18 +2053,30 @@ static bool h2_add_from_buffer(h2_t * const h2)
 
         case FRAME_TYPE_PING:
           success = h2_parse_frame_ping(h2, (h2_frame_ping_t *) frame);
+          if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_PING,
+              frame, h2->buffer_position);
+          success = success && h2_incoming_frame_ping(h2, (h2_frame_ping_t *) frame);
           break;
 
         case FRAME_TYPE_GOAWAY:
           success = h2_parse_frame_goaway(h2, (h2_frame_goaway_t *) frame);
+          if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_GOAWAY,
+              frame, h2->buffer_position);
+          success = success && h2_incoming_frame_goaway(h2, (h2_frame_goaway_t *) frame);
           break;
 
         case FRAME_TYPE_WINDOW_UPDATE:
           success = h2_parse_frame_window_update(h2, (h2_frame_window_update_t *) frame);
+          if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_WINDOW_UPDATE,
+              frame, h2->buffer_position);
+          success = success && h2_incoming_frame_window_update(h2, (h2_frame_window_update_t *) frame);
           break;
 
         case FRAME_TYPE_CONTINUATION:
           success = h2_parse_frame_continuation(h2, (h2_frame_continuation_t *) frame);
+          if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_CONTINUATION,
+              frame, h2->buffer_position);
+          success = success && h2_incoming_frame_continuation(h2, (h2_frame_continuation_t *) frame);
           break;
 
         default:
@@ -2107,6 +2223,7 @@ bool h2_response_write(h2_stream_t * stream, http_response_t * const response, u
 
   if (last) {
     http_response_free(response);
+    stream->response = NULL;
 
     h2_stream_mark_closing(h2, stream);
   }
@@ -2133,6 +2250,7 @@ bool h2_response_write_data(h2_stream_t * stream, http_response_t * const respon
 
   if (last) {
     http_response_free(response);
+    stream->response = NULL;
 
     h2_stream_mark_closing(h2, stream);
   }
@@ -2179,7 +2297,6 @@ http_request_t * h2_push_init(h2_stream_t * stream, http_request_t * const origi
   pushed_stream->request = pushed_request;
 
   return pushed_request;
-
 }
 
 bool h2_push_promise(h2_stream_t * stream, http_request_t * const request)
