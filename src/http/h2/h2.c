@@ -793,6 +793,21 @@ static bool h2_frame_emit_window_update(const h2_t * const h2, h2_frame_window_u
   return true;
 }
 
+static bool h2_frame_emit_continuation(const h2_t * const h2, h2_frame_continuation_t * frame)
+{
+  const size_t buf_length = FRAME_HEADER_SIZE;
+  uint8_t buf[buf_length];
+
+  h2_frame_header_write(buf, (h2_frame_t *) frame);
+
+  if (!h2_write(h2, buf, buf_length)) {
+    log_append(h2->log, LOG_ERROR, "Unable to write continuation frame header");
+    return false;
+  }
+
+  return h2_write(h2, frame->header_block_fragment, frame->header_block_fragment_length);
+}
+
 static bool h2_frame_emit(const h2_t * const h2, h2_frame_t * frame)
 {
   plugin_invoke(h2->plugin_invoker, OUTGOING_FRAME, frame);
@@ -846,8 +861,8 @@ static bool h2_frame_emit(const h2_t * const h2, h2_frame_t * frame)
       break;
 
     case FRAME_TYPE_CONTINUATION:
-      log_append(h2->log, LOG_FATAL, "Unable to emit continuation frame: Not implemented yet");
-      abort();
+      plugin_invoke(h2->plugin_invoker, OUTGOING_FRAME_CONTINUATION, frame);
+      success = h2_frame_emit_continuation(h2, (h2_frame_continuation_t *) frame);
       break;
 
     default:
@@ -944,7 +959,6 @@ static bool emit_error_and_close(h2_t * const h2, uint32_t stream_id,
 static bool h2_send_headers(h2_t * const h2, const h2_stream_t * const stream,
                             const header_list_t * const headers)
 {
-  // TODO split large headers into multiple frames
   binary_buffer_t encoded;
 
   if (!hpack_encode(h2->encoding_context, headers, &encoded)) {
@@ -958,40 +972,77 @@ static bool h2_send_headers(h2_t * const h2, const h2_stream_t * const stream,
 
   uint8_t flags = 0;
   // TODO - these should be dynamic
-  const bool end_stream = false;
-  const bool end_headers = true;
+  const bool padded = false;
+  if (padded) {
+    flags |= FLAG_PADDED;
+  }
+
   const bool priority = false;
-
-  if (end_stream) {
-    flags |= FLAG_END_STREAM;
-  }
-
-  if (end_headers) {
-    flags |= FLAG_END_HEADERS;
-  }
-
   if (priority) {
     flags |= FLAG_PRIORITY;
   }
 
-  h2_frame_headers_t * frame = (h2_frame_headers_t *) h2_frame_init(h2, headers_length,
+  const bool end_stream = false;
+  if (end_stream) {
+    flags |= FLAG_END_STREAM;
+  }
+
+  size_t max_first_frame_length = h2->max_frame_size; // - padding - priority
+  size_t first_frame_length = headers_length > max_first_frame_length ?
+    max_first_frame_length : headers_length;
+  if (first_frame_length == headers_length) {
+      flags |= FLAG_END_HEADERS;
+  }
+  h2_frame_headers_t * frame = (h2_frame_headers_t *) h2_frame_init(h2, first_frame_length,
                                FRAME_TYPE_HEADERS, flags, stream->id);
   frame->header_block_fragment = hpack_buf;
-  frame->header_block_fragment_length = headers_length;
+  frame->header_block_fragment_length = first_frame_length;
 
+  // padding is not currently supported
   frame->padding_length = 0;
 
+  // these are not currently written on the wire because there is no mechanism for changing it
   frame->priority_exclusive = stream->priority_exclusive;
   frame->priority_stream_dependency = stream->priority_stream_dependency;
   frame->priority_weight = stream->priority_weight;
 
   log_append(h2->log, LOG_DEBUG, "Writing headers frame: stream %d", stream->id);
 
-  bool success = h2_frame_emit(h2, (h2_frame_t *) frame);
+  if (!h2_frame_emit(h2, (h2_frame_t *) frame)) {
+    free(hpack_buf);
+    return false;
+  }
+
+  if (first_frame_length < headers_length) {
+    // emit continuation frames
+    size_t header_block_pos = first_frame_length;
+    do {
+      uint8_t continuation_flags = 0;
+      size_t headers_left = headers_length - header_block_pos;
+      size_t continuation_frame_length = headers_left > h2->max_frame_size ?
+        h2->max_frame_size : headers_left;
+
+      if (continuation_frame_length == headers_left) {
+        continuation_flags |= FLAG_END_HEADERS;
+      }
+
+      h2_frame_continuation_t * cont_frame = (h2_frame_continuation_t *) h2_frame_init(h2,
+          continuation_frame_length, FRAME_TYPE_CONTINUATION, continuation_flags, stream->id);
+      cont_frame->header_block_fragment = hpack_buf + header_block_pos;
+      cont_frame->header_block_fragment_length = continuation_frame_length;
+
+      if (!h2_frame_emit(h2, (h2_frame_t *) cont_frame)) {
+        free(hpack_buf);
+        return false;
+      }
+
+      header_block_pos += continuation_frame_length;
+    } while (header_block_pos < headers_length);
+  }
 
   free(hpack_buf);
 
-  return success;
+  return true;
 }
 
 static bool h2_send_push_promise(h2_t * const h2, const h2_stream_t * const pushed_stream,

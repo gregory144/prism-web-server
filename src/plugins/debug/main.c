@@ -142,6 +142,18 @@ static bool debug_plugin_request_handler(plugin_t * plugin, client_t * client, h
     }
   }
 
+  if (http_request_param_get(request, "continuation")) {
+    for (size_t i = 0; i < 1000; i++) {
+      size_t header_key_length = 128;
+      char header_key[header_key_length];
+      snprintf(header_key, header_key_length, "header-%04ld", i + 1);
+      size_t header_value_length = 1000;
+      char header_value[header_value_length];
+      snprintf(header_value, header_value_length, "%040ld", i + 1);
+      http_response_header_add(response, header_key, header_value);
+    }
+  }
+
   http_response_status_set(response, 200);
 
   size_t content_length = strlen(resp_text);
