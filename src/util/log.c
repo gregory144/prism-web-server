@@ -37,6 +37,19 @@ bool log_level_enabled(log_context_t * ctx, enum log_level_e level)
   return log_enabled(ctx) && level <= ctx->min_level;
 }
 
+static void log_append_string(log_context_t * ctx, enum log_level_e level, char * str)
+{
+  if (log_level_enabled(ctx, level)) {
+    size_t date_buf_length = TIME_WITH_MS_LEN + 1;
+    char date_buf[date_buf_length];
+    char * time_str = current_time_with_milliseconds(date_buf, date_buf_length);
+
+    if (fprintf(ctx->fp, "%s\t%s\t[%s]\t%s\n", ctx->name, LEVEL_STR[level], time_str, str) < 0) {
+      abort();
+    }
+  }
+}
+
 void log_append(log_context_t * ctx, enum log_level_e level, char * format, ...)
 {
   if (log_level_enabled(ctx, level)) {
@@ -50,47 +63,37 @@ void log_append(log_context_t * ctx, enum log_level_e level, char * format, ...)
 
     va_end(ap);
 
-    size_t date_buf_length = TIME_WITH_MS_LEN + 1;
-    char date_buf[date_buf_length];
-    char * time_str = current_time_with_milliseconds(date_buf, date_buf_length);
-
-    if (fprintf(ctx->fp, "%s\t%s\t[%s]\t%s\n", ctx->name, LEVEL_STR[level], time_str, buf) < 0) {
-      abort();
-    }
-
-    va_end(ap);
+    log_append_string(ctx, level, buf);
   }
 }
 
-void log_buffer(log_context_t * log, enum log_level_e level, uint8_t * buffer, size_t length)
+void log_buffer(log_context_t * ctx, enum log_level_e level, uint8_t * buffer, size_t length)
 {
   for (size_t i = 0; i < length; i+=16) {
-    size_t buf_len = 256;
-    char buf[buf_len];
-    buf[0] = '\0';
-    size_t half_length = 128;
-    char hex[half_length];
-    hex[0] = '\0';
-    char dec[half_length];
-    dec[0] = '\0';
+    size_t half_buf_length = 64;
+    size_t hex_length = 0;
+    size_t dec_length = 0;
+
+    char hex[half_buf_length];
+    char dec[half_buf_length];
     for (size_t j = 0; j < 16 && i + j < length; j++) {
       if (j != 0 && j % 2 == 0) {
-        strncat(hex, " ", half_length);
+        hex_length += snprintf(hex + hex_length, half_buf_length, " ");
       }
-      size_t single_len = 64;
-      char single[single_len];
       uint8_t x = buffer[i + j];
-      snprintf(single, single_len, "%02x", x);
-      strncat(hex, single, half_length);
+
+      hex_length += snprintf(hex + hex_length, half_buf_length, "%02x", x);
       if (isprint(x)) {
-        snprintf(single, single_len, "%c", x);
-        strncat(dec, single, half_length);
+        dec_length += snprintf(dec + dec_length, half_buf_length, "%c", x);
       } else {
-        strncat(dec, ".", half_length);
+        dec_length += snprintf(dec + dec_length, half_buf_length, ".");
       }
     }
-    snprintf(buf, buf_len, "%-40s\t%-16s", hex, dec);
-    log_append(log, level, buf);
+
+    size_t out_length = 128;
+    char out[out_length];
+    snprintf(out, out_length, "%-40s\t%-16s", hex, dec);
+    log_append_string(ctx, level, out);
   }
 }
 
