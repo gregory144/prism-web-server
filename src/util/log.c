@@ -54,10 +54,11 @@ void log_append(log_context_t * ctx, enum log_level_e level, char * format, ...)
 {
   if (log_level_enabled(ctx, level)) {
     va_list ap;
-    char buf[256];
+    size_t buf_length = 1024;
+    char buf[buf_length];
     va_start(ap, format);
 
-    if (vsnprintf(buf, 256, format, ap) < 0) {
+    if (vsnprintf(buf, buf_length, format, ap) < 0) {
       abort();
     }
 

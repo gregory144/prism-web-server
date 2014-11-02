@@ -13,6 +13,7 @@
 #include "http/http.h"
 #include "http/request.h"
 
+#include "logo.h"
 #include "server.h"
 
 #include "worker.c"
@@ -507,6 +508,7 @@ int server_start(server_t * server)
     return 1;
   }
 
+  log_append(server->log, LOG_INFO, LOGO_STRING);
   log_append(server->log, LOG_INFO, "Server starting on %s:%d", server->config->hostname, server->config->port);
 
   uv_signal_start(&server->sigpipe_handler, server_sigpipe_handler, SIGPIPE);
