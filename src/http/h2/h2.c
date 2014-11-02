@@ -987,16 +987,18 @@ static bool h2_send_headers(h2_t * const h2, const h2_stream_t * const stream,
     flags |= FLAG_END_STREAM;
   }
 
-  size_t max_first_frame_length = h2->max_frame_size; // - padding - priority
-  size_t first_frame_length = headers_length > max_first_frame_length ?
-    max_first_frame_length : headers_length;
-  if (first_frame_length == headers_length) {
-      flags |= FLAG_END_HEADERS;
+  size_t max_first_fragment_length = h2->max_frame_size; // - padding - priority
+  size_t first_fragment_length = headers_length;
+  if (first_fragment_length > max_first_fragment_length) {
+    first_fragment_length = max_first_fragment_length;
+  } else {
+    flags |= FLAG_END_HEADERS;
   }
+  size_t first_frame_length = first_fragment_length; // + padding + priority
   h2_frame_headers_t * frame = (h2_frame_headers_t *) h2_frame_init(h2, first_frame_length,
                                FRAME_TYPE_HEADERS, flags, stream->id);
   frame->header_block_fragment = hpack_buf;
-  frame->header_block_fragment_length = first_frame_length;
+  frame->header_block_fragment_length = first_fragment_length;
 
   // padding is not currently supported
   frame->padding_length = 0;
@@ -1013,9 +1015,9 @@ static bool h2_send_headers(h2_t * const h2, const h2_stream_t * const stream,
     return false;
   }
 
-  if (first_frame_length < headers_length) {
+  if (first_fragment_length < headers_length) {
     // emit continuation frames
-    size_t header_block_pos = first_frame_length;
+    size_t header_block_pos = first_fragment_length;
     do {
       uint8_t continuation_flags = 0;
       size_t headers_left = headers_length - header_block_pos;
@@ -1062,40 +1064,74 @@ static bool h2_send_push_promise(h2_t * const h2, const h2_stream_t * const push
   uint8_t * hpack_buf = encoded.buf;
   size_t headers_length = binary_buffer_size(&encoded);
 
-  const size_t stream_id_length = 4;
-  const size_t payload_length = stream_id_length + headers_length;
 
   uint8_t flags = 0;
-  // TODO - these should be dynamic
-  const bool end_stream = false;
-  const bool end_headers = true;
-  const bool priority = false;
 
+  const bool padded = false;
+  if (padded) {
+    flags |= FLAG_PADDED;
+  }
+
+  const bool end_stream = false;
   if (end_stream) {
     flags |= FLAG_END_STREAM;
   }
 
-  if (end_headers) {
+  const size_t stream_id_length = 4;
+  size_t max_first_fragment_length = h2->max_frame_size - stream_id_length; // - padding
+  size_t first_fragment_length = headers_length;
+  if (first_fragment_length > max_first_fragment_length) {
+    first_fragment_length = max_first_fragment_length;
+  } else {
     flags |= FLAG_END_HEADERS;
   }
+  size_t first_frame_length = first_fragment_length + stream_id_length; // + padding
+  h2_frame_push_promise_t * frame = (h2_frame_push_promise_t *) h2_frame_init(h2, first_frame_length,
+                                    FRAME_TYPE_PUSH_PROMISE, flags, associated_stream_id);
+  frame->promised_stream_id = pushed_stream->id;
+  frame->header_block_fragment = hpack_buf;
+  frame->header_block_fragment_length = first_fragment_length;
 
-  if (priority) {
-    flags |= FLAG_PRIORITY;
+  // padding is not currently supported
+  frame->padding_length = 0;
+
+  log_append(h2->log, LOG_DEBUG, "Writing push promise frame: stream %d", pushed_stream->id);
+
+  if (!h2_frame_emit(h2, (h2_frame_t *) frame)) {
+    free(hpack_buf);
+    return false;
   }
 
-  h2_frame_push_promise_t * frame = (h2_frame_push_promise_t *) h2_frame_init(h2, payload_length,
-                                    FRAME_TYPE_PUSH_PROMISE, flags, associated_stream_id);
-  frame->header_block_fragment = hpack_buf;
-  frame->header_block_fragment_length = headers_length;
+  if (first_fragment_length < headers_length) {
+    // emit continuation frames
+    size_t header_block_pos = first_fragment_length;
+    do {
+      uint8_t continuation_flags = 0;
+      size_t headers_left = headers_length - header_block_pos;
+      size_t continuation_frame_length = headers_left > h2->max_frame_size ?
+        h2->max_frame_size : headers_left;
 
-  frame->padding_length = 0;
-  frame->promised_stream_id = pushed_stream->id;
+      if (continuation_frame_length == headers_left) {
+        continuation_flags |= FLAG_END_HEADERS;
+      }
 
-  bool success = h2_frame_emit(h2, (h2_frame_t *) frame);
+      h2_frame_continuation_t * cont_frame = (h2_frame_continuation_t *) h2_frame_init(h2,
+          continuation_frame_length, FRAME_TYPE_CONTINUATION, continuation_flags, associated_stream_id);
+      cont_frame->header_block_fragment = hpack_buf + header_block_pos;
+      cont_frame->header_block_fragment_length = continuation_frame_length;
+
+      if (!h2_frame_emit(h2, (h2_frame_t *) cont_frame)) {
+        free(hpack_buf);
+        return false;
+      }
+
+      header_block_pos += continuation_frame_length;
+    } while (header_block_pos < headers_length);
+  }
 
   free(hpack_buf);
 
-  return success;
+  return true;
 }
 
 static bool h2_send_data_frame(const h2_t * const h2, const h2_stream_t * const stream,

@@ -142,7 +142,8 @@ static bool debug_plugin_request_handler(plugin_t * plugin, client_t * client, h
     }
   }
 
-  if (http_request_param_get(request, "continuation")) {
+  bool continuation_enabled = http_request_param_get(request, "continuation");
+  if (continuation_enabled) {
     for (size_t i = 0; i < 1000; i++) {
       size_t header_key_length = 128;
       char header_key[header_key_length];
@@ -184,9 +185,21 @@ static bool debug_plugin_request_handler(plugin_t * plugin, client_t * client, h
 
     if (pushed_request) {
       http_request_header_add(pushed_request, ":method", "GET");
-      http_request_header_add(pushed_request, ":scheme", "http");
-      http_request_header_add(pushed_request, ":authority", "localhost:7000");
+      http_request_header_add(pushed_request, ":scheme", "https");
+      http_request_header_add(pushed_request, ":authority", "localhost:8443");
       http_request_header_add(pushed_request, ":path", "/pushed_resource.txt");
+
+      if (continuation_enabled) {
+        for (size_t i = 0; i < 500; i++) {
+          size_t header_key_length = 128;
+          char header_key[header_key_length];
+          snprintf(header_key, header_key_length, "header-%04ld", i + 1);
+          size_t header_value_length = 1000;
+          char header_value[header_value_length];
+          snprintf(header_value, header_value_length, "%040ld", i + 1);
+          http_request_header_add(pushed_request, header_key, header_value);
+        }
+      }
 
       if (!http_push_promise(pushed_request)) {
         http_request_free(pushed_request);
@@ -216,7 +229,6 @@ static bool debug_plugin_request_handler(plugin_t * plugin, client_t * client, h
       http_response_header_add(pushed_response, "date", date);
     }
 
-    printf("Writing push promise response\n");
     http_response_write(pushed_response, (uint8_t *) strdup(push_text), push_content_length, true);
   }
 
