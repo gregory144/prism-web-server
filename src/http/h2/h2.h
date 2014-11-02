@@ -11,6 +11,9 @@
 #include "http/request.h"
 #include "http/response.h"
 
+#include "h2_setting.h"
+#include "h2_frame.h"
+
 #define PUSH_ENABLED true
 
 typedef bool (*h2_write_cb)(void * data, uint8_t * buf, size_t len);
@@ -18,25 +21,6 @@ typedef bool (*h2_write_cb)(void * data, uint8_t * buf, size_t len);
 typedef void (*h2_close_cb)(void * data);
 
 typedef http_request_t * (*h2_request_init_cb)(void * data, void * user_data, header_list_t * headers);
-
-/**
- * Frame types
- */
-enum frame_type_e {
-  FRAME_TYPE_DATA,
-  FRAME_TYPE_HEADERS,
-  FRAME_TYPE_PRIORITY,
-  FRAME_TYPE_RST_STREAM,
-  FRAME_TYPE_SETTINGS,
-  FRAME_TYPE_PUSH_PROMISE,
-  FRAME_TYPE_PING,
-  FRAME_TYPE_GOAWAY,
-  FRAME_TYPE_WINDOW_UPDATE,
-  FRAME_TYPE_CONTINUATION
-};
-
-#define FRAME_TYPE_MIN FRAME_TYPE_DATA
-#define FRAME_TYPE_MAX FRAME_TYPE_CONTINUATION
 
 /**
  * Stream states
@@ -52,18 +36,6 @@ enum stream_state_e {
 };
 
 /**
- * Connection setting identifiers
- */
-enum settings_e {
-  SETTINGS_HEADER_TABLE_SIZE = 1,
-  SETTINGS_ENABLE_PUSH,
-  SETTINGS_MAX_CONCURRENT_STREAMS,
-  SETTINGS_INITIAL_WINDOW_SIZE,
-  SETTINGS_MAX_FRAME_SIZE,
-  SETTINGS_MAX_HEADER_LIST_SIZE
-};
-
-/**
  * Default setting values
  */
 #define DEFAULT_HEADER_TABLE_SIZE 4096
@@ -72,20 +44,6 @@ enum settings_e {
 #define DEFAULT_INITIAL_WINDOW_SIZE 65535
 #define DEFAULT_MAX_FRAME_SIZE 16384 // 2^14
 #define DEFAULT_MAX_HEADER_LIST_SIZE 0 // unlimited
-
-/**
- * Frame flags
- */
-
-// shared
-#define FLAG_ACK 0x1
-#define FLAG_END_STREAM 0x1
-#define FLAG_END_SEGMENT 0x2
-#define FLAG_END_HEADERS 0x4
-#define FLAG_PADDED 0x8
-
-// headers
-#define FLAG_PRIORITY 0x20
 
 /**
  * HTTP 2 errors
@@ -168,144 +126,6 @@ enum h2_error_code_e {
 
 };
 
-
-#define H2_FRAME_FIELDS                 \
-  /* Length in octets of the frame */   \
-  /* 14 bits                       */   \
-  uint16_t length;                      \
-                                        \
-  /* Frame type                    */   \
-  /* 8 bits                        */   \
-  enum frame_type_e type;               \
-                                        \
-  /* Frame flags                   */   \
-  uint8_t flags;                        \
-                                        \
-  /* Stream identifier             */   \
-  /* 31 bits                       */   \
-  uint32_t stream_id;
-
-
-typedef struct {
-
-  H2_FRAME_FIELDS
-
-} h2_frame_t;
-
-typedef struct {
-
-  enum settings_e id;
-  uint32_t value;
-
-} h2_setting_t;
-
-typedef struct {
-
-  H2_FRAME_FIELDS
-
-  size_t num_settings;
-
-  h2_setting_t settings[6];
-
-} h2_frame_settings_t;
-
-typedef struct {
-
-  H2_FRAME_FIELDS
-
-  bool priority_exclusive;
-  uint32_t priority_stream_dependency;
-  // This is a value from 0 - 255.
-  // The priority weight is usually refered to as a value
-  // from 1 - 256. We may need to add 1 to this value when using it.
-  uint8_t priority_weight;
-
-} h2_frame_priority_t;
-
-typedef struct {
-
-  H2_FRAME_FIELDS
-
-  uint32_t error_code;
-
-} h2_frame_rst_stream_t;
-
-typedef struct {
-
-  H2_FRAME_FIELDS
-
-  /**
-   * See the note about padding lengths in the definition of h2_frame_data_t
-   */
-  size_t padding_length;
-
-  uint32_t promised_stream_id;
-
-  uint8_t * header_block_fragment;
-  uint16_t header_block_fragment_length;
-
-} h2_frame_push_promise_t;
-
-typedef struct {
-
-  H2_FRAME_FIELDS
-
-  uint8_t * opaque_data;
-
-} h2_frame_ping_t;
-
-typedef struct {
-
-  H2_FRAME_FIELDS
-
-  uint32_t last_stream_id;
-  uint32_t error_code;
-
-  uint8_t * debug_data;
-  size_t debug_data_length;
-
-} h2_frame_goaway_t;
-
-typedef struct {
-
-  H2_FRAME_FIELDS
-
-  uint32_t increment;
-
-} h2_frame_window_update_t;
-
-typedef struct {
-
-  H2_FRAME_FIELDS
-
-  uint8_t * header_block_fragment;
-  uint16_t header_block_fragment_length;
-
-} h2_frame_continuation_t;
-
-typedef struct {
-
-  H2_FRAME_FIELDS
-
-  /**
-   * There are 2 potential values that this could represent:
-   * 1. The value transmitted over the wire in the padding length field
-   * 2. The "actual" amount of padding in this frame, which is:
-   *    transmitted value + 1
-   *
-   * Since the padding length field takes up one byte itself, there is
-   * always an extra octet of padding.
-   *
-   * This value represents the transmitted value.
-   *
-   */
-  uint8_t padding_length;
-
-  uint8_t * payload;
-  uint16_t payload_length;
-
-} h2_frame_data_t;
-
 typedef struct h2_header_fragment_s {
 
   uint8_t * buffer;
@@ -313,27 +133,6 @@ typedef struct h2_header_fragment_s {
   struct h2_header_fragment_s * next;
 
 } h2_header_fragment_t;
-
-typedef struct {
-
-  H2_FRAME_FIELDS
-
-  /**
-   * See the note about padding lengths in the definition of h2_frame_data_t
-   */
-  size_t padding_length;
-
-  bool priority_exclusive;
-  uint32_t priority_stream_dependency;
-  // This is a value from 0 - 255.
-  // The priority weight is usually refered to as a value
-  // from 1 - 256. We may need to add 1 to this value when using it.
-  uint8_t priority_weight;
-
-  uint8_t * header_block_fragment;
-  uint16_t header_block_fragment_length;
-
-} h2_frame_headers_t;
 
 typedef struct h2_queued_frame_s {
   struct h2_queued_frame_s * next;
@@ -488,11 +287,18 @@ bool h2_request_begin(h2_t * const h2, header_list_t * headers, uint8_t * buf, s
 
 void h2_free(h2_t * const h2);
 
+bool h2_write(const h2_t * const h2, uint8_t * const buf, size_t buf_length);
+
 void h2_read(h2_t * const h2, uint8_t * const buffer, const size_t len);
 
 void h2_eof(h2_t * const h2);
 
 void h2_finished_writes(h2_t * const h2);
+
+bool h2_flush(const h2_t * const h2, size_t new_length);
+
+bool h2_emit_error_and_close(h2_t * const h2, uint32_t stream_id,
+                                 enum h2_error_code_e error_code, char * format, ...);
 
 bool h2_response_write(h2_stream_t * stream, http_response_t * const response, uint8_t * data, const size_t data_length,
                        bool last);
