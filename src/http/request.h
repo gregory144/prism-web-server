@@ -19,6 +19,8 @@ typedef struct http_request_t {
 
   char * scheme;
 
+  char * authority;
+
   char * host;
 
   int port;
@@ -42,6 +44,8 @@ multimap_values_t * http_request_param_get_values(const http_request_t * const r
 char * http_request_method(const http_request_t * const request);
 
 char * http_request_scheme(const http_request_t * const request);
+
+char * http_request_authority(const http_request_t * const request);
 
 char * http_request_host(const http_request_t * const request);
 

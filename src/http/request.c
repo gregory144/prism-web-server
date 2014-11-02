@@ -15,6 +15,7 @@
 static void parse_authority(http_request_t * const request)
 {
   char * authority = http_request_header_get(request, ":authority");
+  request->authority = authority;
 
   if (authority) {
     char * port = strchr(authority, ':');
@@ -174,6 +175,7 @@ http_request_t * http_request_init(void * handler_data, log_context_t * log, hea
   request->host = NULL;
   request->method = NULL;
   request->scheme = NULL;
+  request->authority = NULL;
 
   if (header_list) {
 
@@ -278,6 +280,11 @@ char * http_request_method(const http_request_t * const request)
 char * http_request_scheme(const http_request_t * const request)
 {
   return request->scheme;
+}
+
+char * http_request_authority(const http_request_t * const request)
+{
+  return request->authority;
 }
 
 char * http_request_host(const http_request_t * const request)
