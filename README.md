@@ -31,7 +31,6 @@ An interoperable HTTP2 server.
 * better error handling for libuv calls
 * doxygen documentation
 * complete spec compliance
-* fix up trace data output
 
 #### Up next
 

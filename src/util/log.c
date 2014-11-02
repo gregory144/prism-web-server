@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include <sys/time.h>
 
 #include "log.h"
@@ -60,4 +61,37 @@ void log_append(log_context_t * ctx, enum log_level_e level, char * format, ...)
     va_end(ap);
   }
 }
+
+void log_buffer(log_context_t * log, enum log_level_e level, uint8_t * buffer, size_t length)
+{
+  for (size_t i = 0; i < length; i+=16) {
+    size_t buf_len = 256;
+    char buf[buf_len];
+    buf[0] = '\0';
+    size_t half_length = 128;
+    char hex[half_length];
+    hex[0] = '\0';
+    char dec[half_length];
+    dec[0] = '\0';
+    for (size_t j = 0; j < 16 && i + j < length; j++) {
+      if (j != 0 && j % 2 == 0) {
+        strncat(hex, " ", half_length);
+      }
+      size_t single_len = 64;
+      char single[single_len];
+      uint8_t x = buffer[i + j];
+      snprintf(single, single_len, "%02x", x);
+      strncat(hex, single, half_length);
+      if (isprint(x)) {
+        snprintf(single, single_len, "%c", x);
+        strncat(dec, single, half_length);
+      } else {
+        strncat(dec, ".", half_length);
+      }
+    }
+    snprintf(buf, buf_len, "%-40s\t%-16s", hex, dec);
+    log_append(log, level, buf);
+  }
+}
+
 

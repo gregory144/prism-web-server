@@ -125,7 +125,7 @@ static void worker_http_cb_close_connection(void * data)
   worker_close(client);
 }
 
-static bool worker_http_cb_write(void * data, uint8_t * buf, size_t length)
+static bool worker_http_cb_write(void * data, uint8_t * buffer, size_t length)
 {
   client_t * client = data;
   server_t * server = client->server;
@@ -138,20 +138,29 @@ static bool worker_http_cb_write(void * data, uint8_t * buf, size_t length)
 
   log_append(server->log, LOG_DEBUG, "Write client #%ld (%ld octets, %ld total)", client->id, length,
              client->octets_written);
+  if (log_enabled(client->data_log)) {
+    log_append(client->data_log, LOG_TRACE, "Writing data: (%zd octets)", length);
+    log_buffer(client->data_log, LOG_TRACE, buffer, length);
+  }
 
   if (server->config->use_tls) {
     log_append(server->log, LOG_TRACE, "Passing %ld octets of data from application to TLS handler", length);
-    bool ret = tls_encrypt_data_and_pass_to_network(client->tls_ctx, buf, length);
+    bool ret = tls_encrypt_data_and_pass_to_network(client->tls_ctx, buffer, length);
     log_append(server->log, LOG_TRACE, "Passed %ld octets of data from application to TLS handler", length);
     return ret;
   } else {
-    return worker_write_to_network(client, buf, length);
+    return worker_write_to_network(client, buffer, length);
   }
 }
 
 static void worker_parse(client_t * client, uint8_t * buffer, size_t length)
 {
   client->octets_read += length;
+
+  if (log_enabled(client->data_log)) {
+    log_append(client->data_log, LOG_TRACE, "Reading data: (%zd octets)", length);
+    log_buffer(client->data_log, LOG_TRACE, buffer, length);
+  }
 
   if (client->tls_ctx && client->tls_ctx->selected_tls_version) {
     http_connection_set_tls_details(client->connection, client->tls_ctx->selected_tls_version,

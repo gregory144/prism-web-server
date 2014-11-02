@@ -28,4 +28,6 @@ bool log_level_enabled(log_context_t * cxt, enum log_level_e level);
 
 void log_append(log_context_t * cxt, enum log_level_e level, char * format, ...);
 
+void log_buffer(log_context_t * cxt, enum log_level_e level, uint8_t * buffer, size_t length);
+
 #endif

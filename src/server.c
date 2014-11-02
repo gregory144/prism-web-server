@@ -82,8 +82,6 @@ static void server_uv_async_cb_write(uv_async_t * async_handle)
 
     if (uv_is_active((uv_handle_t *) stream) && !client->eof) {
 
-      log_append(client->log, LOG_DEBUG, "Writing for client: #%ld", client->id);
-
       http_write_req_data_t * write_req_data = malloc(sizeof(http_write_req_data_t));
       write_req_data->stream = (uv_stream_t *) stream;
       write_req_data->req.data = write_req_data;
@@ -91,13 +89,10 @@ static void server_uv_async_cb_write(uv_async_t * async_handle)
       write_req_data->buf.base = (char *) worker_buffer->buffer;
       write_req_data->buf.len = worker_buffer->length;
 
-      if (log_enabled(client->data_log)) {
-        log_append(client->data_log, LOG_TRACE, "uv_write: %s, %ld", worker_buffer->buffer, worker_buffer->length);
-        size_t i;
-
-        for (i = 0; i < worker_buffer->length; i++) {
-          log_append(client->data_log, LOG_TRACE, "%02x", worker_buffer->buffer[i]);
-        }
+      log_append(client->log, LOG_DEBUG, "Writing for client: #%ld", client->id);
+      if (log_enabled(client->wire_log)) {
+        log_append(client->wire_log, LOG_TRACE, "Writing to wire: (%zd octets)", worker_buffer->length);
+        log_buffer(client->wire_log, LOG_TRACE, worker_buffer->buffer, worker_buffer->length);
       }
 
       uv_write(&write_req_data->req, (uv_stream_t *) stream, &write_req_data->buf, 1, uv_cb_write);
@@ -230,6 +225,10 @@ static void uv_cb_read(uv_stream_t * stream, ssize_t nread, const uv_buf_t * buf
   }
 
   log_append(client->log, LOG_DEBUG, "Queueing from client: #%ld", client->id);
+  if (log_enabled(client->wire_log)) {
+    log_append(client->wire_log, LOG_TRACE, "Reading from wire: (%zd octets)", nread);
+    log_buffer(client->wire_log, LOG_TRACE, (uint8_t *) buf->base, nread);
+  }
   worker_queue(client, false, (uint8_t *) buf->base, nread);
 
 }
@@ -299,6 +298,7 @@ static void uv_cb_listen(uv_stream_t * tcp_server, int status)
   log_append(server->log, LOG_DEBUG, "Initializing client %ld (%d)", client->id, total_clients);
   client->log = server->log;
   client->data_log = server->data_log;
+  client->wire_log = server->wire_log;
   client->selected_protocol = false;
   client->closing = false;
   client->closed = false;
@@ -379,6 +379,7 @@ server_t * server_init(server_config_t * config)
   server->client_ids = 0;
   server->log = &config->server_log;
   server->data_log = &config->data_log;
+  server->wire_log = &config->wire_log;
 
   server->terminate = false;
 

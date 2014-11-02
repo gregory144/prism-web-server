@@ -35,6 +35,7 @@ typedef struct {
   plugin_config_t * plugin_configs;
 
   log_context_t server_log;
+  log_context_t wire_log;
   log_context_t data_log;
   log_context_t http_log;
   log_context_t hpack_log;
@@ -47,6 +48,7 @@ typedef struct {
 
   log_context_t * log;
   log_context_t * data_log;
+  log_context_t * wire_log;
 
   server_config_t * config;
 
@@ -72,6 +74,7 @@ typedef struct client_t {
 
   log_context_t * log;
   log_context_t * data_log;
+  log_context_t * wire_log;
 
   uv_tcp_t tcp;
 

@@ -124,9 +124,10 @@ int main(int argc, char ** argv)
     exit(EXIT_FAILURE);
   }
 
-  enum log_level_e min_level = LOG_INFO;
+  enum log_level_e min_level = LOG_TRACE;
 
   log_context_init(&config->server_log, "SERVER", stdout, min_level, true);
+  log_context_init(&config->wire_log, "WIRE", stdout, LOG_WARN, true);
   log_context_init(&config->data_log, "DATA", stdout, min_level, true);
   log_context_init(&config->http_log, "HTTP", stdout, min_level, true);
   log_context_init(&config->hpack_log, "HPACK", stdout, min_level, true);
