@@ -185,8 +185,10 @@ static bool debug_plugin_request_handler(plugin_t * plugin, client_t * client, h
 
     if (pushed_request) {
       http_request_header_add(pushed_request, ":method", "GET");
-      http_request_header_add(pushed_request, ":scheme", "https");
-      http_request_header_add(pushed_request, ":authority", "localhost:8443");
+      char * scheme = http_request_scheme(request);
+      http_request_header_add(pushed_request, ":scheme", scheme);
+      char * authority = http_request_authority(request);
+      http_request_header_add(pushed_request, ":authority", authority);
       http_request_header_add(pushed_request, ":path", "/pushed_resource.txt");
 
       if (continuation_enabled) {
