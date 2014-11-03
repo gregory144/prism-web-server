@@ -40,7 +40,7 @@ check_*.trs
 /tests/*.log
 /tests/*.trs
 
-/src/synapse
+/src/prism
 
 /src/check_priority_queue
 /src/check_blocking_queue

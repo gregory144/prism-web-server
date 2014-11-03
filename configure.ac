@@ -1,4 +1,4 @@
-AC_INIT([synapse],[0.0.1],[greg@gtgross.com])
+AC_INIT([prism],[0.0.1],[greg@gtgross.com])
 AM_INIT_AUTOMAKE([foreign -Wall -Werror])
 
 AC_GNU_SOURCE
