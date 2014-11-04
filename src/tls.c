@@ -311,8 +311,16 @@ tls_server_ctx_t * tls_server_init(log_context_t * log, char * key_file, char * 
 #endif
 
   // set certificates
-  SSL_CTX_use_certificate_file(ssl_ctx, cert_file, SSL_FILETYPE_PEM);
-  SSL_CTX_use_PrivateKey_file(ssl_ctx, key_file, SSL_FILETYPE_PEM);
+  if (SSL_CTX_use_certificate_file(ssl_ctx, cert_file, SSL_FILETYPE_PEM) != 1) {
+    log_append(log, LOG_FATAL, "Failed setting certificate file: %s, error: %s",
+        cert_file, ERR_error_string(ERR_get_error(), NULL));
+    return NULL;
+  }
+  if (SSL_CTX_use_PrivateKey_file(ssl_ctx, key_file, SSL_FILETYPE_PEM) != 1) {
+    log_append(log, LOG_FATAL, "Failed setting private key file: %s, error: %s",
+        key_file, ERR_error_string(ERR_get_error(), NULL));
+    return NULL;
+  }
 
   tls_thread_setup();
 
