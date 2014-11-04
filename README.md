@@ -6,8 +6,10 @@
 
 
 
-    DATA TRACE [2014-11-04 10:52:34.436] 5052 4920 2a20 4854 5450 2f32 2e30 0d0a   PRI * HTTP/2.0..
-    DATA TRACE [2014-11-04 10:52:34.437] 0d0a 534d 0d0a 0d0a                       ..SM....
+<pre>
+DATA TRACE [2014-11-04 10:52:34.436] 5052 4920 2a20 4854 5450 2f32 2e30 0d0a   <b>PRI</b> * HTTP/2.0..
+DATA TRACE [2014-11-04 10:52:34.437] 0d0a 534d 0d0a 0d0a                       ..<b>SM</b>....
+</pre>
 
 
 An interoperable HTTP2 server.
