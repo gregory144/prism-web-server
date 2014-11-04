@@ -192,6 +192,9 @@ h2_t * h2_init(void * const data, log_context_t * log, log_context_t * hpack_log
   h2->decoding_context = NULL;
   h2->streams = NULL;
 
+  h2->frame_parser.log = h2->log;
+  h2->frame_parser.plugin_invoker = h2->plugin_invoker;
+
   h2->encoding_context = hpack_context_init(DEFAULT_HEADER_TABLE_SIZE, hpack_log);
 
   if (!h2->encoding_context) {
@@ -253,7 +256,7 @@ void h2_finished_writes(h2_t * const h2)
   h2_close(h2);
 }
 
-bool h2_flush(const h2_t * const h2, size_t new_length)
+static bool h2_flush(const h2_t * const h2, size_t new_length)
 {
 
   size_t buf_length = binary_buffer_size(&h2->write_buffer);
@@ -270,32 +273,15 @@ bool h2_flush(const h2_t * const h2, size_t new_length)
   return true;
 }
 
-bool h2_write(const h2_t * const h2, uint8_t * const buf, size_t buf_length)
+bool h2_frame_write(const h2_t * const h2, h2_frame_t * const frame)
 {
-  size_t existing_length = binary_buffer_size(&h2->write_buffer);
-
-  if (existing_length + buf_length >= MAX_CONNECTION_BUFFER_SIZE) {
-    // if the write buffer doesn't have enough space to accommodate the new buffer then
-    // flush the buffer
-    ASSERT_OR_RETURN_FALSE(
-      h2_flush(h2, buf_length < MAX_CONNECTION_BUFFER_SIZE ? buf_length : 0)
-    );
-  }
-
-  // if the given buffer's size is greater than MAX_CONNECTION_BUFFER_SIZE
-  // then just write it directly - don't add it to the write buffer
-  if (buf_length > MAX_CONNECTION_BUFFER_SIZE) {
-    return h2->writer(h2->data, buf, buf_length);
-  }
-
-  binary_buffer_t * const wb = (binary_buffer_t * const) &h2->write_buffer;
   ASSERT_OR_RETURN_FALSE(
-    binary_buffer_write(wb, buf, buf_length)
+    h2_frame_emit(&h2->frame_parser, (binary_buffer_t *) &h2->write_buffer, (h2_frame_t *) frame)
   );
 
   size_t new_length = binary_buffer_size(&h2->write_buffer);
 
-  if (new_length + buf_length >= MAX_CONNECTION_BUFFER_SIZE) {
+  if (new_length >= MAX_CONNECTION_BUFFER_SIZE) {
     ASSERT_OR_RETURN_FALSE(
       h2_flush(h2, 0)
     );
@@ -319,13 +305,14 @@ static bool h2_send_goaway(const h2_t * const h2, enum h2_error_code_e error_cod
 
   uint8_t flags = 0; // no flags
 
-  h2_frame_goaway_t * frame = (h2_frame_goaway_t *) h2_frame_init(h2, payload_length, FRAME_TYPE_GOAWAY, flags, 0);
+  h2_frame_goaway_t * frame = (h2_frame_goaway_t *) h2_frame_init(&h2->frame_parser, payload_length,
+      FRAME_TYPE_GOAWAY, flags, 0);
   frame->stream_id = h2->last_stream_id;
   frame->error_code = error_code;
   frame->debug_data = (uint8_t *) debug;
   frame->debug_data_length = debug_length;
 
-  return h2_frame_emit(h2, (h2_frame_t *) frame);
+  return h2_frame_write(h2, (h2_frame_t *) frame);
 }
 
 static bool h2_send_rst_stream(const h2_t * const h2, uint32_t stream_id,
@@ -337,17 +324,16 @@ static bool h2_send_rst_stream(const h2_t * const h2, uint32_t stream_id,
 
   uint8_t flags = 0; // no flags
 
-  h2_frame_rst_stream_t * frame = (h2_frame_rst_stream_t *) h2_frame_init(h2, payload_length, FRAME_TYPE_RST_STREAM,
-                                  flags, stream_id);
+  h2_frame_rst_stream_t * frame = (h2_frame_rst_stream_t *) h2_frame_init(&h2->frame_parser, payload_length,
+      FRAME_TYPE_RST_STREAM, flags, stream_id);
   frame->error_code = error_code;
 
-  return h2_frame_emit(h2, (h2_frame_t *) frame);
+  return h2_frame_write(h2, (h2_frame_t *) frame);
 }
 
-bool h2_emit_error_and_close(h2_t * const h2, uint32_t stream_id,
+static bool h2_emit_error_and_close(h2_t * const h2, uint32_t stream_id,
                                  enum h2_error_code_e error_code, char * format, ...)
 {
-
   size_t buf_length = 1024;
   char buf[buf_length];
 
@@ -425,7 +411,7 @@ static bool h2_send_headers(h2_t * const h2, const h2_stream_t * const stream,
     flags |= FLAG_END_HEADERS;
   }
   size_t first_frame_length = first_fragment_length; // + padding + priority
-  h2_frame_headers_t * frame = (h2_frame_headers_t *) h2_frame_init(h2, first_frame_length,
+  h2_frame_headers_t * frame = (h2_frame_headers_t *) h2_frame_init(&h2->frame_parser, first_frame_length,
                                FRAME_TYPE_HEADERS, flags, stream->id);
   frame->header_block_fragment = hpack_buf;
   frame->header_block_fragment_length = first_fragment_length;
@@ -440,7 +426,7 @@ static bool h2_send_headers(h2_t * const h2, const h2_stream_t * const stream,
 
   log_append(h2->log, LOG_DEBUG, "Writing headers frame: stream %d", stream->id);
 
-  if (!h2_frame_emit(h2, (h2_frame_t *) frame)) {
+  if (!h2_frame_write(h2, (h2_frame_t *) frame)) {
     free(hpack_buf);
     return false;
   }
@@ -458,12 +444,12 @@ static bool h2_send_headers(h2_t * const h2, const h2_stream_t * const stream,
         continuation_flags |= FLAG_END_HEADERS;
       }
 
-      h2_frame_continuation_t * cont_frame = (h2_frame_continuation_t *) h2_frame_init(h2,
+      h2_frame_continuation_t * cont_frame = (h2_frame_continuation_t *) h2_frame_init(&h2->frame_parser,
           continuation_frame_length, FRAME_TYPE_CONTINUATION, continuation_flags, stream->id);
       cont_frame->header_block_fragment = hpack_buf + header_block_pos;
       cont_frame->header_block_fragment_length = continuation_frame_length;
 
-      if (!h2_frame_emit(h2, (h2_frame_t *) cont_frame)) {
+      if (!h2_frame_write(h2, (h2_frame_t *) cont_frame)) {
         free(hpack_buf);
         return false;
       }
@@ -516,8 +502,8 @@ static bool h2_send_push_promise(h2_t * const h2, const h2_stream_t * const push
     flags |= FLAG_END_HEADERS;
   }
   size_t first_frame_length = first_fragment_length + stream_id_length; // + padding
-  h2_frame_push_promise_t * frame = (h2_frame_push_promise_t *) h2_frame_init(h2, first_frame_length,
-                                    FRAME_TYPE_PUSH_PROMISE, flags, associated_stream_id);
+  h2_frame_push_promise_t * frame = (h2_frame_push_promise_t *) h2_frame_init(&h2->frame_parser,
+      first_frame_length, FRAME_TYPE_PUSH_PROMISE, flags, associated_stream_id);
   frame->promised_stream_id = pushed_stream->id;
   frame->header_block_fragment = hpack_buf;
   frame->header_block_fragment_length = first_fragment_length;
@@ -527,7 +513,7 @@ static bool h2_send_push_promise(h2_t * const h2, const h2_stream_t * const push
 
   log_append(h2->log, LOG_DEBUG, "Writing push promise frame: stream %d", pushed_stream->id);
 
-  if (!h2_frame_emit(h2, (h2_frame_t *) frame)) {
+  if (!h2_frame_write(h2, (h2_frame_t *) frame)) {
     free(hpack_buf);
     return false;
   }
@@ -545,12 +531,12 @@ static bool h2_send_push_promise(h2_t * const h2, const h2_stream_t * const push
         continuation_flags |= FLAG_END_HEADERS;
       }
 
-      h2_frame_continuation_t * cont_frame = (h2_frame_continuation_t *) h2_frame_init(h2,
+      h2_frame_continuation_t * cont_frame = (h2_frame_continuation_t *) h2_frame_init(&h2->frame_parser,
           continuation_frame_length, FRAME_TYPE_CONTINUATION, continuation_flags, associated_stream_id);
       cont_frame->header_block_fragment = hpack_buf + header_block_pos;
       cont_frame->header_block_fragment_length = continuation_frame_length;
 
-      if (!h2_frame_emit(h2, (h2_frame_t *) cont_frame)) {
+      if (!h2_frame_write(h2, (h2_frame_t *) cont_frame)) {
         free(hpack_buf);
         return false;
       }
@@ -575,14 +561,14 @@ static bool h2_send_data_frame(const h2_t * const h2, const h2_stream_t * const 
     flags |= FLAG_END_STREAM;
   }
 
-  h2_frame_data_t * frame = (h2_frame_data_t *) h2_frame_init(h2, queued_frame->buf_length, FRAME_TYPE_DATA, flags,
-                            stream->id);
+  h2_frame_data_t * frame = (h2_frame_data_t *) h2_frame_init(&h2->frame_parser, queued_frame->buf_length,
+      FRAME_TYPE_DATA, flags, stream->id);
   frame->payload = queued_frame->buf;
   frame->payload_length = queued_frame->buf_length;
 
   log_append(h2->log, LOG_DEBUG, "Writing data frame: stream %d, %ld octets", stream->id, queued_frame->buf_length);
 
-  return h2_frame_emit(h2, (h2_frame_t *) frame);
+  return h2_frame_write(h2, (h2_frame_t *) frame);
 }
 
 static bool h2_stream_trigger_send_data(h2_t * const h2, h2_stream_t * const stream)
@@ -780,12 +766,12 @@ static bool h2_send_settings_ack(const h2_t * const h2)
     flags |= FLAG_ACK;
   }
 
-  h2_frame_settings_t * frame = (h2_frame_settings_t *) h2_frame_init(h2, 0, FRAME_TYPE_SETTINGS,
-                                flags, 0);
+  h2_frame_settings_t * frame = (h2_frame_settings_t *) h2_frame_init(&h2->frame_parser, 0,
+      FRAME_TYPE_SETTINGS, flags, 0);
 
   log_append(h2->log, LOG_DEBUG, "Writing settings ack frame");
 
-  return h2_frame_emit(h2, (h2_frame_t *) frame);
+  return h2_frame_write(h2, (h2_frame_t *) frame);
 }
 
 static bool h2_send_ping_ack(const h2_t * const h2, uint8_t * opaque_data)
@@ -797,12 +783,12 @@ static bool h2_send_ping_ack(const h2_t * const h2, uint8_t * opaque_data)
     flags |= FLAG_ACK;
   }
 
-  h2_frame_ping_t * frame = (h2_frame_ping_t *) h2_frame_init(h2, PING_OPAQUE_DATA_LENGTH, FRAME_TYPE_PING, flags, 0);
+  h2_frame_ping_t * frame = (h2_frame_ping_t *) h2_frame_init(&h2->frame_parser, PING_OPAQUE_DATA_LENGTH, FRAME_TYPE_PING, flags, 0);
   frame->opaque_data = opaque_data;
 
   log_append(h2->log, LOG_DEBUG, "Writing ping ack frame");
 
-  return h2_frame_emit(h2, (h2_frame_t *) frame);
+  return h2_frame_write(h2, (h2_frame_t *) frame);
 }
 
 static bool h2_send_window_update(const h2_t * const h2, const uint32_t stream_id,
@@ -813,13 +799,24 @@ static bool h2_send_window_update(const h2_t * const h2, const uint32_t stream_i
 
   uint8_t flags = 0; // no flags
 
-  h2_frame_window_update_t * frame = (h2_frame_window_update_t *) h2_frame_init(h2, payload_length,
-                                     FRAME_TYPE_WINDOW_UPDATE, flags, stream_id);
+  h2_frame_window_update_t * frame = (h2_frame_window_update_t *) h2_frame_init(&h2->frame_parser,
+      payload_length, FRAME_TYPE_WINDOW_UPDATE, flags, stream_id);
   frame->increment = increment;
 
   log_append(h2->log, LOG_DEBUG, "Writing window update frame");
 
-  return h2_frame_emit(h2, (h2_frame_t *) frame);
+  if (!h2_frame_write(h2, (h2_frame_t *) frame)) {
+    log_append(h2->log, LOG_WARN, "Could not write window update frame");
+    return false;
+  }
+
+  // flush the connection so that we write the window update as soon as possible
+  if (!h2_flush(h2, 0)) {
+    log_append(h2->log, LOG_WARN, "Could not flush write buffer after window update");
+    return false;
+  }
+
+  return true;
 }
 
 /**
@@ -1381,7 +1378,8 @@ bool h2_settings_apply(h2_t * const h2, char * base64)
   frame.length = strlen(base64);
   frame.stream_id = 0;
 
-  h2_parse_settings_payload(h2, binary_buffer_start(&buf), binary_buffer_size(&buf), &frame.num_settings, frame.settings);
+  h2_parse_settings_payload(&h2->frame_parser, binary_buffer_start(&buf), binary_buffer_size(&buf),
+      &frame.num_settings, frame.settings);
   binary_buffer_free(&buf);
 
   plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_SETTINGS, &frame);
@@ -1467,17 +1465,23 @@ static bool h2_add_from_buffer(h2_t * const h2)
     // is this a valid frame type?
     if (!h2_frame_is_valid_frame_type(frame_type)) {
       // invalid frame type is always a connection error
-      h2_emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR, "Invalid Frame Type: %d", frame_type);
+      h2_emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR, "Invalid Frame Type: 0x%x, %d",
+          frame_type, frame_type);
       return false;
     }
 
     // TODO - if the previous frame type was headers, and headers haven't been completed,
     // this frame must be a continuation frame, or else this is a protocol error
 
-    h2_frame_t * frame = h2_frame_init(h2, frame_length, frame_type, frame_flags, stream_id);
+    h2_frame_t * frame = h2_frame_init(&h2->frame_parser, frame_length, frame_type, frame_flags, stream_id);
 
-    if (frame == NULL || !h2_frame_is_valid(h2, frame)) {
-      h2_emit_error_and_close(h2, stream_id, H2_ERROR_INTERNAL_ERROR, "Unhandled frame type");
+    enum h2_error_code_e error_code;
+    char * error_string = NULL;
+    if (frame == NULL) {
+      h2_emit_error_and_close(h2, stream_id, H2_ERROR_PROTOCOL_ERROR, "Unhandled frame type");
+      return false;
+    } else if (!h2_frame_is_valid(&h2->frame_parser, frame, &error_code, &error_string)) {
+      h2_emit_error_and_close(h2, stream_id, error_code, error_string);
       return false;
     }
 
@@ -1497,8 +1501,8 @@ static bool h2_add_from_buffer(h2_t * const h2)
        */
       switch (frame->type) {
         case FRAME_TYPE_DATA:
-          success = h2_frame_parse_data(h2, (h2_frame_data_t *) frame);
-
+          success = h2_frame_parse_data(&h2->frame_parser, h2->buffer + h2->buffer_position,
+              (h2_frame_data_t *) frame);
           if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_DATA,
                                        frame, h2->buffer_position);
 
@@ -1506,7 +1510,8 @@ static bool h2_add_from_buffer(h2_t * const h2)
           break;
 
         case FRAME_TYPE_HEADERS:
-          success = h2_frame_parse_headers(h2, (h2_frame_headers_t *) frame);
+          success = h2_frame_parse_headers(&h2->frame_parser, h2->buffer + h2->buffer_position,
+              (h2_frame_headers_t *) frame);
 
           if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_HEADERS,
                                        frame, h2->buffer_position);
@@ -1515,7 +1520,8 @@ static bool h2_add_from_buffer(h2_t * const h2)
           break;
 
         case FRAME_TYPE_PRIORITY:
-          success = h2_frame_parse_priority(h2, (h2_frame_priority_t *) frame);
+          success = h2_frame_parse_priority(&h2->frame_parser, h2->buffer + h2->buffer_position,
+              (h2_frame_priority_t *) frame);
 
           if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_PRIORITY,
                                        frame, h2->buffer_position);
@@ -1524,7 +1530,8 @@ static bool h2_add_from_buffer(h2_t * const h2)
           break;
 
         case FRAME_TYPE_RST_STREAM:
-          success = h2_frame_parse_rst_stream(h2, (h2_frame_rst_stream_t *) frame);
+          success = h2_frame_parse_rst_stream(&h2->frame_parser, h2->buffer + h2->buffer_position,
+                (h2_frame_rst_stream_t *) frame);
 
           if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_RST_STREAM,
                                        frame, h2->buffer_position);
@@ -1533,7 +1540,8 @@ static bool h2_add_from_buffer(h2_t * const h2)
           break;
 
         case FRAME_TYPE_SETTINGS:
-          success = h2_frame_parse_settings(h2, (h2_frame_settings_t *) frame);
+          success = h2_frame_parse_settings(&h2->frame_parser, h2->buffer + h2->buffer_position,
+              (h2_frame_settings_t *) frame);
 
           if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_SETTINGS,
                                        frame, h2->buffer_position);
@@ -1546,7 +1554,8 @@ static bool h2_add_from_buffer(h2_t * const h2)
           return false;
 
         case FRAME_TYPE_PING:
-          success = h2_frame_parse_ping(h2, (h2_frame_ping_t *) frame);
+          success = h2_frame_parse_ping(&h2->frame_parser, h2->buffer + h2->buffer_position,
+              (h2_frame_ping_t *) frame);
 
           if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_PING,
                                        frame, h2->buffer_position);
@@ -1555,7 +1564,8 @@ static bool h2_add_from_buffer(h2_t * const h2)
           break;
 
         case FRAME_TYPE_GOAWAY:
-          success = h2_frame_parse_goaway(h2, (h2_frame_goaway_t *) frame);
+          success = h2_frame_parse_goaway(&h2->frame_parser, h2->buffer + h2->buffer_position,
+              (h2_frame_goaway_t *) frame);
 
           if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_GOAWAY,
                                        frame, h2->buffer_position);
@@ -1564,7 +1574,8 @@ static bool h2_add_from_buffer(h2_t * const h2)
           break;
 
         case FRAME_TYPE_WINDOW_UPDATE:
-          success = h2_frame_parse_window_update(h2, (h2_frame_window_update_t *) frame);
+          success = h2_frame_parse_window_update(&h2->frame_parser, h2->buffer + h2->buffer_position,
+              (h2_frame_window_update_t *) frame);
 
           if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_WINDOW_UPDATE,
                                        frame, h2->buffer_position);
@@ -1573,7 +1584,8 @@ static bool h2_add_from_buffer(h2_t * const h2)
           break;
 
         case FRAME_TYPE_CONTINUATION:
-          success = h2_frame_parse_continuation(h2, (h2_frame_continuation_t *) frame);
+          success = h2_frame_parse_continuation(&h2->frame_parser, h2->buffer + h2->buffer_position,
+            (h2_frame_continuation_t *) frame);
 
           if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_CONTINUATION,
                                        frame, h2->buffer_position);

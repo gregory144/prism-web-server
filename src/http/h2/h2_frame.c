@@ -7,7 +7,6 @@
 #include "util.h"
 
 #include "h2_frame.h"
-#include "h2.h"
 
 typedef struct {
   uint32_t length_min;
@@ -221,10 +220,10 @@ bool h2_frame_flag_get(const h2_frame_t * const frame, int mask)
   return frame->flags & mask;
 }
 
-h2_frame_t * h2_frame_init(const h2_t * const h2, const uint32_t length, const uint8_t type,
+h2_frame_t * h2_frame_init(const h2_frame_parser_t * const parser, const uint32_t length, const uint8_t type,
                                   const uint8_t flags, const uint32_t stream_id)
 {
-  UNUSED(h2);
+  UNUSED(parser);
 
   h2_frame_t * frame;
 
@@ -280,7 +279,7 @@ h2_frame_t * h2_frame_init(const h2_t * const h2, const uint32_t length, const u
   return frame;
 }
 
-void h2_frame_free(h2_frame_t * frame)
+void h2_frame_free(h2_frame_t * const frame)
 {
   free(frame);
 }
@@ -310,35 +309,37 @@ static void h2_frame_header_write(uint8_t * const buf, h2_frame_t * frame)
   buf[pos++] = (stream_id) & 0xFF;
 }
 
-static bool h2_frame_emit_data(const h2_t * const h2, h2_frame_data_t * frame)
+static bool h2_frame_emit_data(const h2_frame_parser_t * const parser, binary_buffer_t * const bb, h2_frame_data_t * frame)
 {
   uint8_t buf[FRAME_HEADER_SIZE];
   h2_frame_header_write(buf, (h2_frame_t *) frame);
 
-  if (!h2_write(h2, buf, FRAME_HEADER_SIZE)) {
-    log_append(h2->log, LOG_ERROR, "Unable to write data frame header");
+  if (!binary_buffer_write(bb, buf, FRAME_HEADER_SIZE)) {
+    log_append(parser->log, LOG_ERROR, "Unable to write data frame header");
     return false;
   }
 
-  return h2_write(h2, frame->payload, frame->payload_length);
+  return binary_buffer_write(bb, frame->payload, frame->payload_length);
 }
 
-static bool h2_frame_emit_headers(const h2_t * const h2, h2_frame_headers_t * frame)
+static bool h2_frame_emit_headers(const h2_frame_parser_t * const parser, binary_buffer_t * const bb,
+    h2_frame_headers_t * frame)
 {
   const size_t buf_length = FRAME_HEADER_SIZE;
   uint8_t buf[buf_length];
 
   h2_frame_header_write(buf, (h2_frame_t *) frame);
 
-  if (!h2_write(h2, buf, FRAME_HEADER_SIZE)) {
-    log_append(h2->log, LOG_ERROR, "Unable to write headers frame header");
+  if (!binary_buffer_write(bb, buf, FRAME_HEADER_SIZE)) {
+    log_append(parser->log, LOG_ERROR, "Unable to write headers frame header");
     return false;
   }
 
-  return h2_write(h2, frame->header_block_fragment, frame->header_block_fragment_length);
+  return binary_buffer_write(bb, frame->header_block_fragment, frame->header_block_fragment_length);
 }
 
-static bool h2_frame_emit_rst_stream(const h2_t * const h2, h2_frame_rst_stream_t * frame)
+static bool h2_frame_emit_rst_stream(const h2_frame_parser_t * const parser, binary_buffer_t * const bb,
+    h2_frame_rst_stream_t * frame)
 {
   size_t error_code_length = 4; // 32 bits
 
@@ -357,15 +358,16 @@ static bool h2_frame_emit_rst_stream(const h2_t * const h2, h2_frame_rst_stream_
   buf[pos++] = (error_code >> 8) & 0xFF;
   buf[pos++] = (error_code) & 0xFF;
 
-  log_append(h2->log, LOG_DEBUG, "Writing reset stream frame");
+  log_append(parser->log, LOG_DEBUG, "Writing reset stream frame");
 
-  return h2_write(h2, buf, buf_length);
+  return binary_buffer_write(bb, buf, buf_length);
 }
 
-static bool h2_frame_emit_settings(const h2_t * const h2, h2_frame_settings_t * frame)
+static bool h2_frame_emit_settings(const h2_frame_parser_t * const parser, binary_buffer_t * const bb,
+    h2_frame_settings_t * frame)
 {
   if (!FRAME_FLAG(frame, FLAG_ACK)) {
-    log_append(h2->log, LOG_FATAL, "Can't emit settings frame: Not implemented yet");
+    log_append(parser->log, LOG_FATAL, "Can't emit settings frame: Not implemented yet");
     abort();
   }
 
@@ -375,10 +377,10 @@ static bool h2_frame_emit_settings(const h2_t * const h2, h2_frame_settings_t * 
 
   h2_frame_header_write(buf, (h2_frame_t *) frame);
 
-  return h2_write(h2, buf, buf_length);
+  return binary_buffer_write(bb, buf, buf_length);
 }
 
-static bool h2_frame_emit_push_promise(const h2_t * const h2, h2_frame_push_promise_t * frame)
+static bool h2_frame_emit_push_promise(const h2_frame_parser_t * const parser, binary_buffer_t * const bb, h2_frame_push_promise_t * frame)
 {
   const size_t stream_id_length = 4;
   const size_t payload_length = stream_id_length;
@@ -394,18 +396,19 @@ static bool h2_frame_emit_push_promise(const h2_t * const h2, h2_frame_push_prom
   buf[pos++] = (frame->promised_stream_id >> 8) & 0xFF;
   buf[pos++] = (frame->promised_stream_id) & 0xFF;
 
-  if (!h2_write(h2, buf, buf_length)) {
-    log_append(h2->log, LOG_ERROR, "Unable to write push promise frame header");
+  if (!binary_buffer_write(bb, buf, buf_length)) {
+    log_append(parser->log, LOG_ERROR, "Unable to write push promise frame header");
     return false;
   }
 
-  return h2_write(h2, frame->header_block_fragment, frame->header_block_fragment_length);
+  return binary_buffer_write(bb, frame->header_block_fragment, frame->header_block_fragment_length);
 }
 
-static bool h2_frame_emit_ping(const h2_t * const h2, h2_frame_ping_t * frame)
+static bool h2_frame_emit_ping(const h2_frame_parser_t * const parser, binary_buffer_t * const bb,
+    h2_frame_ping_t * frame)
 {
   if (!FRAME_FLAG(frame, FLAG_ACK)) {
-    log_append(h2->log, LOG_FATAL, "Can't emit ping frame: Not implemented yet");
+    log_append(parser->log, LOG_FATAL, "Can't emit ping frame: Not implemented yet");
     abort();
   }
 
@@ -416,10 +419,11 @@ static bool h2_frame_emit_ping(const h2_t * const h2, h2_frame_ping_t * frame)
   h2_frame_header_write(buf, (h2_frame_t *) frame);
   memcpy(buf + FRAME_HEADER_SIZE, frame->opaque_data, PING_OPAQUE_DATA_LENGTH);
 
-  return h2_write(h2, buf, buf_length);
+  return binary_buffer_write(bb, buf, buf_length);
 }
 
-static bool h2_frame_emit_goaway(const h2_t * const h2, h2_frame_goaway_t * frame)
+static bool h2_frame_emit_goaway(const h2_frame_parser_t * const parser, binary_buffer_t * const bb,
+    h2_frame_goaway_t * frame)
 {
   size_t last_stream_id_length = 4; // 1 bit + 31 bits
   size_t error_code_length = 4; // 32 bits
@@ -452,12 +456,13 @@ static bool h2_frame_emit_goaway(const h2_t * const h2, h2_frame_goaway_t * fram
     memcpy(buf + pos, frame->debug_data, debug_length);
   }
 
-  log_append(h2->log, LOG_DEBUG, "Writing goaway frame");
+  log_append(parser->log, LOG_DEBUG, "Writing goaway frame");
 
-  return h2_write(h2, buf, buf_length);
+  return binary_buffer_write(bb, buf, buf_length);
 }
 
-static bool h2_frame_emit_window_update(const h2_t * const h2, h2_frame_window_update_t * frame)
+static bool h2_frame_emit_window_update(const h2_frame_parser_t * const parser, binary_buffer_t * const bb,
+    h2_frame_window_update_t * frame)
 {
   size_t increment_length = 4; // 32 bits
 
@@ -474,90 +479,86 @@ static bool h2_frame_emit_window_update(const h2_t * const h2, h2_frame_window_u
   buf[pos++] = (frame->increment >> 8) & 0xFF;
   buf[pos++] = (frame->increment) & 0xFF;
 
-  log_append(h2->log, LOG_DEBUG, "Writing window update frame");
+  log_append(parser->log, LOG_DEBUG, "Writing window update frame");
 
-  if (!h2_write(h2, buf, buf_length)) {
+  if (!binary_buffer_write(bb, buf, buf_length)) {
     return false;
-  }
-
-  // flush the connection so that we write the window update as soon as possible
-  if (!h2_flush(h2, 0)) {
-    log_append(h2->log, LOG_WARN, "Could not flush write buffer after window update");
   }
 
   return true;
 }
 
-static bool h2_frame_emit_continuation(const h2_t * const h2, h2_frame_continuation_t * frame)
+static bool h2_frame_emit_continuation(const h2_frame_parser_t * const parser, binary_buffer_t * const bb,
+    h2_frame_continuation_t * frame)
 {
   const size_t buf_length = FRAME_HEADER_SIZE;
   uint8_t buf[buf_length];
 
   h2_frame_header_write(buf, (h2_frame_t *) frame);
 
-  if (!h2_write(h2, buf, buf_length)) {
-    log_append(h2->log, LOG_ERROR, "Unable to write continuation frame header");
+  if (!binary_buffer_write(bb, buf, buf_length)) {
+    log_append(parser->log, LOG_ERROR, "Unable to write continuation frame header");
     return false;
   }
 
-  return h2_write(h2, frame->header_block_fragment, frame->header_block_fragment_length);
+  return binary_buffer_write(bb, frame->header_block_fragment, frame->header_block_fragment_length);
 }
 
-bool h2_frame_emit(const h2_t * const h2, h2_frame_t * frame)
+bool h2_frame_emit(const h2_frame_parser_t * const parser, binary_buffer_t * const bb, h2_frame_t * frame)
 {
-  plugin_invoke(h2->plugin_invoker, OUTGOING_FRAME, frame);
+  plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME, frame);
 
   bool success = false;
 
   switch (frame->type) {
     case FRAME_TYPE_DATA:
-      plugin_invoke(h2->plugin_invoker, OUTGOING_FRAME_DATA, frame);
-      success = h2_frame_emit_data(h2, (h2_frame_data_t *) frame);
+      plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_DATA, frame);
+      success = h2_frame_emit_data(parser, bb, (h2_frame_data_t *) frame);
       break;
 
     case FRAME_TYPE_HEADERS:
-      plugin_invoke(h2->plugin_invoker, OUTGOING_FRAME_HEADERS, frame);
-      success = h2_frame_emit_headers(h2, (h2_frame_headers_t *) frame);
+      plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_HEADERS, frame);
+      success = h2_frame_emit_headers(parser, bb, (h2_frame_headers_t *) frame);
       break;
 
     case FRAME_TYPE_PRIORITY:
-      log_append(h2->log, LOG_FATAL, "Unable to emit priority frame: Not implemented yet");
+      log_append(parser->log, LOG_FATAL, "Unable to emit priority frame: Not implemented yet");
       abort();
       break;
 
     case FRAME_TYPE_RST_STREAM:
-      plugin_invoke(h2->plugin_invoker, OUTGOING_FRAME_RST_STREAM, frame);
-      success = h2_frame_emit_rst_stream(h2, (h2_frame_rst_stream_t *) frame);
+      plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_RST_STREAM, frame);
+      success = h2_frame_emit_rst_stream(parser, bb, (h2_frame_rst_stream_t *) frame);
       break;
 
     case FRAME_TYPE_SETTINGS:
-      plugin_invoke(h2->plugin_invoker, OUTGOING_FRAME_SETTINGS, frame);
-      success = h2_frame_emit_settings(h2, (h2_frame_settings_t *) frame);
+      plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_SETTINGS, frame);
+      success = h2_frame_emit_settings(parser, bb, (h2_frame_settings_t *) frame);
       break;
 
     case FRAME_TYPE_PUSH_PROMISE:
-      plugin_invoke(h2->plugin_invoker, OUTGOING_FRAME_PUSH_PROMISE, frame);
-      success = h2_frame_emit_push_promise(h2, (h2_frame_push_promise_t *) frame);
+      plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_PUSH_PROMISE, frame);
+      success = h2_frame_emit_push_promise(parser, bb, (h2_frame_push_promise_t *) frame);
       break;
 
     case FRAME_TYPE_PING:
-      plugin_invoke(h2->plugin_invoker, OUTGOING_FRAME_PING, frame);
-      success = h2_frame_emit_ping(h2, (h2_frame_ping_t *) frame);
+      plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_PING, frame);
+      success = h2_frame_emit_ping(parser, bb, (h2_frame_ping_t *) frame);
       break;
 
     case FRAME_TYPE_GOAWAY:
-      plugin_invoke(h2->plugin_invoker, OUTGOING_FRAME_GOAWAY, frame);
-      success = h2_frame_emit_goaway(h2, (h2_frame_goaway_t *) frame);
+      plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_GOAWAY, frame);
+      success = h2_frame_emit_goaway(parser, bb, (h2_frame_goaway_t *) frame);
       break;
 
     case FRAME_TYPE_WINDOW_UPDATE:
-      plugin_invoke(h2->plugin_invoker, OUTGOING_FRAME_WINDOW_UPDATE, frame);
-      success = h2_frame_emit_window_update(h2, (h2_frame_window_update_t *) frame);
+      plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_WINDOW_UPDATE, frame);
+      success = h2_frame_emit_window_update(parser, bb, (h2_frame_window_update_t *) frame);
       break;
 
     case FRAME_TYPE_CONTINUATION:
-      plugin_invoke(h2->plugin_invoker, OUTGOING_FRAME_CONTINUATION, frame);
-      success = h2_frame_emit_continuation(h2, (h2_frame_continuation_t *) frame);
+      plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_CONTINUATION, frame);
+      success = h2_frame_emit_continuation(parser, bb, (h2_frame_continuation_t *) frame);
       break;
 
     default:
@@ -569,7 +570,7 @@ bool h2_frame_emit(const h2_t * const h2, h2_frame_t * frame)
   return success;
 }
 
-static bool strip_padding(h2_t * const h2, uint8_t * padding_length, uint8_t ** payload, size_t * payload_length,
+static bool strip_padding(const h2_frame_parser_t * const parser, uint8_t * padding_length, uint8_t ** payload, size_t * payload_length,
                           bool padded_on)
 {
   if (padded_on) {
@@ -581,24 +582,23 @@ static bool strip_padding(h2_t * const h2, uint8_t * padding_length, uint8_t ** 
     (*payload_length)--;
     (*payload)++;
     *payload_length -= *padding_length;
-    log_append(h2->log, LOG_TRACE, "Stripped %ld octets of padding from frame", padding_length);
+    log_append(parser->log, LOG_TRACE, "Stripped %ld octets of padding from frame", padding_length);
   }
 
   return true;
 }
 
-bool h2_frame_parse_data(h2_t * const h2, h2_frame_data_t * const frame)
+bool h2_frame_parse_data(const h2_frame_parser_t * const parser, uint8_t * buf,
+    h2_frame_data_t * const frame)
 {
   // pass on to application
-  uint8_t * buf = h2->buffer + h2->buffer_position;
   size_t buf_length = frame->length;
 
   bool padded = FRAME_FLAG(frame, FLAG_PADDED);
   uint8_t padding_length = 0;
 
-  if (!strip_padding(h2, &padding_length, &buf, &buf_length, padded)) {
-    h2_emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR,
-                         "Problem with padding on data frame");
+  if (!strip_padding(parser, &padding_length, &buf, &buf_length, padded)) {
+    log_append(parser->log, LOG_ERROR, "Problem with padding on data frame");
     return false;
   }
 
@@ -607,21 +607,19 @@ bool h2_frame_parse_data(h2_t * const h2, h2_frame_data_t * const frame)
   frame->payload = buf;
   frame->payload_length = buf_length;
 
-
   return true;
 }
 
-bool h2_frame_parse_headers(h2_t * const h2, h2_frame_headers_t * const frame)
+bool h2_frame_parse_headers(const h2_frame_parser_t * const parser, uint8_t * buf,
+    h2_frame_headers_t * const frame)
 {
-  uint8_t * buf = h2->buffer + h2->buffer_position;
   size_t buf_length = frame->length;
 
   bool padded = FRAME_FLAG(frame, FLAG_PADDED);
   uint8_t padding_length = 0;
 
-  if (!strip_padding(h2, &padding_length, &buf, &buf_length, padded)) {
-    h2_emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR,
-                         "Problem with padding on header frame");
+  if (!strip_padding(parser, &padding_length, &buf, &buf_length, padded)) {
+    log_append(parser->log, LOG_ERROR, "Problem with padding on header frame");
     return false;
   }
 
@@ -644,10 +642,11 @@ bool h2_frame_parse_headers(h2_t * const h2, h2_frame_headers_t * const frame)
   return true;
 }
 
-bool h2_frame_parse_continuation(h2_t * const h2,
+bool h2_frame_parse_continuation(const h2_frame_parser_t * const parser, uint8_t * buf,
                                         h2_frame_continuation_t * const frame)
 {
-  uint8_t * buf = h2->buffer + h2->buffer_position;
+  UNUSED(parser);
+
   size_t buf_length = frame->length;
 
   frame->header_block_fragment = buf;
@@ -656,22 +655,22 @@ bool h2_frame_parse_continuation(h2_t * const h2,
   return true;
 }
 
-bool h2_parse_settings_payload(h2_t * const h2, uint8_t * buffer, size_t buffer_length, size_t * num_settings,
+bool h2_parse_settings_payload(const h2_frame_parser_t * const parser, uint8_t * buf,
+    size_t buffer_length, size_t * num_settings,
                                       h2_setting_t * settings)
 {
   *num_settings = buffer_length / SETTING_SIZE;
 
   if (*num_settings > 6) {
-    h2_emit_error_and_close(h2, 0, H2_ERROR_INTERNAL_ERROR, "Up to 6 settings per frame supported: %ld",
-                         *num_settings);
+    log_append(parser->log, LOG_ERROR, "Up to 6 settings per frame supported: %ld", *num_settings);
     return false;
   }
 
-  log_append(h2->log, LOG_TRACE, "Settings: Found %ld settings", *num_settings);
+  log_append(parser->log, LOG_TRACE, "Settings: Found %ld settings", *num_settings);
 
   for (size_t i = 0; i < *num_settings; i++) {
     h2_setting_t * curr = &settings[i];
-    uint8_t * curr_setting = buffer + (i * SETTING_SIZE);
+    uint8_t * curr_setting = buf + (i * SETTING_SIZE);
     curr->id = get_bits16(curr_setting, 0xFFFF);
     curr->value = get_bits32(curr_setting + SETTING_ID_SIZE, 0xFFFFFFFF);
   }
@@ -679,12 +678,11 @@ bool h2_parse_settings_payload(h2_t * const h2, uint8_t * buffer, size_t buffer_
   return true;
 }
 
-bool h2_frame_parse_settings(h2_t * const h2, h2_frame_settings_t * const frame)
+bool h2_frame_parse_settings(const h2_frame_parser_t * const parser, uint8_t * buf,
+    h2_frame_settings_t * const frame)
 {
   if (!FRAME_FLAG(frame, FLAG_ACK)) {
-    uint8_t * pos = h2->buffer + h2->buffer_position;
-
-    return h2_parse_settings_payload(h2, pos, frame->length, &frame->num_settings, frame->settings);
+    return h2_parse_settings_payload(parser, buf, frame->length, &frame->num_settings, frame->settings);
   } else {
     frame->num_settings = 0;
   }
@@ -692,33 +690,40 @@ bool h2_frame_parse_settings(h2_t * const h2, h2_frame_settings_t * const frame)
   return true;
 }
 
-bool h2_frame_parse_ping(h2_t * const h2, h2_frame_ping_t * const frame)
+bool h2_frame_parse_ping(const h2_frame_parser_t * const parser, uint8_t * buf,
+    h2_frame_ping_t * const frame)
 {
-  frame->opaque_data = h2->buffer + h2->buffer_position;
+  UNUSED(parser);
+
+  frame->opaque_data = buf;
 
   return true;
 }
 
-bool h2_frame_parse_window_update(h2_t * const h2,
+bool h2_frame_parse_window_update(const h2_frame_parser_t * const parser, uint8_t * buf,
     h2_frame_window_update_t * const frame)
 {
-  uint8_t * buf = h2->buffer + h2->buffer_position;
+  UNUSED(parser);
+
   frame->increment = get_bits32(buf, 0x7FFFFFFF);
 
   return true;
 }
 
-bool h2_frame_parse_rst_stream(h2_t * const h2, h2_frame_rst_stream_t * const frame)
+bool h2_frame_parse_rst_stream(const h2_frame_parser_t * const parser, uint8_t * buf,
+    h2_frame_rst_stream_t * const frame)
 {
-  uint8_t * buf = h2->buffer + h2->buffer_position;
+  UNUSED(parser);
+
   frame->error_code = get_bits32(buf, 0xFFFFFFFF);
 
   return true;
 }
 
-bool h2_frame_parse_priority(h2_t * const h2, h2_frame_priority_t * const frame)
+bool h2_frame_parse_priority(const h2_frame_parser_t * const parser, uint8_t * buf,
+    h2_frame_priority_t * const frame)
 {
-  uint8_t * buf = h2->buffer + h2->buffer_position;
+  UNUSED(parser);
 
   frame->priority_exclusive = get_bit(buf, 0);
   frame->priority_stream_dependency = get_bits32(buf, 0x7FFFFFFF);
@@ -728,9 +733,11 @@ bool h2_frame_parse_priority(h2_t * const h2, h2_frame_priority_t * const frame)
   return true;
 }
 
-bool h2_frame_parse_goaway(h2_t * const h2, h2_frame_goaway_t * const frame)
+bool h2_frame_parse_goaway(const h2_frame_parser_t * const parser, uint8_t * buf,
+    h2_frame_goaway_t * const frame)
 {
-  uint8_t * buf = h2->buffer + h2->buffer_position;
+  UNUSED(parser);
+
   frame->last_stream_id = get_bits32(buf, 0x7FFFFFFF);
   frame->error_code = get_bits32(buf + 4, 0xFFFFFFFF);
   frame->debug_data_length = (frame->length - 8);
@@ -747,18 +754,23 @@ bool h2_frame_is_valid_frame_type(enum frame_type_e frame_type)
   return frame_type >= FRAME_TYPE_MIN && frame_type <= FRAME_TYPE_MAX;
 }
 
-bool h2_frame_is_valid(h2_t * const h2, h2_frame_t * frame)
+bool h2_frame_is_valid(const h2_frame_parser_t * const parser, h2_frame_t * frame,
+    enum h2_error_code_e * error_code, char * * error_string)
 {
+  UNUSED(parser);
+
   enum frame_type_e frame_type = frame->type;
   frame_parser_definition_t def = frame_parser_definitions[frame_type];
 
   if (frame->length < def.length_min) {
-    h2_emit_error_and_close(h2, frame->stream_id, H2_ERROR_FRAME_SIZE_ERROR, "Invalid frame length");
+    *error_code = H2_ERROR_FRAME_SIZE_ERROR;
+    *error_string = "Invalid frame length";
     return false;
   }
 
   if (frame->length > def.length_max) {
-    h2_emit_error_and_close(h2, frame->stream_id, H2_ERROR_FRAME_SIZE_ERROR, "Invalid frame length");
+    *error_code = H2_ERROR_FRAME_SIZE_ERROR;
+    *error_string = "Invalid frame length";
     return false;
   }
 
@@ -771,19 +783,22 @@ bool h2_frame_is_valid(h2_t * const h2, h2_frame_t * frame)
       uint8_t mask = 1 << i;
 
       if (frame->flags & mask) {
-        h2_emit_error_and_close(h2, frame->stream_id, H2_ERROR_PROTOCOL_ERROR, "Invalid flag set");
+        *error_code = H2_ERROR_PROTOCOL_ERROR;
+        *error_string = "Invalid flag set";
         return false;
       }
     }
   }
 
   if (frame->stream_id == 0 && def.must_have_stream_id) {
-    h2_emit_error_and_close(h2, frame->stream_id, H2_ERROR_PROTOCOL_ERROR, "Stream ID must be set");
+    *error_code = H2_ERROR_PROTOCOL_ERROR;
+    *error_string = "Stream ID must be set";
     return false;
   }
 
   if (frame->stream_id > 0 && def.must_not_have_stream_id) {
-    h2_emit_error_and_close(h2, frame->stream_id, H2_ERROR_PROTOCOL_ERROR, "Stream ID must not be set");
+    *error_code = H2_ERROR_PROTOCOL_ERROR;
+    *error_string = "Stream ID must not be set";
     return false;
   }
 

@@ -11,6 +11,7 @@
 #include "http/request.h"
 #include "http/response.h"
 
+#include "h2_error.h"
 #include "h2_setting.h"
 #include "h2_frame.h"
 
@@ -44,87 +45,6 @@ enum stream_state_e {
 #define DEFAULT_INITIAL_WINDOW_SIZE 65535
 #define DEFAULT_MAX_FRAME_SIZE 16384 // 2^14
 #define DEFAULT_MAX_HEADER_LIST_SIZE 0 // unlimited
-
-/**
- * HTTP 2 errors
- */
-enum h2_error_code_e {
-
-  /**
-   * The associated condition is not as a result of an error. For example, a
-   * GOAWAY might include this code to indicate graceful shutdown of a connection.
-   */
-  H2_ERROR_NO_ERROR,
-
-  /**
-   * The endpoint detected an unspecific protocol error. This error is for use
-   * when a more specific error code is not available.
-   */
-  H2_ERROR_PROTOCOL_ERROR,
-
-  /**
-   * The endpoint encountered an unexpected internal error.
-   */
-  H2_ERROR_INTERNAL_ERROR,
-
-  /**
-   * The endpoint detected that its peer violated the flow control protocol.
-   */
-  H2_ERROR_FLOW_CONTROL_ERROR,
-
-  /**
-   * The endpoint sent a SETTINGS frame, but did not receive a response in a
-   * timely manner. See Settings Synchronization (Section 6.5.3).
-   */
-  H2_ERROR_SETTINGS_TIMEOUT,
-
-  /**
-   * The endpoint received a frame after a stream was half closed.
-   */
-  H2_ERROR_STREAM_CLOSED,
-
-  /**
-   * The endpoint received a frame that was larger than the maximum size
-   * that it supports.
-   */
-  H2_ERROR_FRAME_SIZE_ERROR,
-
-  /**
-   * The endpoint refuses the stream prior to performing any application
-   * processing, see Section 8.1.4 for details.
-   */
-  H2_ERROR_REFUSED_STREAM,
-
-  /**
-   * Used by the endpoint to indicate that the stream is no longer needed.
-   */
-  H2_ERROR_CANCEL,
-
-  /**
-   * The endpoint is unable to maintain the compression context for the
-   * connection.
-   */
-  H2_ERROR_COMPRESSION_ERROR,
-
-  /**
-   * The connection established in response to a CONNECT request (Section 8.3)
-   * was reset or abnormally closed.
-   */
-  H2_ERROR_CONNECT_ERROR,
-
-  /**
-   * The endpoint detected that its peer is exhibiting a behavior over a given
-   * amount of time that has caused it to refuse to process further frames.
-   */
-  H2_ERROR_ENHANCE_YOUR_CALM,
-
-  /**
-   * The underlying transport has properties that do not meet the minimum
-   * requirements imposed by this document (see Section 9.2) or the endpoint.
-   */
-  H2_ERROR_INADEQUATE_SECURITY
-
-};
 
 typedef struct h2_header_fragment_s {
 
@@ -273,6 +193,8 @@ typedef struct h2_t {
   hpack_context_t * encoding_context;
   hpack_context_t * decoding_context;
 
+  h2_frame_parser_t frame_parser;
+
 } h2_t;
 
 bool h2_detect_connection(uint8_t * buffer, size_t len);
@@ -287,18 +209,11 @@ bool h2_request_begin(h2_t * const h2, header_list_t * headers, uint8_t * buf, s
 
 void h2_free(h2_t * const h2);
 
-bool h2_write(const h2_t * const h2, uint8_t * const buf, size_t buf_length);
-
 void h2_read(h2_t * const h2, uint8_t * const buffer, const size_t len);
 
 void h2_eof(h2_t * const h2);
 
 void h2_finished_writes(h2_t * const h2);
-
-bool h2_flush(const h2_t * const h2, size_t new_length);
-
-bool h2_emit_error_and_close(h2_t * const h2, uint32_t stream_id,
-                                 enum h2_error_code_e error_code, char * format, ...);
 
 bool h2_response_write(h2_stream_t * stream, http_response_t * const response, uint8_t * data, const size_t data_length,
                        bool last);

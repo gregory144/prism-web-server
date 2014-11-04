@@ -3,13 +3,13 @@
 
 #include <stdbool.h>
 
-#include "hash_table.h"
-#include "hpack/hpack.h"
+#include "log.h"
+#include "binary_buffer.h"
 
-#include "http/request.h"
-#include "http/response.h"
+#include "plugin_callbacks.h"
 
 #include "h2_setting.h"
+#include "h2_error.h"
 
 /**
  * Frame types
@@ -205,40 +205,56 @@ typedef struct {
 
 } h2_frame_headers_t;
 
-struct h2_t;
+typedef struct {
 
-h2_frame_t * h2_frame_init(const struct h2_t * const h2, const uint32_t length, const uint8_t type,
+  log_context_t * log;
+
+  struct plugin_invoker_t * plugin_invoker;
+
+} h2_frame_parser_t;
+
+h2_frame_t * h2_frame_init(const h2_frame_parser_t * const parser, const uint32_t length, const uint8_t type,
                                   const uint8_t flags, const uint32_t stream_id);
 
-void h2_frame_free(h2_frame_t * frame);
+void h2_frame_free(h2_frame_t * const frame);
 
 bool h2_frame_flag_get(const h2_frame_t * const frame, int mask);
 
-bool h2_frame_emit(const struct h2_t * const h2, h2_frame_t * frame);
+bool h2_frame_emit(const h2_frame_parser_t * const parser, binary_buffer_t * const buffer, h2_frame_t * frame);
 
 bool h2_frame_is_valid_frame_type(enum frame_type_e frame_type);
 
-bool h2_frame_is_valid(struct h2_t * const h2, h2_frame_t * frame);
+bool h2_frame_is_valid(const h2_frame_parser_t * const parser, h2_frame_t * frame,
+    enum h2_error_code_e * error_code, char * * error_string);
 
-bool h2_frame_parse_data(struct h2_t * const h2, h2_frame_data_t * const frame);
+bool h2_frame_parse_data(const h2_frame_parser_t * const parser, uint8_t * buffer,
+    h2_frame_data_t * const frame);
 
-bool h2_frame_parse_headers(struct h2_t * const h2, h2_frame_headers_t * const frame);
+bool h2_frame_parse_headers(const h2_frame_parser_t * const parser, uint8_t * buffer,
+    h2_frame_headers_t * const frame);
 
-bool h2_frame_parse_settings(struct h2_t * const h2, h2_frame_settings_t * const frame);
+bool h2_frame_parse_settings(const h2_frame_parser_t * const parser, uint8_t * buffer,
+    h2_frame_settings_t * const frame);
 
-bool h2_frame_parse_ping(struct h2_t * const h2, h2_frame_ping_t * const frame);
+bool h2_frame_parse_ping(const h2_frame_parser_t * const parser, uint8_t * buffer,
+    h2_frame_ping_t * const frame);
 
-bool h2_frame_parse_window_update(struct h2_t * const h2, h2_frame_window_update_t * const frame);
+bool h2_frame_parse_window_update(const h2_frame_parser_t * const parser, uint8_t * buffer,
+    h2_frame_window_update_t * const frame);
 
-bool h2_frame_parse_rst_stream(struct h2_t * const h2, h2_frame_rst_stream_t * const frame);
+bool h2_frame_parse_rst_stream(const h2_frame_parser_t * const parser, uint8_t * buffer,
+    h2_frame_rst_stream_t * const frame);
 
-bool h2_frame_parse_priority(struct h2_t * const h2, h2_frame_priority_t * const frame);
+bool h2_frame_parse_priority(const h2_frame_parser_t * const parser, uint8_t * buffer,
+    h2_frame_priority_t * const frame);
 
-bool h2_frame_parse_goaway(struct h2_t * const h2, h2_frame_goaway_t * const frame);
+bool h2_frame_parse_goaway(const h2_frame_parser_t * const parser, uint8_t * buffer,
+    h2_frame_goaway_t * const frame);
 
-bool h2_frame_parse_continuation(struct h2_t * const h2, h2_frame_continuation_t * const frame);
+bool h2_frame_parse_continuation(const h2_frame_parser_t * const parser, uint8_t * buffer,
+    h2_frame_continuation_t * const frame);
 
-bool h2_parse_settings_payload(struct h2_t * const h2, uint8_t * buffer, size_t buffer_length,
+bool h2_parse_settings_payload(const h2_frame_parser_t * const parser, uint8_t * buffer, size_t buffer_length,
     size_t * num_settings, h2_setting_t * settings);
 
 #endif
