@@ -29,6 +29,9 @@ size_t roundup_to_power_of_2(size_t v)
   v |= v >> 4;
   v |= v >> 8;
   v |= v >> 16;
+  if (sizeof(size_t) == 8) { // for 64 bit arch
+    v |= v >> 32;
+  }
   v++;
 
   return v;
