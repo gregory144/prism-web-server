@@ -220,7 +220,7 @@ bool h2_frame_flag_get(const h2_frame_t * const frame, int mask)
   return frame->flags & mask;
 }
 
-h2_frame_t * h2_frame_init(const h2_frame_parser_t * const parser, const uint32_t length, const uint8_t type,
+h2_frame_t * h2_frame_init(const h2_frame_parser_t * const parser, const uint8_t type,
                                   const uint8_t flags, const uint32_t stream_id)
 {
   UNUSED(parser);
@@ -274,7 +274,7 @@ h2_frame_t * h2_frame_init(const h2_frame_parser_t * const parser, const uint32_
 
   frame->type = type;
   frame->flags = flags;
-  frame->length = length;
+  frame->length = 0;
   frame->stream_id = stream_id;
   return frame;
 }
@@ -312,6 +312,7 @@ static void h2_frame_header_write(uint8_t * const buf, h2_frame_t * frame)
 static bool h2_frame_emit_data(const h2_frame_parser_t * const parser, binary_buffer_t * const bb, h2_frame_data_t * frame)
 {
   uint8_t buf[FRAME_HEADER_SIZE];
+  frame->length = frame->payload_length;
   h2_frame_header_write(buf, (h2_frame_t *) frame);
 
   if (!binary_buffer_write(bb, buf, FRAME_HEADER_SIZE)) {
@@ -328,6 +329,7 @@ static bool h2_frame_emit_headers(const h2_frame_parser_t * const parser, binary
   const size_t buf_length = FRAME_HEADER_SIZE;
   uint8_t buf[buf_length];
 
+  frame->length = frame->header_block_fragment_length;
   h2_frame_header_write(buf, (h2_frame_t *) frame);
 
   if (!binary_buffer_write(bb, buf, FRAME_HEADER_SIZE)) {
@@ -349,6 +351,7 @@ static bool h2_frame_emit_rst_stream(const h2_frame_parser_t * const parser, bin
   size_t pos = 0;
   uint8_t buf[buf_length];
 
+  frame->length = payload_length;
   h2_frame_header_write(buf, (h2_frame_t *) frame);
   pos += FRAME_HEADER_SIZE;
 
@@ -368,13 +371,14 @@ static bool h2_frame_emit_settings(const h2_frame_parser_t * const parser, binar
 {
   if (!FRAME_FLAG(frame, FLAG_ACK)) {
     log_append(parser->log, LOG_FATAL, "Can't emit settings frame: Not implemented yet");
-    abort();
+    return false;
   }
 
   size_t buf_length = FRAME_HEADER_SIZE;
 
   uint8_t buf[buf_length];
 
+  frame->length = 0;
   h2_frame_header_write(buf, (h2_frame_t *) frame);
 
   return binary_buffer_write(bb, buf, buf_length);
@@ -387,6 +391,7 @@ static bool h2_frame_emit_push_promise(const h2_frame_parser_t * const parser, b
   const size_t buf_length = FRAME_HEADER_SIZE + payload_length;
   uint8_t buf[buf_length];
 
+  frame->length = payload_length + frame->header_block_fragment_length;
   h2_frame_header_write(buf, (h2_frame_t *) frame);
 
   size_t pos = FRAME_HEADER_SIZE;
@@ -416,6 +421,7 @@ static bool h2_frame_emit_ping(const h2_frame_parser_t * const parser, binary_bu
   size_t buf_length = FRAME_HEADER_SIZE + payload_length;
   uint8_t buf[buf_length];
 
+  frame->length = payload_length;
   h2_frame_header_write(buf, (h2_frame_t *) frame);
   memcpy(buf + FRAME_HEADER_SIZE, frame->opaque_data, PING_OPAQUE_DATA_LENGTH);
 
@@ -436,6 +442,7 @@ static bool h2_frame_emit_goaway(const h2_frame_parser_t * const parser, binary_
   size_t pos = 0;
   uint8_t buf[buf_length];
 
+  frame->length = payload_length;
   h2_frame_header_write(buf, (h2_frame_t *) frame);
   pos += FRAME_HEADER_SIZE;
 
@@ -471,6 +478,7 @@ static bool h2_frame_emit_window_update(const h2_frame_parser_t * const parser, 
   size_t pos = 0;
   uint8_t buf[buf_length];
 
+  frame->length = increment_length;
   h2_frame_header_write(buf, (h2_frame_t *) frame);
   pos += FRAME_HEADER_SIZE;
 
@@ -494,6 +502,7 @@ static bool h2_frame_emit_continuation(const h2_frame_parser_t * const parser, b
   const size_t buf_length = FRAME_HEADER_SIZE;
   uint8_t buf[buf_length];
 
+  frame->length = frame->header_block_fragment_length;
   h2_frame_header_write(buf, (h2_frame_t *) frame);
 
   if (!binary_buffer_write(bb, buf, buf_length)) {
@@ -514,11 +523,13 @@ bool h2_frame_emit(const h2_frame_parser_t * const parser, binary_buffer_t * con
     case FRAME_TYPE_DATA:
       plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_DATA, frame);
       success = h2_frame_emit_data(parser, bb, (h2_frame_data_t *) frame);
+      plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_DATA_SENT, frame);
       break;
 
     case FRAME_TYPE_HEADERS:
       plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_HEADERS, frame);
       success = h2_frame_emit_headers(parser, bb, (h2_frame_headers_t *) frame);
+      plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_HEADERS_SENT, frame);
       break;
 
     case FRAME_TYPE_PRIORITY:
@@ -529,36 +540,43 @@ bool h2_frame_emit(const h2_frame_parser_t * const parser, binary_buffer_t * con
     case FRAME_TYPE_RST_STREAM:
       plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_RST_STREAM, frame);
       success = h2_frame_emit_rst_stream(parser, bb, (h2_frame_rst_stream_t *) frame);
+      plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_RST_STREAM_SENT, frame);
       break;
 
     case FRAME_TYPE_SETTINGS:
       plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_SETTINGS, frame);
       success = h2_frame_emit_settings(parser, bb, (h2_frame_settings_t *) frame);
+      plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_SETTINGS_SENT, frame);
       break;
 
     case FRAME_TYPE_PUSH_PROMISE:
       plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_PUSH_PROMISE, frame);
       success = h2_frame_emit_push_promise(parser, bb, (h2_frame_push_promise_t *) frame);
+      plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_PUSH_PROMISE_SENT, frame);
       break;
 
     case FRAME_TYPE_PING:
       plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_PING, frame);
       success = h2_frame_emit_ping(parser, bb, (h2_frame_ping_t *) frame);
+      plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_PING_SENT, frame);
       break;
 
     case FRAME_TYPE_GOAWAY:
       plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_GOAWAY, frame);
       success = h2_frame_emit_goaway(parser, bb, (h2_frame_goaway_t *) frame);
+      plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_GOAWAY_SENT, frame);
       break;
 
     case FRAME_TYPE_WINDOW_UPDATE:
       plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_WINDOW_UPDATE, frame);
       success = h2_frame_emit_window_update(parser, bb, (h2_frame_window_update_t *) frame);
+      plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_WINDOW_UPDATE_SENT, frame);
       break;
 
     case FRAME_TYPE_CONTINUATION:
       plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_CONTINUATION, frame);
       success = h2_frame_emit_continuation(parser, bb, (h2_frame_continuation_t *) frame);
+      plugin_invoke(parser->plugin_invoker, OUTGOING_FRAME_CONTINUATION_SENT, frame);
       break;
 
     default:

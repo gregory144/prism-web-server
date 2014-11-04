@@ -82,4 +82,6 @@ enum h2_error_code_e {
 
 };
 
+const char * h2_error_to_string(enum h2_error_code_e code);
+
 #endif

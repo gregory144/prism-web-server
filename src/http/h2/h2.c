@@ -21,22 +21,6 @@
 const char * H2_CONNECTION_PREFACE = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 const size_t H2_CONNECTION_PREFACE_LENGTH = 24;
 
-static const char * const H2_ERRORS[] = {
-  "NO_ERROR",
-  "PROTOCOL_ERROR",
-  "INTERNAL_ERROR",
-  "FLOW_CONTROL_ERROR",
-  "SETTINGS_TIMEOUT",
-  "STREAM_CLOSED",
-  "FRAME_SIZE_ERROR",
-  "REFUSED_STREAM",
-  "CANCEL",
-  "COMPRESSION_ERROR",
-  "CONNECT_ERROR",
-  "ENHANCE_YOUR_CALM",
-  "INADEQUATE_SECURITY"
-};
-
 static const char * const HTTP2_CIPHERS[] = {
   "ECDHE-RSA-AES128-GCM-SHA256",
   "ECDHE-ECDSA-AES128-GCM-SHA256",
@@ -300,21 +284,16 @@ bool h2_frame_write(const h2_t * const h2, h2_frame_t * const frame)
 
 static bool h2_send_goaway(const h2_t * const h2, enum h2_error_code_e error_code, char * debug)
 {
-  size_t last_stream_id_length = 4; // 1 bit + 31 bits
-  size_t error_code_length = 4; // 32 bits
-
   size_t debug_length = 0;
 
   if (debug) {
     debug_length = strlen(debug);
   }
 
-  size_t payload_length = last_stream_id_length + error_code_length + debug_length;
-
   uint8_t flags = 0; // no flags
 
-  h2_frame_goaway_t * frame = (h2_frame_goaway_t *) h2_frame_init(&h2->frame_parser, payload_length,
-      FRAME_TYPE_GOAWAY, flags, 0);
+  h2_frame_goaway_t * frame = (h2_frame_goaway_t *) h2_frame_init(&h2->frame_parser, FRAME_TYPE_GOAWAY,
+      flags, 0);
   frame->stream_id = h2->last_stream_id;
   frame->error_code = error_code;
   frame->debug_data = (uint8_t *) debug;
@@ -326,13 +305,9 @@ static bool h2_send_goaway(const h2_t * const h2, enum h2_error_code_e error_cod
 static bool h2_send_rst_stream(const h2_t * const h2, uint32_t stream_id,
                                enum h2_error_code_e error_code)
 {
-  size_t error_code_length = 4; // 32 bits
-
-  size_t payload_length = error_code_length;
-
   uint8_t flags = 0; // no flags
 
-  h2_frame_rst_stream_t * frame = (h2_frame_rst_stream_t *) h2_frame_init(&h2->frame_parser, payload_length,
+  h2_frame_rst_stream_t * frame = (h2_frame_rst_stream_t *) h2_frame_init(&h2->frame_parser,
       FRAME_TYPE_RST_STREAM, flags, stream_id);
   frame->error_code = error_code;
 
@@ -424,9 +399,8 @@ static bool h2_send_headers(h2_t * const h2, const h2_stream_t * const stream,
   } else {
     flags |= FLAG_END_HEADERS;
   }
-  size_t first_frame_length = first_fragment_length; // + padding + priority
-  h2_frame_headers_t * frame = (h2_frame_headers_t *) h2_frame_init(&h2->frame_parser, first_frame_length,
-                               FRAME_TYPE_HEADERS, flags, stream->id);
+  h2_frame_headers_t * frame = (h2_frame_headers_t *) h2_frame_init(&h2->frame_parser,
+      FRAME_TYPE_HEADERS, flags, stream->id);
   frame->header_block_fragment = hpack_buf;
   frame->header_block_fragment_length = first_fragment_length;
 
@@ -459,7 +433,7 @@ static bool h2_send_headers(h2_t * const h2, const h2_stream_t * const stream,
       }
 
       h2_frame_continuation_t * cont_frame = (h2_frame_continuation_t *) h2_frame_init(&h2->frame_parser,
-          continuation_frame_length, FRAME_TYPE_CONTINUATION, continuation_flags, stream->id);
+          FRAME_TYPE_CONTINUATION, continuation_flags, stream->id);
       cont_frame->header_block_fragment = hpack_buf + header_block_pos;
       cont_frame->header_block_fragment_length = continuation_frame_length;
 
@@ -515,9 +489,8 @@ static bool h2_send_push_promise(h2_t * const h2, const h2_stream_t * const push
   } else {
     flags |= FLAG_END_HEADERS;
   }
-  size_t first_frame_length = first_fragment_length + stream_id_length; // + padding
   h2_frame_push_promise_t * frame = (h2_frame_push_promise_t *) h2_frame_init(&h2->frame_parser,
-      first_frame_length, FRAME_TYPE_PUSH_PROMISE, flags, associated_stream_id);
+      FRAME_TYPE_PUSH_PROMISE, flags, associated_stream_id);
   frame->promised_stream_id = pushed_stream->id;
   frame->header_block_fragment = hpack_buf;
   frame->header_block_fragment_length = first_fragment_length;
@@ -546,7 +519,7 @@ static bool h2_send_push_promise(h2_t * const h2, const h2_stream_t * const push
       }
 
       h2_frame_continuation_t * cont_frame = (h2_frame_continuation_t *) h2_frame_init(&h2->frame_parser,
-          continuation_frame_length, FRAME_TYPE_CONTINUATION, continuation_flags, associated_stream_id);
+          FRAME_TYPE_CONTINUATION, continuation_flags, associated_stream_id);
       cont_frame->header_block_fragment = hpack_buf + header_block_pos;
       cont_frame->header_block_fragment_length = continuation_frame_length;
 
@@ -575,8 +548,8 @@ static bool h2_send_data_frame(const h2_t * const h2, const h2_stream_t * const 
     flags |= FLAG_END_STREAM;
   }
 
-  h2_frame_data_t * frame = (h2_frame_data_t *) h2_frame_init(&h2->frame_parser, queued_frame->buf_length,
-      FRAME_TYPE_DATA, flags, stream->id);
+  h2_frame_data_t * frame = (h2_frame_data_t *) h2_frame_init(&h2->frame_parser, FRAME_TYPE_DATA,
+      flags, stream->id);
   frame->payload = queued_frame->buf;
   frame->payload_length = queued_frame->buf_length;
 
@@ -780,7 +753,7 @@ static bool h2_send_settings_ack(const h2_t * const h2)
     flags |= FLAG_ACK;
   }
 
-  h2_frame_settings_t * frame = (h2_frame_settings_t *) h2_frame_init(&h2->frame_parser, 0,
+  h2_frame_settings_t * frame = (h2_frame_settings_t *) h2_frame_init(&h2->frame_parser,
       FRAME_TYPE_SETTINGS, flags, 0);
 
   log_append(h2->log, LOG_DEBUG, "Writing settings ack frame");
@@ -797,7 +770,7 @@ static bool h2_send_ping_ack(const h2_t * const h2, uint8_t * opaque_data)
     flags |= FLAG_ACK;
   }
 
-  h2_frame_ping_t * frame = (h2_frame_ping_t *) h2_frame_init(&h2->frame_parser, PING_OPAQUE_DATA_LENGTH, FRAME_TYPE_PING, flags, 0);
+  h2_frame_ping_t * frame = (h2_frame_ping_t *) h2_frame_init(&h2->frame_parser, FRAME_TYPE_PING, flags, 0);
   frame->opaque_data = opaque_data;
 
   log_append(h2->log, LOG_DEBUG, "Writing ping ack frame");
@@ -808,13 +781,10 @@ static bool h2_send_ping_ack(const h2_t * const h2, uint8_t * opaque_data)
 static bool h2_send_window_update(const h2_t * const h2, const uint32_t stream_id,
                                   const size_t increment)
 {
-
-  size_t payload_length = 4;
-
   uint8_t flags = 0; // no flags
 
   h2_frame_window_update_t * frame = (h2_frame_window_update_t *) h2_frame_init(&h2->frame_parser,
-      payload_length, FRAME_TYPE_WINDOW_UPDATE, flags, stream_id);
+      FRAME_TYPE_WINDOW_UPDATE, flags, stream_id);
   frame->increment = increment;
 
   log_append(h2->log, LOG_DEBUG, "Writing window update frame");
@@ -1334,8 +1304,8 @@ static bool h2_incoming_frame_window_update(h2_t * const h2,
 
 static bool h2_incoming_frame_rst_stream(h2_t * const h2, h2_frame_rst_stream_t * const frame)
 {
-  log_append(h2->log, LOG_WARN, "Received reset stream: stream #%d, error code: %s (%d)",
-             frame->stream_id, H2_ERRORS[frame->error_code], frame->error_code);
+  log_append(h2->log, LOG_WARN, "Received reset stream: stream #%d, error code: %s (0x%x)",
+             frame->stream_id, h2_error_to_string(frame->error_code), frame->error_code);
 
   h2_stream_t * stream = h2_stream_get(h2, frame->stream_id);
 
@@ -1364,13 +1334,13 @@ static bool h2_incoming_frame_priority(h2_t * const h2, h2_frame_priority_t * co
 static bool h2_incoming_frame_goaway(h2_t * const h2, h2_frame_goaway_t * const frame)
 {
   if (frame->error_code == H2_ERROR_NO_ERROR) {
-    log_append(h2->log, LOG_TRACE, "Received goaway, last stream: %d, error code: %s (%d), debug_data: %s",
-               frame->last_stream_id, H2_ERRORS[frame->error_code],
+    log_append(h2->log, LOG_TRACE, "Received goaway, last stream: %d, error code: %s (0x%x), debug_data: %s",
+               frame->last_stream_id, h2_error_to_string(frame->error_code),
                frame->error_code, frame->debug_data);
     h2_mark_closing(h2);
   } else {
-    log_append(h2->log, LOG_ERROR, "Received goaway, last stream: %d, error code: %s (%d), debug_data: %s",
-               frame->last_stream_id, H2_ERRORS[frame->error_code],
+    log_append(h2->log, LOG_ERROR, "Received goaway, last stream: %d, error code: %s (0x%x), debug_data: %s",
+               frame->last_stream_id, h2_error_to_string(frame->error_code),
                frame->error_code, frame->debug_data);
   }
 
@@ -1532,9 +1502,15 @@ static bool h2_parse_error_cb(void * data, uint32_t stream_id, enum h2_error_cod
  */
 static bool h2_add_from_buffer(h2_t * const h2)
 {
-  bool cont = h2_frame_parse(&h2->frame_parser, h2->buffer, h2->buffer_length, &h2->buffer_position);
+  h2_frame_t * frame = h2_frame_parse(&h2->frame_parser, h2->buffer, h2->buffer_length, &h2->buffer_position);
 
-  return cont;
+  if (frame) {
+    free(frame);
+    return true;
+  } else {
+    return false;
+  }
+
 }
 
 /**

@@ -222,7 +222,7 @@ typedef struct {
 
 } h2_frame_parser_t;
 
-h2_frame_t * h2_frame_init(const h2_frame_parser_t * const parser, const uint32_t length, const uint8_t type,
+h2_frame_t * h2_frame_init(const h2_frame_parser_t * const parser, const uint8_t type,
                                   const uint8_t flags, const uint32_t stream_id);
 
 void h2_frame_free(h2_frame_t * const frame);

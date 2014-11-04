@@ -542,70 +542,70 @@ static bool framer_plugin_handler(plugin_t * plugin, client_t * client, enum plu
         return false;
       }
 
-    case OUTGOING_FRAME_DATA:
+    case OUTGOING_FRAME_DATA_SENT:
       {
         h2_frame_data_t * frame = va_arg(args, h2_frame_data_t *);
         framer_plugin_frame_data(plugin, client, frame, false);
         return false;
       }
 
-    case OUTGOING_FRAME_HEADERS:
+    case OUTGOING_FRAME_HEADERS_SENT:
       {
         h2_frame_headers_t * frame = va_arg(args, h2_frame_headers_t *);
         framer_plugin_frame_headers(plugin, client, frame, false);
         return false;
       }
 
-    case OUTGOING_FRAME_PUSH_PROMISE:
+    case OUTGOING_FRAME_PUSH_PROMISE_SENT:
       {
         h2_frame_push_promise_t * frame = va_arg(args, h2_frame_push_promise_t *);
         framer_plugin_frame_push_promise(plugin, client, frame, false);
         return false;
       }
 
-    case OUTGOING_FRAME_PRIORITY:
+    case OUTGOING_FRAME_PRIORITY_SENT:
       {
         h2_frame_priority_t * frame = va_arg(args, h2_frame_priority_t *);
         framer_plugin_frame_priority(plugin, client, frame, false);
         return false;
       }
 
-    case OUTGOING_FRAME_RST_STREAM:
+    case OUTGOING_FRAME_RST_STREAM_SENT:
       {
         h2_frame_rst_stream_t * frame = va_arg(args, h2_frame_rst_stream_t *);
         framer_plugin_frame_rst_stream(plugin, client, frame, false);
         return false;
       }
 
-    case OUTGOING_FRAME_SETTINGS:
+    case OUTGOING_FRAME_SETTINGS_SENT:
       {
         h2_frame_settings_t * frame = va_arg(args, h2_frame_settings_t *);
         framer_plugin_frame_settings(plugin, client, frame, false);
         return false;
       }
 
-    case OUTGOING_FRAME_PING:
+    case OUTGOING_FRAME_PING_SENT:
       {
         h2_frame_ping_t * frame = va_arg(args, h2_frame_ping_t *);
         framer_plugin_frame_ping(plugin, client, frame, false);
         return false;
       }
 
-    case OUTGOING_FRAME_GOAWAY:
+    case OUTGOING_FRAME_GOAWAY_SENT:
       {
         h2_frame_goaway_t * frame = va_arg(args, h2_frame_goaway_t *);
         framer_plugin_frame_goaway(plugin, client, frame, false);
         return false;
       }
 
-    case OUTGOING_FRAME_WINDOW_UPDATE:
+    case OUTGOING_FRAME_WINDOW_UPDATE_SENT:
       {
         h2_frame_window_update_t * frame = va_arg(args, h2_frame_window_update_t *);
         framer_plugin_frame_window_update(plugin, client, frame, false);
         return false;
       }
 
-    case OUTGOING_FRAME_CONTINUATION:
+    case OUTGOING_FRAME_CONTINUATION_SENT:
       {
         h2_frame_continuation_t * frame = va_arg(args, h2_frame_continuation_t *);
         framer_plugin_frame_continuation(plugin, client, frame, false);
