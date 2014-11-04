@@ -825,7 +825,7 @@ static bool h2_frame_is_valid(const h2_frame_parser_t * const parser, h2_frame_t
 }
 
 
-bool h2_frame_parse(const h2_frame_parser_t * const parser, uint8_t * const buffer,
+h2_frame_t * h2_frame_parse(const h2_frame_parser_t * const parser, uint8_t * const buffer,
     const size_t buffer_length, size_t * buffer_position)
 {
   log_append(parser->log, LOG_TRACE, "Reading %ld bytes", buffer_length);
@@ -833,7 +833,7 @@ bool h2_frame_parse(const h2_frame_parser_t * const parser, uint8_t * const buff
   if (*buffer_position == buffer_length) {
     log_append(parser->log, LOG_TRACE, "Finished with current buffer");
 
-    return false;
+    return NULL;
   }
 
   // is there enough in the buffer to read a frame header?
@@ -841,7 +841,7 @@ bool h2_frame_parse(const h2_frame_parser_t * const parser, uint8_t * const buff
     // TODO off-by-one?
     log_append(parser->log, LOG_TRACE, "Not enough in buffer to read frame header");
 
-    return false;
+    return NULL;
   }
 
   uint8_t * pos = buffer + *buffer_position;
@@ -861,22 +861,23 @@ bool h2_frame_parse(const h2_frame_parser_t * const parser, uint8_t * const buff
     // is this a valid frame type?
     if (!h2_frame_is_valid_frame_type(frame_type)) {
       // invalid frame type is always a connection error
-      parser->parse_error(parser->data, 0, H2_ERROR_PROTOCOL_ERROR,
-          "Invalid frame type: %d", frame_type);
-      return false;
+      parser->parse_error(parser->data, 0, H2_ERROR_PROTOCOL_ERROR, "Invalid frame type: 0x%x", frame_type);
+      return NULL;
     }
 
     // TODO - if the previous frame type was headers, and headers haven't been completed,
     // this frame must be a continuation frame, or else this is a protocol error
 
-    h2_frame_t * frame = h2_frame_init(parser, frame_length, frame_type, frame_flags, stream_id);
+    h2_frame_t * frame = h2_frame_init(parser, frame_type, frame_flags, stream_id);
+    frame->length = frame_length;
 
     if (frame == NULL) {
       parser->parse_error(parser->data, 0, H2_ERROR_PROTOCOL_ERROR,
           "Unhandled frame type: %d", frame_type);
-      return false;
+      return NULL;
     } else if (!h2_frame_is_valid(parser, frame)) {
-      return false;
+      free(frame);
+      return NULL;
     }
 
     *buffer_position += FRAME_HEADER_SIZE;
@@ -944,16 +945,17 @@ bool h2_frame_parse(const h2_frame_parser_t * const parser, uint8_t * const buff
         success = false;
     }
 
+    *buffer_position += frame->length;
+
     if (success) {
       success = success && parser->incoming_frame(parser->data, frame);
+      return frame;
+    } else {
+      free(frame);
     }
-
-    *buffer_position += frame->length;
-    free(frame);
-    return success;
   } else {
     log_append(parser->log, LOG_TRACE, "Not enough in buffer to read %ld byte frame payload", frame_length);
-    return false;
   }
 
+  return NULL;
 }

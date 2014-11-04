@@ -48,6 +48,7 @@ check_*.trs
 /src/huffman/check_huffman
 /src/huffman/huffman
 /src/http/check_request
+/src/http/h2/check_h2_frame
 /src/util/check_util
 /src/util/check_multimap
 /src/util/check_binary_buffer

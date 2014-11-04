@@ -114,6 +114,8 @@ bool binary_buffer_write_curr_index(binary_buffer_t * const buffer, uint8_t valu
 
 void binary_buffer_free(binary_buffer_t * const buffer)
 {
-  free(buffer->buf);
+  if (buffer->buf) {
+    free(buffer->buf);
+  }
 }
 

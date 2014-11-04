@@ -234,7 +234,7 @@ bool h2_frame_emit(const h2_frame_parser_t * const parser, binary_buffer_t * con
 bool h2_parse_settings_payload(const h2_frame_parser_t * const parser, uint8_t * buffer, size_t buffer_length,
     size_t * num_settings, h2_setting_t * settings);
 
-bool h2_frame_parse(const h2_frame_parser_t * const parser, uint8_t * buffer,
+h2_frame_t * h2_frame_parse(const h2_frame_parser_t * const parser, uint8_t * buffer,
     size_t  buffer_length, size_t * buffer_position_ptr);
 
 #endif
