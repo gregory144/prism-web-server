@@ -141,6 +141,11 @@ static void h2_stream_mark_closing(h2_t * const h2, h2_stream_t * const stream)
 
 }
 
+static bool h2_parse_error_cb(void * data, uint32_t stream_id, enum h2_error_code_e error_code,
+    char * format, ...);
+
+static bool h2_incoming_frame(void * data, const h2_frame_t * const frame);
+
 h2_t * h2_init(void * const data, log_context_t * log, log_context_t * hpack_log, const char * tls_version,
                const char * cipher, int cipher_key_size_in_bits, struct plugin_invoker_t * plugin_invoker,
                const h2_write_cb writer, const h2_close_cb closer, const h2_request_init_cb request_init)
@@ -192,6 +197,9 @@ h2_t * h2_init(void * const data, log_context_t * log, log_context_t * hpack_log
   h2->decoding_context = NULL;
   h2->streams = NULL;
 
+  h2->frame_parser.data = h2;
+  h2->frame_parser.parse_error = h2_parse_error_cb;
+  h2->frame_parser.incoming_frame = h2_incoming_frame;
   h2->frame_parser.log = h2->log;
   h2->frame_parser.plugin_invoker = h2->plugin_invoker;
 
@@ -332,34 +340,23 @@ static bool h2_send_rst_stream(const h2_t * const h2, uint32_t stream_id,
 }
 
 static bool h2_emit_error_and_close(h2_t * const h2, uint32_t stream_id,
-                                 enum h2_error_code_e error_code, char * format, ...)
+                                 enum h2_error_code_e error_code, char * string)
 {
-  size_t buf_length = 1024;
-  char buf[buf_length];
-
-  if (format) {
-    va_list ap;
-    va_start(ap, format);
-    vsnprintf(buf, buf_length, format, ap);
-    va_end(ap);
-
-    if (error_code != H2_ERROR_NO_ERROR) {
-      log_append(h2->log, LOG_ERROR, buf);
-    }
+  if (error_code != H2_ERROR_NO_ERROR && string) {
+    log_append(h2->log, LOG_ERROR, string);
   }
 
   if (stream_id > 0) {
 
-    bool success = h2_send_rst_stream(h2, stream_id, error_code);
-
-    if (!success) {
+    if (!h2_send_rst_stream(h2, stream_id, error_code)) {
       log_append(h2->log, LOG_ERROR, "Unable to emit reset stream frame");
+      return false;
     }
 
-    return success;
+    return true;
 
   } else {
-    bool success = h2_send_goaway(h2, error_code, format ? buf : NULL);
+    bool success = h2_send_goaway(h2, error_code, string ? string : NULL);
 
     if (!success) {
       log_append(h2->log, LOG_ERROR, "Unable to emit goaway frame");
@@ -369,6 +366,23 @@ static bool h2_emit_error_and_close(h2_t * const h2, uint32_t stream_id,
 
     return success;
   }
+
+}
+
+static bool h2_emit_error_and_close_va(h2_t * const h2, uint32_t stream_id,
+                                 enum h2_error_code_e error_code, char * format, ...)
+{
+  size_t buf_length = 1024;
+  char buf[buf_length];
+
+  if (error_code != H2_ERROR_NO_ERROR && format) {
+    va_list ap;
+    va_start(ap, format);
+    vsnprintf(buf, buf_length, format, ap);
+    va_end(ap);
+  }
+
+  return h2_emit_error_and_close(h2, stream_id, error_code, format ? buf : NULL);
 
 }
 
@@ -897,7 +911,7 @@ static bool h2_setting_set(h2_t * const h2, const h2_setting_t * setting)
       break;
 
     default:
-      h2_emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR, "Invalid setting: %d", setting->id);
+      h2_emit_error_and_close_va(h2, 0, H2_ERROR_PROTOCOL_ERROR, "Invalid setting: %d", setting->id);
       return false;
   }
 
@@ -920,7 +934,7 @@ static h2_stream_t * h2_stream_init(h2_t * const h2, const uint32_t stream_id)
   stream = malloc(sizeof(h2_stream_t));
 
   if (!stream) {
-    h2_emit_error_and_close(h2, stream_id, H2_ERROR_INTERNAL_ERROR,
+    h2_emit_error_and_close_va(h2, stream_id, H2_ERROR_INTERNAL_ERROR,
                          "Unable to initialize stream: %ld", stream_id);
     return NULL;
   }
@@ -930,7 +944,7 @@ static h2_stream_t * h2_stream_init(h2_t * const h2, const uint32_t stream_id)
   long * stream_id_key = malloc(sizeof(long));
 
   if (!stream_id_key) {
-    h2_emit_error_and_close(h2, stream_id, H2_ERROR_INTERNAL_ERROR,
+    h2_emit_error_and_close_va(h2, stream_id, H2_ERROR_INTERNAL_ERROR,
                          "Unable to initialize stream (stream identifier): %ld", stream_id);
     free(stream);
     return NULL;
@@ -1020,7 +1034,7 @@ static bool h2_incoming_frame_data(h2_t * const h2, const h2_frame_data_t * cons
   h2_stream_t * stream = h2_stream_get(h2, frame->stream_id);
 
   if (!stream) {
-    h2_emit_error_and_close(h2, frame->stream_id, H2_ERROR_PROTOCOL_ERROR,
+    h2_emit_error_and_close_va(h2, frame->stream_id, H2_ERROR_PROTOCOL_ERROR,
                          "Unable to find stream #%d", frame->stream_id);
     return true;
   }
@@ -1038,8 +1052,8 @@ static bool h2_incoming_frame_data(h2_t * const h2, const h2_frame_data_t * cons
   // do we need to send WINDOW_UPDATE?
   if (h2->incoming_window_size < 0) {
 
-    h2_emit_error_and_close(h2, 0, H2_ERROR_FLOW_CONTROL_ERROR, "Connection window size is less than 0: %ld",
-                         h2->incoming_window_size);
+    h2_emit_error_and_close_va(h2, 0, H2_ERROR_FLOW_CONTROL_ERROR,
+        "Connection window size is less than 0: %ld", h2->incoming_window_size);
 
   } else if (h2->incoming_window_size < 0.75 * DEFAULT_INITIAL_WINDOW_SIZE) {
 
@@ -1056,7 +1070,7 @@ static bool h2_incoming_frame_data(h2_t * const h2, const h2_frame_data_t * cons
 
   if (stream->incoming_window_size < 0) {
 
-    h2_emit_error_and_close(h2, stream->id, H2_ERROR_FLOW_CONTROL_ERROR,
+    h2_emit_error_and_close_va(h2, stream->id, H2_ERROR_FLOW_CONTROL_ERROR,
                          "Stream #%d: window size is less than 0: %ld", stream->incoming_window_size);
 
   } else if (!last_data_frame && (stream->incoming_window_size < 0.75 * DEFAULT_INITIAL_WINDOW_SIZE)) {
@@ -1229,7 +1243,7 @@ static bool h2_incoming_frame_settings(h2_t * const h2, const h2_frame_settings_
   if (FRAME_FLAG(frame, FLAG_ACK)) {
 
     if (frame->length != 0) {
-      h2_emit_error_and_close(h2, 0, H2_ERROR_FRAME_SIZE_ERROR,
+      h2_emit_error_and_close_va(h2, 0, H2_ERROR_FRAME_SIZE_ERROR,
                            "Non-zero frame size for ACK settings frame: %ld", frame->length);
       return false;
     }
@@ -1288,7 +1302,7 @@ static bool h2_increment_stream_window_size(h2_t * const h2, const uint32_t stre
   h2_stream_t * stream = h2_stream_get(h2, stream_id);
 
   if (!stream) {
-    h2_emit_error_and_close(h2, stream_id, H2_ERROR_PROTOCOL_ERROR,
+    h2_emit_error_and_close_va(h2, stream_id, H2_ERROR_PROTOCOL_ERROR,
                          "Could not find stream #%d to update it's window size", stream_id);
     return false;
   }
@@ -1335,7 +1349,7 @@ static bool h2_incoming_frame_priority(h2_t * const h2, h2_frame_priority_t * co
   h2_stream_t * stream = h2_stream_get(h2, frame->stream_id);
 
   if (!stream) {
-    h2_emit_error_and_close(h2, frame->stream_id, H2_ERROR_PROTOCOL_ERROR, "Unknown stream id: %d",
+    h2_emit_error_and_close_va(h2, frame->stream_id, H2_ERROR_PROTOCOL_ERROR, "Unknown stream id: %d",
                          frame->stream_id);
     return true;
   }
@@ -1363,6 +1377,80 @@ static bool h2_incoming_frame_goaway(h2_t * const h2, h2_frame_goaway_t * const 
   free(frame->debug_data);
 
   return true;
+}
+
+static bool h2_incoming_frame(void * data, const h2_frame_t * const frame)
+{
+  h2_t * h2 = data;
+  bool success = false;
+
+  if (!h2->received_settings && frame->type != FRAME_TYPE_SETTINGS) {
+    h2_emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR, "Expected settings frame");
+    return false;
+  }
+
+  switch (frame->type) {
+    case FRAME_TYPE_DATA:
+      plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_DATA, frame, h2->buffer_position);
+      success = h2_incoming_frame_data(h2, (h2_frame_data_t *) frame);
+      break;
+
+    case FRAME_TYPE_HEADERS:
+      plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_HEADERS, frame, h2->buffer_position);
+      success = h2_incoming_frame_headers(h2, (h2_frame_headers_t *) frame);
+      break;
+
+    case FRAME_TYPE_PRIORITY:
+      plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_PRIORITY, frame, h2->buffer_position);
+      success = h2_incoming_frame_priority(h2, (h2_frame_priority_t *) frame);
+      break;
+
+    case FRAME_TYPE_RST_STREAM:
+      plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_RST_STREAM, frame, h2->buffer_position);
+      success = h2_incoming_frame_rst_stream(h2, (h2_frame_rst_stream_t *) frame);
+      break;
+
+    case FRAME_TYPE_SETTINGS:
+      plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_SETTINGS, frame, h2->buffer_position);
+      success = h2_incoming_frame_settings(h2, (h2_frame_settings_t *) frame);
+      break;
+
+    case FRAME_TYPE_PUSH_PROMISE:
+      h2_emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR, "Server does not accept PUSH_PROMISE frames");
+      success = false;
+      break;
+
+    case FRAME_TYPE_PING:
+      plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_PING, frame, h2->buffer_position);
+      success = h2_incoming_frame_ping(h2, (h2_frame_ping_t *) frame);
+      break;
+
+    case FRAME_TYPE_GOAWAY:
+      plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_GOAWAY, frame, h2->buffer_position);
+      success = h2_incoming_frame_goaway(h2, (h2_frame_goaway_t *) frame);
+      break;
+
+    case FRAME_TYPE_WINDOW_UPDATE:
+      plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_WINDOW_UPDATE, frame, h2->buffer_position);
+      success = h2_incoming_frame_window_update(h2, (h2_frame_window_update_t *) frame);
+      break;
+
+    case FRAME_TYPE_CONTINUATION:
+      plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_CONTINUATION, frame, h2->buffer_position);
+      success = h2_incoming_frame_continuation(h2, (h2_frame_continuation_t *) frame);
+      break;
+
+    default:
+      h2_emit_error_and_close_va(h2, 0, H2_ERROR_INTERNAL_ERROR, "Unhandled frame type: %d", frame->type);
+      success = false;
+      break;
+  }
+
+  if (success) {
+    plugin_invoke(h2->plugin_invoker, POSTPROCESS_INCOMING_FRAME, frame);
+  }
+
+  return success;
 }
 
 bool h2_settings_apply(h2_t * const h2, char * base64)
@@ -1424,6 +1512,18 @@ static bool h2_verify_tls_settings(h2_t * const h2)
   return true;
 }
 
+static bool h2_parse_error_cb(void * data, uint32_t stream_id, enum h2_error_code_e error_code,
+    char * format, ...)
+{
+  h2_t * h2 = data;
+  va_list args;
+
+  va_start(args, format);
+  bool ret = h2_emit_error_and_close_va(h2, stream_id, error_code, format, args);
+  va_end(args);
+  return ret;
+}
+
 /**
  * Processes the next frame in the buffer.
  *
@@ -1432,183 +1532,9 @@ static bool h2_verify_tls_settings(h2_t * const h2)
  */
 static bool h2_add_from_buffer(h2_t * const h2)
 {
-  log_append(h2->log, LOG_TRACE, "Reading %ld bytes", h2->buffer_length);
+  bool cont = h2_frame_parse(&h2->frame_parser, h2->buffer, h2->buffer_length, &h2->buffer_position);
 
-  if (h2->buffer_position == h2->buffer_length) {
-    log_append(h2->log, LOG_TRACE, "Finished with current buffer");
-
-    return false;
-  }
-
-  // is there enough in the buffer to read a frame header?
-  if (h2->buffer_position + FRAME_HEADER_SIZE > h2->buffer_length) {
-    // TODO off-by-one?
-    log_append(h2->log, LOG_TRACE, "Not enough in buffer to read frame header");
-
-    return false;
-  }
-
-  uint8_t * pos = h2->buffer + h2->buffer_position;
-
-  // Read the frame header
-  // get first 3 bytes
-  uint32_t frame_length = get_bits32(pos, 0xFFFFFF00) >> 8;
-
-  // is there enough in the buffer to read the frame payload?
-  if (h2->buffer_position + FRAME_HEADER_SIZE + frame_length <= h2->buffer_length) {
-
-    uint8_t frame_type = pos[3];
-    uint8_t frame_flags = pos[4];
-    // get 31 bits
-    uint32_t stream_id = get_bits32(pos + 5, 0x7FFFFFFF);
-
-    // is this a valid frame type?
-    if (!h2_frame_is_valid_frame_type(frame_type)) {
-      // invalid frame type is always a connection error
-      h2_emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR, "Invalid Frame Type: 0x%x, %d",
-          frame_type, frame_type);
-      return false;
-    }
-
-    // TODO - if the previous frame type was headers, and headers haven't been completed,
-    // this frame must be a continuation frame, or else this is a protocol error
-
-    h2_frame_t * frame = h2_frame_init(&h2->frame_parser, frame_length, frame_type, frame_flags, stream_id);
-
-    enum h2_error_code_e error_code;
-    char * error_string = NULL;
-    if (frame == NULL) {
-      h2_emit_error_and_close(h2, stream_id, H2_ERROR_PROTOCOL_ERROR, "Unhandled frame type");
-      return false;
-    } else if (!h2_frame_is_valid(&h2->frame_parser, frame, &error_code, &error_string)) {
-      h2_emit_error_and_close(h2, stream_id, error_code, error_string);
-      return false;
-    }
-
-    h2->buffer_position += FRAME_HEADER_SIZE;
-
-    plugin_invoke(h2->plugin_invoker, INCOMING_FRAME, frame, h2->buffer_position);
-
-    bool success = false;
-
-    if (!h2->received_settings && frame->type != FRAME_TYPE_SETTINGS) {
-      h2_emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR, "Expected Settings frame as first frame");
-    } else {
-      /**
-       * The h2_frame_parse_xxx functions should return true if the next frame should be allowed to
-       * continue to be processed. Connection errors usually prevent the rest of the frames from
-       * being processed.
-       */
-      switch (frame->type) {
-        case FRAME_TYPE_DATA:
-          success = h2_frame_parse_data(&h2->frame_parser, h2->buffer + h2->buffer_position,
-              (h2_frame_data_t *) frame);
-          if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_DATA,
-                                       frame, h2->buffer_position);
-
-          success = success && h2_incoming_frame_data(h2, (h2_frame_data_t *) frame);
-          break;
-
-        case FRAME_TYPE_HEADERS:
-          success = h2_frame_parse_headers(&h2->frame_parser, h2->buffer + h2->buffer_position,
-              (h2_frame_headers_t *) frame);
-
-          if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_HEADERS,
-                                       frame, h2->buffer_position);
-
-          success = success && h2_incoming_frame_headers(h2, (h2_frame_headers_t *) frame);
-          break;
-
-        case FRAME_TYPE_PRIORITY:
-          success = h2_frame_parse_priority(&h2->frame_parser, h2->buffer + h2->buffer_position,
-              (h2_frame_priority_t *) frame);
-
-          if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_PRIORITY,
-                                       frame, h2->buffer_position);
-
-          success = success && h2_incoming_frame_priority(h2, (h2_frame_priority_t *) frame);
-          break;
-
-        case FRAME_TYPE_RST_STREAM:
-          success = h2_frame_parse_rst_stream(&h2->frame_parser, h2->buffer + h2->buffer_position,
-                (h2_frame_rst_stream_t *) frame);
-
-          if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_RST_STREAM,
-                                       frame, h2->buffer_position);
-
-          success = success && h2_incoming_frame_rst_stream(h2, (h2_frame_rst_stream_t *) frame);
-          break;
-
-        case FRAME_TYPE_SETTINGS:
-          success = h2_frame_parse_settings(&h2->frame_parser, h2->buffer + h2->buffer_position,
-              (h2_frame_settings_t *) frame);
-
-          if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_SETTINGS,
-                                       frame, h2->buffer_position);
-
-          success = success && h2_incoming_frame_settings(h2, (h2_frame_settings_t *) frame);
-          break;
-
-        case FRAME_TYPE_PUSH_PROMISE:
-          h2_emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR, "Server does not accept PUSH_PROMISE frames");
-          return false;
-
-        case FRAME_TYPE_PING:
-          success = h2_frame_parse_ping(&h2->frame_parser, h2->buffer + h2->buffer_position,
-              (h2_frame_ping_t *) frame);
-
-          if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_PING,
-                                       frame, h2->buffer_position);
-
-          success = success && h2_incoming_frame_ping(h2, (h2_frame_ping_t *) frame);
-          break;
-
-        case FRAME_TYPE_GOAWAY:
-          success = h2_frame_parse_goaway(&h2->frame_parser, h2->buffer + h2->buffer_position,
-              (h2_frame_goaway_t *) frame);
-
-          if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_GOAWAY,
-                                       frame, h2->buffer_position);
-
-          success = success && h2_incoming_frame_goaway(h2, (h2_frame_goaway_t *) frame);
-          break;
-
-        case FRAME_TYPE_WINDOW_UPDATE:
-          success = h2_frame_parse_window_update(&h2->frame_parser, h2->buffer + h2->buffer_position,
-              (h2_frame_window_update_t *) frame);
-
-          if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_WINDOW_UPDATE,
-                                       frame, h2->buffer_position);
-
-          success = success && h2_incoming_frame_window_update(h2, (h2_frame_window_update_t *) frame);
-          break;
-
-        case FRAME_TYPE_CONTINUATION:
-          success = h2_frame_parse_continuation(&h2->frame_parser, h2->buffer + h2->buffer_position,
-            (h2_frame_continuation_t *) frame);
-
-          if (success) plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_CONTINUATION,
-                                       frame, h2->buffer_position);
-
-          success = success && h2_incoming_frame_continuation(h2, (h2_frame_continuation_t *) frame);
-          break;
-
-        default:
-          h2_emit_error_and_close(h2, 0, H2_ERROR_INTERNAL_ERROR, "Unhandled frame type: %d", frame->type);
-          return false;
-      }
-    }
-
-    plugin_invoke(h2->plugin_invoker, POSTPROCESS_INCOMING_FRAME, frame);
-
-    h2->buffer_position += frame->length;
-    free(frame);
-    return success;
-  } else {
-    log_append(h2->log, LOG_TRACE, "Not enough in buffer to read %ld byte frame payload", frame_length);
-  }
-
-  return false;
+  return cont;
 }
 
 /**

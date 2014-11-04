@@ -205,11 +205,20 @@ typedef struct {
 
 } h2_frame_headers_t;
 
+typedef bool (*h2_frame_incoming_cb)(void * data, const h2_frame_t * const frame);
+typedef bool (*h2_frame_parse_error_cb)(void * data, uint32_t stream_id,
+    enum h2_error_code_e, char * format, ...);
+
 typedef struct {
+
+  void * data;
 
   log_context_t * log;
 
   struct plugin_invoker_t * plugin_invoker;
+
+  h2_frame_incoming_cb incoming_frame;
+  h2_frame_parse_error_cb parse_error;
 
 } h2_frame_parser_t;
 
@@ -222,39 +231,10 @@ bool h2_frame_flag_get(const h2_frame_t * const frame, int mask);
 
 bool h2_frame_emit(const h2_frame_parser_t * const parser, binary_buffer_t * const buffer, h2_frame_t * frame);
 
-bool h2_frame_is_valid_frame_type(enum frame_type_e frame_type);
-
-bool h2_frame_is_valid(const h2_frame_parser_t * const parser, h2_frame_t * frame,
-    enum h2_error_code_e * error_code, char * * error_string);
-
-bool h2_frame_parse_data(const h2_frame_parser_t * const parser, uint8_t * buffer,
-    h2_frame_data_t * const frame);
-
-bool h2_frame_parse_headers(const h2_frame_parser_t * const parser, uint8_t * buffer,
-    h2_frame_headers_t * const frame);
-
-bool h2_frame_parse_settings(const h2_frame_parser_t * const parser, uint8_t * buffer,
-    h2_frame_settings_t * const frame);
-
-bool h2_frame_parse_ping(const h2_frame_parser_t * const parser, uint8_t * buffer,
-    h2_frame_ping_t * const frame);
-
-bool h2_frame_parse_window_update(const h2_frame_parser_t * const parser, uint8_t * buffer,
-    h2_frame_window_update_t * const frame);
-
-bool h2_frame_parse_rst_stream(const h2_frame_parser_t * const parser, uint8_t * buffer,
-    h2_frame_rst_stream_t * const frame);
-
-bool h2_frame_parse_priority(const h2_frame_parser_t * const parser, uint8_t * buffer,
-    h2_frame_priority_t * const frame);
-
-bool h2_frame_parse_goaway(const h2_frame_parser_t * const parser, uint8_t * buffer,
-    h2_frame_goaway_t * const frame);
-
-bool h2_frame_parse_continuation(const h2_frame_parser_t * const parser, uint8_t * buffer,
-    h2_frame_continuation_t * const frame);
-
 bool h2_parse_settings_payload(const h2_frame_parser_t * const parser, uint8_t * buffer, size_t buffer_length,
     size_t * num_settings, h2_setting_t * settings);
+
+bool h2_frame_parse(const h2_frame_parser_t * const parser, uint8_t * buffer,
+    size_t  buffer_length, size_t * buffer_position_ptr);
 
 #endif
