@@ -7,11 +7,15 @@
 
 #include "server.h"
 
+#define USE_TLS true
 #define MIN_PORT 1
 #define MAX_PORT 0xFFFF
 #define NUM_WORKERS 4
 #define SERVER_HOSTNAME "0.0.0.0"
 #define SERVER_PORT 8443
+#define DEFAULT_LOG_LEVEL LOG_WARN
+#define PRIVATE_KEY_FILE_NAME "key.pem"
+#define CERTIFICATE_FILE_NAME "cert.pem"
 
 static server_t * server = NULL;
 
@@ -23,7 +27,7 @@ void print_version()
 void print_help(char * cmd)
 {
   fprintf(stdout, "Usage: %s [OPTION]...\n", cmd);
-  fprintf(stdout, "Example: %s -p 8443 -n localhost -i\n\n", cmd);
+  fprintf(stdout, "Example: %s -p %d -n localhost -i\n\n", cmd, SERVER_PORT);
   fprintf(stdout, "  -p NUM\t\tport\n");
   fprintf(stdout, "  -n HOSTNAME\t\thostname\n");
   fprintf(stdout, "  -w NUM_WORKERS\tspecify the number of worker threads to handle requests\n");
@@ -31,6 +35,7 @@ void print_help(char * cmd)
   fprintf(stdout, "  -k FILE\t\tlocation of private key file (PEM)\n");
   fprintf(stdout, "  -c FILE\t\tlocation of certificate file (PEM)\n");
   fprintf(stdout, "  -e FILE\t\tlocation of a plugin shared library\n");
+  fprintf(stdout, "  -l LEVEL\t\tone of: (TRACE|DEBUG|INFO|WARN|ERROR|FATAL), default: WARN\n");
 
   print_version();
 }
@@ -38,13 +43,14 @@ void print_help(char * cmd)
 int main(int argc, char ** argv)
 {
   server_config_t * config = malloc(sizeof(server_config_t));
-  config->use_tls = true;
+  config->use_tls = USE_TLS;
   config->port = SERVER_PORT;
   config->hostname = SERVER_HOSTNAME;
   config->num_workers = NUM_WORKERS;
-  config->private_key_file = "key.pem";
-  config->cert_file = "cert.pem";
+  config->private_key_file = PRIVATE_KEY_FILE_NAME;
+  config->cert_file = CERTIFICATE_FILE_NAME;
   config->plugin_configs = NULL;
+  config->default_log_level = DEFAULT_LOG_LEVEL;
 
   plugin_config_t * current_plugin = NULL;
 
@@ -52,7 +58,7 @@ int main(int argc, char ** argv)
 
   opterr = 0;
 
-  while ((c = getopt(argc, argv, "e:p:n:k:c:w:ighv")) != -1) {
+  while ((c = getopt(argc, argv, "e:p:n:k:c:w:l:ighv")) != -1) {
     switch (c) {
       case 'p': // port
         config->port = strtol(optarg, NULL, 10);
@@ -91,6 +97,14 @@ int main(int argc, char ** argv)
         config->num_workers = strtol(optarg, NULL, 10);
         break;
 
+      case 'l': { // plugin file
+        enum log_level_e level = log_level_from_string(optarg);
+        if (level > 0) {
+          config->default_log_level = level;
+        }
+        break;
+      }
+
       case 'i': // insecure
         config->use_tls = false;
         break;
@@ -124,10 +138,10 @@ int main(int argc, char ** argv)
     exit(EXIT_FAILURE);
   }
 
-  enum log_level_e min_level = LOG_TRACE;
+  enum log_level_e min_level = config->default_log_level;
 
   log_context_init(&config->server_log, "SERVER", stdout, min_level, true);
-  log_context_init(&config->wire_log, "WIRE", stdout, LOG_WARN, true);
+  log_context_init(&config->wire_log, "WIRE", stdout, LOG_WARN, true); // wire log must be configured separately
   log_context_init(&config->data_log, "DATA", stdout, min_level, true);
   log_context_init(&config->http_log, "HTTP", stdout, min_level, true);
   log_context_init(&config->hpack_log, "HPACK", stdout, min_level, true);

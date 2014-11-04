@@ -5,12 +5,13 @@
 #include <stdio.h>
 
 enum log_level_e {
-  LOG_FATAL,
-  LOG_ERROR,
-  LOG_WARN,
-  LOG_INFO,
+  LOG_OFF,
+  LOG_TRACE,
   LOG_DEBUG,
-  LOG_TRACE
+  LOG_INFO,
+  LOG_WARN,
+  LOG_ERROR,
+  LOG_FATAL
 };
 
 typedef struct {
@@ -29,5 +30,7 @@ bool log_level_enabled(log_context_t * cxt, enum log_level_e level);
 void log_append(log_context_t * cxt, enum log_level_e level, char * format, ...);
 
 void log_buffer(log_context_t * cxt, enum log_level_e level, uint8_t * buffer, size_t length);
+
+enum log_level_e log_level_from_string(char * s);
 
 #endif

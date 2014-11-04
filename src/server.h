@@ -34,6 +34,8 @@ typedef struct {
 
   plugin_config_t * plugin_configs;
 
+  enum log_level_e default_log_level;
+
   log_context_t server_log;
   log_context_t wire_log;
   log_context_t data_log;

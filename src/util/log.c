@@ -10,12 +10,13 @@
 #include "util.h"
 
 static char * LEVEL_STR[] = {
-  "FATAL",
-  "ERROR",
-  "WARN",
-  "INFO",
+  NULL,
+  "TRACE",
   "DEBUG",
-  "TRACE"
+  "INFO",
+  "WARN",
+  "ERROR",
+  "FATAL"
 };
 
 log_context_t * log_context_init(log_context_t * ctx, char * name, FILE * fp, int min_level, bool enabled)
@@ -34,7 +35,7 @@ bool log_enabled(log_context_t * ctx)
 
 bool log_level_enabled(log_context_t * ctx, enum log_level_e level)
 {
-  return log_enabled(ctx) && level <= ctx->min_level;
+  return log_enabled(ctx) && level != 0 && level >= ctx->min_level;
 }
 
 static void log_append_string(log_context_t * ctx, enum log_level_e level, char * str)
@@ -99,3 +100,12 @@ void log_buffer(log_context_t * ctx, enum log_level_e level, uint8_t * buffer, s
 }
 
 
+enum log_level_e log_level_from_string(char * s)
+{
+  for (size_t i = 1; i < sizeof(LEVEL_STR) / sizeof(char*); i++) {
+    if (strcmp(s, LEVEL_STR[i]) == 0) {
+      return (enum log_level_e) i;
+    }
+  }
+  return 0;
+}
