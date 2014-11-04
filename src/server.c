@@ -508,7 +508,9 @@ int server_start(server_t * server)
     return 1;
   }
 
-  log_append(server->log, LOG_INFO, LOGO_STRING);
+  for (i = 0; i < LOGO_LINES_LENGTH; i++) {
+    log_append(server->log, LOG_INFO, (char *) LOGO_LINES[i]);
+  }
   log_append(server->log, LOG_INFO, "Server starting on %s:%d", server->config->hostname, server->config->port);
 
   uv_signal_start(&server->sigpipe_handler, server_sigpipe_handler, SIGPIPE);
