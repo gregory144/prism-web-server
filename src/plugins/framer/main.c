@@ -132,7 +132,7 @@ static void flags_to_string(char * buf, size_t buf_len, h2_frame_t * frame)
       }
 
       if (flags & FLAG_PADDED) {
-        strncat(buf, "END_PADDED, ", buf_len);
+        strncat(buf, "PADDED, ", buf_len);
       }
 
       break;
