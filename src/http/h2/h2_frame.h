@@ -37,6 +37,10 @@ enum frame_type_e {
 #define FRAME_TYPE_MIN FRAME_TYPE_DATA
 #define FRAME_TYPE_MAX FRAME_TYPE_CONTINUATION
 
+#define DEFAULT_PRIORITY_STREAM_EXCLUSIVE 0
+#define DEFAULT_PRIORITY_STREAM_DEPENDENCY 0
+#define DEFAULT_PRIORITY_WEIGHT 16
+
 /**
  * Frame flags
  */
@@ -221,6 +225,8 @@ typedef struct {
   h2_frame_parse_error_cb parse_error;
 
 } h2_frame_parser_t;
+
+char * frame_type_to_string(enum frame_type_e t);
 
 h2_frame_t * h2_frame_init(const h2_frame_parser_t * const parser, const uint8_t type,
                                   const uint8_t flags, const uint32_t stream_id);

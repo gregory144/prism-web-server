@@ -49,7 +49,7 @@ static bool parse_error_cb(void * data, uint32_t stream_id, enum h2_error_code_e
   va_end(args);
   ce->error_string = strdup(buf);
 
-  fprintf(stdout, "Parser error: stream id: %" PRIu32 ", error code: %s (0x%x), error_string: %s",
+  fprintf(stdout, "Parser error: stream id: %" PRIu32 ", error code: %s (0x%x), error_string: %s\n",
       stream_id, h2_error_to_string(error_code), error_code, buf);
 
   caught_errors[num_errors++] = ce;
@@ -107,10 +107,10 @@ void teardown()
 START_TEST(test_h2_frame_emit_ping_ack)
 {
   h2_frame_ping_t * frame = (h2_frame_ping_t *) h2_frame_init(&parser, FRAME_TYPE_PING, FLAG_ACK, 0);
-  ck_assert_int_eq(frame->stream_id, 0);
-  ck_assert_int_eq(frame->type, FRAME_TYPE_PING);
-  ck_assert_int_eq(frame->flags, FLAG_ACK);
-  ck_assert_int_eq(frame->length, 0);
+  ck_assert_uint_eq(frame->stream_id, 0);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_PING);
+  ck_assert_uint_eq(frame->flags, FLAG_ACK);
+  ck_assert_uint_eq(frame->length, 0);
 
   uint8_t d[] = {
     0xde, 0xad, 0xbe, 0xef,
@@ -120,59 +120,59 @@ START_TEST(test_h2_frame_emit_ping_ack)
 
   h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
 
-  ck_assert_int_eq(binary_buffer_size(&bb), 17);
-  ck_assert_int_eq(OUT(0), 0);
-  ck_assert_int_eq(OUT(1), 0);
-  ck_assert_int_eq(OUT(2), 8);
-  ck_assert_int_eq(OUT(3), FRAME_TYPE_PING);
-  ck_assert_int_eq(OUT(4), FLAG_ACK);
-  ck_assert_int_eq(OUT(5), 0);
-  ck_assert_int_eq(OUT(6), 0);
-  ck_assert_int_eq(OUT(7), 0);
-  ck_assert_int_eq(OUT(8), 0);
-  ck_assert_int_eq(OUT(9), 0xde);
-  ck_assert_int_eq(OUT(10), 0xad);
-  ck_assert_int_eq(OUT(11), 0xbe);
-  ck_assert_int_eq(OUT(12), 0xef);
-  ck_assert_int_eq(OUT(13), 0xde);
-  ck_assert_int_eq(OUT(14), 0xad);
-  ck_assert_int_eq(OUT(15), 0xbe);
-  ck_assert_int_eq(OUT(16), 0xef);
+  ck_assert_uint_eq(binary_buffer_size(&bb), 17);
+  ck_assert_uint_eq(OUT(0), 0);
+  ck_assert_uint_eq(OUT(1), 0);
+  ck_assert_uint_eq(OUT(2), 8);
+  ck_assert_uint_eq(OUT(3), FRAME_TYPE_PING);
+  ck_assert_uint_eq(OUT(4), FLAG_ACK);
+  ck_assert_uint_eq(OUT(5), 0);
+  ck_assert_uint_eq(OUT(6), 0);
+  ck_assert_uint_eq(OUT(7), 0);
+  ck_assert_uint_eq(OUT(8), 0);
+  ck_assert_uint_eq(OUT(9), 0xde);
+  ck_assert_uint_eq(OUT(10), 0xad);
+  ck_assert_uint_eq(OUT(11), 0xbe);
+  ck_assert_uint_eq(OUT(12), 0xef);
+  ck_assert_uint_eq(OUT(13), 0xde);
+  ck_assert_uint_eq(OUT(14), 0xad);
+  ck_assert_uint_eq(OUT(15), 0xbe);
+  ck_assert_uint_eq(OUT(16), 0xef);
 }
 END_TEST
 
 START_TEST(test_h2_frame_emit_data_empty)
 {
   h2_frame_data_t * frame = (h2_frame_data_t *) h2_frame_init(&parser, FRAME_TYPE_DATA, FLAG_END_STREAM, 1);
-  ck_assert_int_eq(frame->stream_id, 1);
-  ck_assert_int_eq(frame->type, FRAME_TYPE_DATA);
-  ck_assert_int_eq(frame->flags, FLAG_END_STREAM);
-  ck_assert_int_eq(frame->length, 0);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_DATA);
+  ck_assert_uint_eq(frame->flags, FLAG_END_STREAM);
+  ck_assert_uint_eq(frame->length, 0);
 
   frame->payload = NULL;
   frame->payload_length = 0;
 
   h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
 
-  ck_assert_int_eq(binary_buffer_size(&bb), 9);
-  ck_assert_int_eq(OUT(0), 0);
-  ck_assert_int_eq(OUT(1), 0);
-  ck_assert_int_eq(OUT(2), 0);
-  ck_assert_int_eq(OUT(3), FRAME_TYPE_DATA);
-  ck_assert_int_eq(OUT(4), FLAG_END_STREAM);
-  ck_assert_int_eq(OUT(5), 0);
-  ck_assert_int_eq(OUT(6), 0);
-  ck_assert_int_eq(OUT(7), 0);
-  ck_assert_int_eq(OUT(8), 1);
+  ck_assert_uint_eq(binary_buffer_size(&bb), 9);
+  ck_assert_uint_eq(OUT(0), 0);
+  ck_assert_uint_eq(OUT(1), 0);
+  ck_assert_uint_eq(OUT(2), 0);
+  ck_assert_uint_eq(OUT(3), FRAME_TYPE_DATA);
+  ck_assert_uint_eq(OUT(4), FLAG_END_STREAM);
+  ck_assert_uint_eq(OUT(5), 0);
+  ck_assert_uint_eq(OUT(6), 0);
+  ck_assert_uint_eq(OUT(7), 0);
+  ck_assert_uint_eq(OUT(8), 1);
 }
 END_TEST
 
 START_TEST(test_h2_frame_emit_data_with_payload)
 {
   h2_frame_data_t * frame = (h2_frame_data_t *) h2_frame_init(&parser, FRAME_TYPE_DATA, FLAG_END_STREAM, 1);
-  ck_assert_int_eq(frame->type, FRAME_TYPE_DATA);
-  ck_assert_int_eq(frame->flags, FLAG_END_STREAM);
-  ck_assert_int_eq(frame->length, 0);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_DATA);
+  ck_assert_uint_eq(frame->flags, FLAG_END_STREAM);
+  ck_assert_uint_eq(frame->length, 0);
 
   uint8_t d[] = {
     0xde, 0xad, 0xbe, 0xef
@@ -182,20 +182,20 @@ START_TEST(test_h2_frame_emit_data_with_payload)
 
   h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
 
-  ck_assert_int_eq(binary_buffer_size(&bb), 13);
-  ck_assert_int_eq(OUT(0), 0);
-  ck_assert_int_eq(OUT(1), 0);
-  ck_assert_int_eq(OUT(2), 4);
-  ck_assert_int_eq(OUT(3), FRAME_TYPE_DATA);
-  ck_assert_int_eq(OUT(4), FLAG_END_STREAM);
-  ck_assert_int_eq(OUT(5), 0);
-  ck_assert_int_eq(OUT(6), 0);
-  ck_assert_int_eq(OUT(7), 0);
-  ck_assert_int_eq(OUT(8), 1);
-  ck_assert_int_eq(OUT(9), 0xde);
-  ck_assert_int_eq(OUT(10), 0xad);
-  ck_assert_int_eq(OUT(11), 0xbe);
-  ck_assert_int_eq(OUT(12), 0xef);
+  ck_assert_uint_eq(binary_buffer_size(&bb), 13);
+  ck_assert_uint_eq(OUT(0), 0);
+  ck_assert_uint_eq(OUT(1), 0);
+  ck_assert_uint_eq(OUT(2), 4);
+  ck_assert_uint_eq(OUT(3), FRAME_TYPE_DATA);
+  ck_assert_uint_eq(OUT(4), FLAG_END_STREAM);
+  ck_assert_uint_eq(OUT(5), 0);
+  ck_assert_uint_eq(OUT(6), 0);
+  ck_assert_uint_eq(OUT(7), 0);
+  ck_assert_uint_eq(OUT(8), 1);
+  ck_assert_uint_eq(OUT(9), 0xde);
+  ck_assert_uint_eq(OUT(10), 0xad);
+  ck_assert_uint_eq(OUT(11), 0xbe);
+  ck_assert_uint_eq(OUT(12), 0xef);
 }
 END_TEST
 
@@ -206,24 +206,24 @@ START_TEST(test_h2_frame_emit_data_with_large_payload)
   h2_frame_data_t * frame = (h2_frame_data_t *) h2_frame_init(&parser, FRAME_TYPE_DATA, FLAG_END_STREAM, 1);
   frame->payload = d;
   frame->payload_length = DEFAULT_MAX_FRAME_SIZE;
-  ck_assert_int_eq(frame->type, FRAME_TYPE_DATA);
-  ck_assert_int_eq(frame->flags, FLAG_END_STREAM);
-  ck_assert_int_eq(frame->length, 0);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_DATA);
+  ck_assert_uint_eq(frame->flags, FLAG_END_STREAM);
+  ck_assert_uint_eq(frame->length, 0);
 
   h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
 
-  ck_assert_int_eq(binary_buffer_size(&bb), DEFAULT_MAX_FRAME_SIZE + FRAME_HEADER_SIZE);
-  ck_assert_int_eq(OUT(0), 0);
-  ck_assert_int_eq(OUT(1), 0x40);
-  ck_assert_int_eq(OUT(2), 0x00);
-  ck_assert_int_eq(OUT(3), FRAME_TYPE_DATA);
-  ck_assert_int_eq(OUT(4), FLAG_END_STREAM);
-  ck_assert_int_eq(OUT(5), 0);
-  ck_assert_int_eq(OUT(6), 0);
-  ck_assert_int_eq(OUT(7), 0);
-  ck_assert_int_eq(OUT(8), 1);
+  ck_assert_uint_eq(binary_buffer_size(&bb), DEFAULT_MAX_FRAME_SIZE + FRAME_HEADER_SIZE);
+  ck_assert_uint_eq(OUT(0), 0);
+  ck_assert_uint_eq(OUT(1), 0x40);
+  ck_assert_uint_eq(OUT(2), 0x00);
+  ck_assert_uint_eq(OUT(3), FRAME_TYPE_DATA);
+  ck_assert_uint_eq(OUT(4), FLAG_END_STREAM);
+  ck_assert_uint_eq(OUT(5), 0);
+  ck_assert_uint_eq(OUT(6), 0);
+  ck_assert_uint_eq(OUT(7), 0);
+  ck_assert_uint_eq(OUT(8), 1);
   for (size_t i = 0; i < DEFAULT_MAX_FRAME_SIZE; i++) {
-    ck_assert_int_eq(OUT(9 + i), 0);
+    ck_assert_uint_eq(OUT(9 + i), 0);
   }
 }
 END_TEST
@@ -235,117 +235,117 @@ START_TEST(test_h2_frame_emit_data_twice)
   h2_frame_data_t * frame = (h2_frame_data_t *) h2_frame_init(&parser, FRAME_TYPE_DATA, 0, 1);
   frame->payload = d1;
   frame->payload_length = DEFAULT_MAX_FRAME_SIZE;
-  ck_assert_int_eq(frame->type, FRAME_TYPE_DATA);
-  ck_assert_int_eq(frame->flags, 0);
-  ck_assert_int_eq(frame->length, 0);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_DATA);
+  ck_assert_uint_eq(frame->flags, 0);
+  ck_assert_uint_eq(frame->length, 0);
 
   h2_frame_data_t * frame2 = (h2_frame_data_t *) h2_frame_init(&parser, FRAME_TYPE_DATA, FLAG_END_STREAM, 1);
   uint8_t d2[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
   frame2->payload = d2;
   frame2->payload_length = 10;
-  ck_assert_int_eq(frame2->type, FRAME_TYPE_DATA);
-  ck_assert_int_eq(frame2->flags, FLAG_END_STREAM);
-  ck_assert_int_eq(frame2->length, 0);
+  ck_assert_uint_eq(frame2->type, FRAME_TYPE_DATA);
+  ck_assert_uint_eq(frame2->flags, FLAG_END_STREAM);
+  ck_assert_uint_eq(frame2->length, 0);
 
   h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
-  ck_assert_int_eq(binary_buffer_size(&bb), DEFAULT_MAX_FRAME_SIZE + FRAME_HEADER_SIZE);
+  ck_assert_uint_eq(binary_buffer_size(&bb), DEFAULT_MAX_FRAME_SIZE + FRAME_HEADER_SIZE);
 
   h2_frame_emit(&parser, &bb, (h2_frame_t *) frame2);
-  ck_assert_int_eq(binary_buffer_size(&bb), DEFAULT_MAX_FRAME_SIZE + FRAME_HEADER_SIZE + 10 + FRAME_HEADER_SIZE);
-  ck_assert_int_eq(OUT(0), 0);
-  ck_assert_int_eq(OUT(1), 0x40);
-  ck_assert_int_eq(OUT(2), 0x00);
-  ck_assert_int_eq(OUT(3), FRAME_TYPE_DATA);
-  ck_assert_int_eq(OUT(4), 0);
-  ck_assert_int_eq(OUT(5), 0);
-  ck_assert_int_eq(OUT(6), 0);
-  ck_assert_int_eq(OUT(7), 0);
-  ck_assert_int_eq(OUT(8), 1);
+  ck_assert_uint_eq(binary_buffer_size(&bb), DEFAULT_MAX_FRAME_SIZE + FRAME_HEADER_SIZE + 10 + FRAME_HEADER_SIZE);
+  ck_assert_uint_eq(OUT(0), 0);
+  ck_assert_uint_eq(OUT(1), 0x40);
+  ck_assert_uint_eq(OUT(2), 0x00);
+  ck_assert_uint_eq(OUT(3), FRAME_TYPE_DATA);
+  ck_assert_uint_eq(OUT(4), 0);
+  ck_assert_uint_eq(OUT(5), 0);
+  ck_assert_uint_eq(OUT(6), 0);
+  ck_assert_uint_eq(OUT(7), 0);
+  ck_assert_uint_eq(OUT(8), 1);
   for (size_t i = 0; i < DEFAULT_MAX_FRAME_SIZE; i++) {
-    ck_assert_int_eq(OUT(9 + i), 0);
+    ck_assert_uint_eq(OUT(9 + i), 0);
   }
   size_t frame2_offset = FRAME_HEADER_SIZE + DEFAULT_MAX_FRAME_SIZE;
-  ck_assert_int_eq(OUT(frame2_offset + 0), 0);
-  ck_assert_int_eq(OUT(frame2_offset + 1), 0);
-  ck_assert_int_eq(OUT(frame2_offset + 2), 0xa);
-  ck_assert_int_eq(OUT(frame2_offset + 3), FRAME_TYPE_DATA);
-  ck_assert_int_eq(OUT(frame2_offset + 4), FLAG_END_STREAM);
-  ck_assert_int_eq(OUT(frame2_offset + 5), 0);
-  ck_assert_int_eq(OUT(frame2_offset + 6), 0);
-  ck_assert_int_eq(OUT(frame2_offset + 7), 0);
-  ck_assert_int_eq(OUT(frame2_offset + 8), 1);
-  ck_assert_int_eq(OUT(frame2_offset + 9), 1);
-  ck_assert_int_eq(OUT(frame2_offset + 10), 2);
-  ck_assert_int_eq(OUT(frame2_offset + 11), 3);
-  ck_assert_int_eq(OUT(frame2_offset + 12), 4);
-  ck_assert_int_eq(OUT(frame2_offset + 13), 5);
-  ck_assert_int_eq(OUT(frame2_offset + 14), 6);
-  ck_assert_int_eq(OUT(frame2_offset + 15), 7);
-  ck_assert_int_eq(OUT(frame2_offset + 16), 8);
-  ck_assert_int_eq(OUT(frame2_offset + 17), 9);
-  ck_assert_int_eq(OUT(frame2_offset + 18), 10);
+  ck_assert_uint_eq(OUT(frame2_offset + 0), 0);
+  ck_assert_uint_eq(OUT(frame2_offset + 1), 0);
+  ck_assert_uint_eq(OUT(frame2_offset + 2), 0xa);
+  ck_assert_uint_eq(OUT(frame2_offset + 3), FRAME_TYPE_DATA);
+  ck_assert_uint_eq(OUT(frame2_offset + 4), FLAG_END_STREAM);
+  ck_assert_uint_eq(OUT(frame2_offset + 5), 0);
+  ck_assert_uint_eq(OUT(frame2_offset + 6), 0);
+  ck_assert_uint_eq(OUT(frame2_offset + 7), 0);
+  ck_assert_uint_eq(OUT(frame2_offset + 8), 1);
+  ck_assert_uint_eq(OUT(frame2_offset + 9), 1);
+  ck_assert_uint_eq(OUT(frame2_offset + 10), 2);
+  ck_assert_uint_eq(OUT(frame2_offset + 11), 3);
+  ck_assert_uint_eq(OUT(frame2_offset + 12), 4);
+  ck_assert_uint_eq(OUT(frame2_offset + 13), 5);
+  ck_assert_uint_eq(OUT(frame2_offset + 14), 6);
+  ck_assert_uint_eq(OUT(frame2_offset + 15), 7);
+  ck_assert_uint_eq(OUT(frame2_offset + 16), 8);
+  ck_assert_uint_eq(OUT(frame2_offset + 17), 9);
+  ck_assert_uint_eq(OUT(frame2_offset + 18), 10);
 }
 END_TEST
 
 START_TEST(test_h2_frame_emit_headers_empty)
 {
   h2_frame_headers_t * frame = (h2_frame_headers_t *) h2_frame_init(&parser, FRAME_TYPE_HEADERS, FLAG_END_HEADERS, 1);
-  ck_assert_int_eq(frame->stream_id, 1);
-  ck_assert_int_eq(frame->type, FRAME_TYPE_HEADERS);
-  ck_assert_int_eq(frame->flags, FLAG_END_HEADERS);
-  ck_assert_int_eq(frame->length, 0);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_HEADERS);
+  ck_assert_uint_eq(frame->flags, FLAG_END_HEADERS);
+  ck_assert_uint_eq(frame->length, 0);
 
   frame->header_block_fragment = NULL;
   frame->header_block_fragment_length = 0;
 
   h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
 
-  ck_assert_int_eq(binary_buffer_size(&bb), 9);
-  ck_assert_int_eq(OUT(0), 0);
-  ck_assert_int_eq(OUT(1), 0);
-  ck_assert_int_eq(OUT(2), 0);
-  ck_assert_int_eq(OUT(3), FRAME_TYPE_HEADERS);
-  ck_assert_int_eq(OUT(4), FLAG_END_HEADERS);
-  ck_assert_int_eq(OUT(5), 0);
-  ck_assert_int_eq(OUT(6), 0);
-  ck_assert_int_eq(OUT(7), 0);
-  ck_assert_int_eq(OUT(8), 1);
+  ck_assert_uint_eq(binary_buffer_size(&bb), 9);
+  ck_assert_uint_eq(OUT(0), 0);
+  ck_assert_uint_eq(OUT(1), 0);
+  ck_assert_uint_eq(OUT(2), 0);
+  ck_assert_uint_eq(OUT(3), FRAME_TYPE_HEADERS);
+  ck_assert_uint_eq(OUT(4), FLAG_END_HEADERS);
+  ck_assert_uint_eq(OUT(5), 0);
+  ck_assert_uint_eq(OUT(6), 0);
+  ck_assert_uint_eq(OUT(7), 0);
+  ck_assert_uint_eq(OUT(8), 1);
 }
 END_TEST
 
 START_TEST(test_h2_frame_emit_headers_end_stream)
 {
   h2_frame_headers_t * frame = (h2_frame_headers_t *) h2_frame_init(&parser, FRAME_TYPE_HEADERS, FLAG_END_STREAM | FLAG_END_HEADERS, 1);
-  ck_assert_int_eq(frame->stream_id, 1);
-  ck_assert_int_eq(frame->type, FRAME_TYPE_HEADERS);
-  ck_assert_int_eq(frame->flags, FLAG_END_HEADERS | FLAG_END_STREAM);
-  ck_assert_int_eq(frame->length, 0);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_HEADERS);
+  ck_assert_uint_eq(frame->flags, FLAG_END_HEADERS | FLAG_END_STREAM);
+  ck_assert_uint_eq(frame->length, 0);
 
   frame->header_block_fragment = NULL;
   frame->header_block_fragment_length = 0;
 
   h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
 
-  ck_assert_int_eq(binary_buffer_size(&bb), 9);
-  ck_assert_int_eq(OUT(0), 0);
-  ck_assert_int_eq(OUT(1), 0);
-  ck_assert_int_eq(OUT(2), 0);
-  ck_assert_int_eq(OUT(3), FRAME_TYPE_HEADERS);
-  ck_assert_int_eq(OUT(4), FLAG_END_HEADERS | FLAG_END_STREAM);
-  ck_assert_int_eq(OUT(5), 0);
-  ck_assert_int_eq(OUT(6), 0);
-  ck_assert_int_eq(OUT(7), 0);
-  ck_assert_int_eq(OUT(8), 1);
+  ck_assert_uint_eq(binary_buffer_size(&bb), 9);
+  ck_assert_uint_eq(OUT(0), 0);
+  ck_assert_uint_eq(OUT(1), 0);
+  ck_assert_uint_eq(OUT(2), 0);
+  ck_assert_uint_eq(OUT(3), FRAME_TYPE_HEADERS);
+  ck_assert_uint_eq(OUT(4), FLAG_END_HEADERS | FLAG_END_STREAM);
+  ck_assert_uint_eq(OUT(5), 0);
+  ck_assert_uint_eq(OUT(6), 0);
+  ck_assert_uint_eq(OUT(7), 0);
+  ck_assert_uint_eq(OUT(8), 1);
 }
 END_TEST
 
 START_TEST(test_h2_frame_emit_headers_with_payload)
 {
   h2_frame_headers_t * frame = (h2_frame_headers_t *) h2_frame_init(&parser, FRAME_TYPE_HEADERS, FLAG_END_HEADERS, 1);
-  ck_assert_int_eq(frame->stream_id, 1);
-  ck_assert_int_eq(frame->type, FRAME_TYPE_HEADERS);
-  ck_assert_int_eq(frame->flags, FLAG_END_HEADERS);
-  ck_assert_int_eq(frame->length, 0);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_HEADERS);
+  ck_assert_uint_eq(frame->flags, FLAG_END_HEADERS);
+  ck_assert_uint_eq(frame->length, 0);
 
   uint8_t d[] = {
     0xde, 0xad, 0xbe, 0xef
@@ -355,82 +355,82 @@ START_TEST(test_h2_frame_emit_headers_with_payload)
 
   h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
 
-  ck_assert_int_eq(binary_buffer_size(&bb), 13);
-  ck_assert_int_eq(OUT(0), 0);
-  ck_assert_int_eq(OUT(1), 0);
-  ck_assert_int_eq(OUT(2), 4);
-  ck_assert_int_eq(OUT(3), FRAME_TYPE_HEADERS);
-  ck_assert_int_eq(OUT(4), FLAG_END_HEADERS);
-  ck_assert_int_eq(OUT(5), 0);
-  ck_assert_int_eq(OUT(6), 0);
-  ck_assert_int_eq(OUT(7), 0);
-  ck_assert_int_eq(OUT(8), 1);
-  ck_assert_int_eq(OUT(9), 0xde);
-  ck_assert_int_eq(OUT(10), 0xad);
-  ck_assert_int_eq(OUT(11), 0xbe);
-  ck_assert_int_eq(OUT(12), 0xef);
+  ck_assert_uint_eq(binary_buffer_size(&bb), 13);
+  ck_assert_uint_eq(OUT(0), 0);
+  ck_assert_uint_eq(OUT(1), 0);
+  ck_assert_uint_eq(OUT(2), 4);
+  ck_assert_uint_eq(OUT(3), FRAME_TYPE_HEADERS);
+  ck_assert_uint_eq(OUT(4), FLAG_END_HEADERS);
+  ck_assert_uint_eq(OUT(5), 0);
+  ck_assert_uint_eq(OUT(6), 0);
+  ck_assert_uint_eq(OUT(7), 0);
+  ck_assert_uint_eq(OUT(8), 1);
+  ck_assert_uint_eq(OUT(9), 0xde);
+  ck_assert_uint_eq(OUT(10), 0xad);
+  ck_assert_uint_eq(OUT(11), 0xbe);
+  ck_assert_uint_eq(OUT(12), 0xef);
 }
 END_TEST
 
 START_TEST(test_h2_frame_emit_rst_stream)
 {
   h2_frame_rst_stream_t * frame = (h2_frame_rst_stream_t *) h2_frame_init(&parser, FRAME_TYPE_RST_STREAM, 0, 1);
-  ck_assert_int_eq(frame->stream_id, 1);
-  ck_assert_int_eq(frame->type, FRAME_TYPE_RST_STREAM);
-  ck_assert_int_eq(frame->flags, 0);
-  ck_assert_int_eq(frame->length, 0);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_RST_STREAM);
+  ck_assert_uint_eq(frame->flags, 0);
+  ck_assert_uint_eq(frame->length, 0);
 
   frame->error_code = H2_ERROR_INTERNAL_ERROR;
 
   h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
 
-  ck_assert_int_eq(binary_buffer_size(&bb), 13);
-  ck_assert_int_eq(OUT(0), 0);
-  ck_assert_int_eq(OUT(1), 0);
-  ck_assert_int_eq(OUT(2), 4);
-  ck_assert_int_eq(OUT(3), FRAME_TYPE_RST_STREAM);
-  ck_assert_int_eq(OUT(4), 0);
-  ck_assert_int_eq(OUT(5), 0);
-  ck_assert_int_eq(OUT(6), 0);
-  ck_assert_int_eq(OUT(7), 0);
-  ck_assert_int_eq(OUT(8), 1);
-  ck_assert_int_eq(OUT(9), 0);
-  ck_assert_int_eq(OUT(10), 0);
-  ck_assert_int_eq(OUT(11), 0);
-  ck_assert_int_eq(OUT(12), 2); //H2_ERROR_INTERNAL_ERROR
+  ck_assert_uint_eq(binary_buffer_size(&bb), 13);
+  ck_assert_uint_eq(OUT(0), 0);
+  ck_assert_uint_eq(OUT(1), 0);
+  ck_assert_uint_eq(OUT(2), 4);
+  ck_assert_uint_eq(OUT(3), FRAME_TYPE_RST_STREAM);
+  ck_assert_uint_eq(OUT(4), 0);
+  ck_assert_uint_eq(OUT(5), 0);
+  ck_assert_uint_eq(OUT(6), 0);
+  ck_assert_uint_eq(OUT(7), 0);
+  ck_assert_uint_eq(OUT(8), 1);
+  ck_assert_uint_eq(OUT(9), 0);
+  ck_assert_uint_eq(OUT(10), 0);
+  ck_assert_uint_eq(OUT(11), 0);
+  ck_assert_uint_eq(OUT(12), 2); //H2_ERROR_INTERNAL_ERROR
 }
 END_TEST
 
 START_TEST(test_h2_frame_emit_settings_ack)
 {
   h2_frame_settings_t * frame = (h2_frame_settings_t *) h2_frame_init(&parser, FRAME_TYPE_SETTINGS, FLAG_ACK, 0);
-  ck_assert_int_eq(frame->stream_id, 0);
-  ck_assert_int_eq(frame->type, FRAME_TYPE_SETTINGS);
-  ck_assert_int_eq(frame->flags, FLAG_ACK);
-  ck_assert_int_eq(frame->length, 0);
+  ck_assert_uint_eq(frame->stream_id, 0);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_SETTINGS);
+  ck_assert_uint_eq(frame->flags, FLAG_ACK);
+  ck_assert_uint_eq(frame->length, 0);
 
   h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
 
-  ck_assert_int_eq(binary_buffer_size(&bb), 9);
-  ck_assert_int_eq(OUT(0), 0);
-  ck_assert_int_eq(OUT(1), 0);
-  ck_assert_int_eq(OUT(2), 0);
-  ck_assert_int_eq(OUT(3), FRAME_TYPE_SETTINGS);
-  ck_assert_int_eq(OUT(4), FLAG_ACK);
-  ck_assert_int_eq(OUT(5), 0);
-  ck_assert_int_eq(OUT(6), 0);
-  ck_assert_int_eq(OUT(7), 0);
-  ck_assert_int_eq(OUT(8), 0);
+  ck_assert_uint_eq(binary_buffer_size(&bb), 9);
+  ck_assert_uint_eq(OUT(0), 0);
+  ck_assert_uint_eq(OUT(1), 0);
+  ck_assert_uint_eq(OUT(2), 0);
+  ck_assert_uint_eq(OUT(3), FRAME_TYPE_SETTINGS);
+  ck_assert_uint_eq(OUT(4), FLAG_ACK);
+  ck_assert_uint_eq(OUT(5), 0);
+  ck_assert_uint_eq(OUT(6), 0);
+  ck_assert_uint_eq(OUT(7), 0);
+  ck_assert_uint_eq(OUT(8), 0);
 }
 END_TEST
 
 START_TEST(test_h2_frame_emit_push_promise_empty)
 {
   h2_frame_push_promise_t * frame = (h2_frame_push_promise_t *) h2_frame_init(&parser, FRAME_TYPE_PUSH_PROMISE, FLAG_END_HEADERS, 1);
-  ck_assert_int_eq(frame->stream_id, 1);
-  ck_assert_int_eq(frame->type, FRAME_TYPE_PUSH_PROMISE);
-  ck_assert_int_eq(frame->flags, FLAG_END_HEADERS);
-  ck_assert_int_eq(frame->length, 0);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_PUSH_PROMISE);
+  ck_assert_uint_eq(frame->flags, FLAG_END_HEADERS);
+  ck_assert_uint_eq(frame->length, 0);
 
   frame->promised_stream_id = 2;
   frame->header_block_fragment = NULL;
@@ -438,30 +438,30 @@ START_TEST(test_h2_frame_emit_push_promise_empty)
 
   h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
 
-  ck_assert_int_eq(binary_buffer_size(&bb), 13);
-  ck_assert_int_eq(OUT(0), 0);
-  ck_assert_int_eq(OUT(1), 0);
-  ck_assert_int_eq(OUT(2), 4);
-  ck_assert_int_eq(OUT(3), FRAME_TYPE_PUSH_PROMISE);
-  ck_assert_int_eq(OUT(4), FLAG_END_HEADERS);
-  ck_assert_int_eq(OUT(5), 0);
-  ck_assert_int_eq(OUT(6), 0);
-  ck_assert_int_eq(OUT(7), 0);
-  ck_assert_int_eq(OUT(8), 1);
-  ck_assert_int_eq(OUT(9), 0);
-  ck_assert_int_eq(OUT(10), 0);
-  ck_assert_int_eq(OUT(11), 0);
-  ck_assert_int_eq(OUT(12), 2);
+  ck_assert_uint_eq(binary_buffer_size(&bb), 13);
+  ck_assert_uint_eq(OUT(0), 0);
+  ck_assert_uint_eq(OUT(1), 0);
+  ck_assert_uint_eq(OUT(2), 4);
+  ck_assert_uint_eq(OUT(3), FRAME_TYPE_PUSH_PROMISE);
+  ck_assert_uint_eq(OUT(4), FLAG_END_HEADERS);
+  ck_assert_uint_eq(OUT(5), 0);
+  ck_assert_uint_eq(OUT(6), 0);
+  ck_assert_uint_eq(OUT(7), 0);
+  ck_assert_uint_eq(OUT(8), 1);
+  ck_assert_uint_eq(OUT(9), 0);
+  ck_assert_uint_eq(OUT(10), 0);
+  ck_assert_uint_eq(OUT(11), 0);
+  ck_assert_uint_eq(OUT(12), 2);
 }
 END_TEST
 
 START_TEST(test_h2_frame_emit_push_promise_end_stream)
 {
   h2_frame_push_promise_t * frame = (h2_frame_push_promise_t *) h2_frame_init(&parser, FRAME_TYPE_PUSH_PROMISE, FLAG_END_STREAM | FLAG_END_HEADERS, 1);
-  ck_assert_int_eq(frame->stream_id, 1);
-  ck_assert_int_eq(frame->type, FRAME_TYPE_PUSH_PROMISE);
-  ck_assert_int_eq(frame->flags, FLAG_END_HEADERS | FLAG_END_STREAM);
-  ck_assert_int_eq(frame->length, 0);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_PUSH_PROMISE);
+  ck_assert_uint_eq(frame->flags, FLAG_END_HEADERS | FLAG_END_STREAM);
+  ck_assert_uint_eq(frame->length, 0);
 
   frame->promised_stream_id = 2;
   frame->header_block_fragment = NULL;
@@ -469,30 +469,30 @@ START_TEST(test_h2_frame_emit_push_promise_end_stream)
 
   h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
 
-  ck_assert_int_eq(binary_buffer_size(&bb), 13);
-  ck_assert_int_eq(OUT(0), 0);
-  ck_assert_int_eq(OUT(1), 0);
-  ck_assert_int_eq(OUT(2), 4);
-  ck_assert_int_eq(OUT(3), FRAME_TYPE_PUSH_PROMISE);
-  ck_assert_int_eq(OUT(4), FLAG_END_HEADERS | FLAG_END_STREAM);
-  ck_assert_int_eq(OUT(5), 0);
-  ck_assert_int_eq(OUT(6), 0);
-  ck_assert_int_eq(OUT(7), 0);
-  ck_assert_int_eq(OUT(8), 1);
-  ck_assert_int_eq(OUT(9), 0);
-  ck_assert_int_eq(OUT(10), 0);
-  ck_assert_int_eq(OUT(11), 0);
-  ck_assert_int_eq(OUT(12), 2);
+  ck_assert_uint_eq(binary_buffer_size(&bb), 13);
+  ck_assert_uint_eq(OUT(0), 0);
+  ck_assert_uint_eq(OUT(1), 0);
+  ck_assert_uint_eq(OUT(2), 4);
+  ck_assert_uint_eq(OUT(3), FRAME_TYPE_PUSH_PROMISE);
+  ck_assert_uint_eq(OUT(4), FLAG_END_HEADERS | FLAG_END_STREAM);
+  ck_assert_uint_eq(OUT(5), 0);
+  ck_assert_uint_eq(OUT(6), 0);
+  ck_assert_uint_eq(OUT(7), 0);
+  ck_assert_uint_eq(OUT(8), 1);
+  ck_assert_uint_eq(OUT(9), 0);
+  ck_assert_uint_eq(OUT(10), 0);
+  ck_assert_uint_eq(OUT(11), 0);
+  ck_assert_uint_eq(OUT(12), 2);
 }
 END_TEST
 
 START_TEST(test_h2_frame_emit_push_promise_with_payload)
 {
   h2_frame_push_promise_t * frame = (h2_frame_push_promise_t *) h2_frame_init(&parser, FRAME_TYPE_PUSH_PROMISE, FLAG_END_HEADERS, 1);
-  ck_assert_int_eq(frame->stream_id, 1);
-  ck_assert_int_eq(frame->type, FRAME_TYPE_PUSH_PROMISE);
-  ck_assert_int_eq(frame->flags, FLAG_END_HEADERS);
-  ck_assert_int_eq(frame->length, 0);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_PUSH_PROMISE);
+  ck_assert_uint_eq(frame->flags, FLAG_END_HEADERS);
+  ck_assert_uint_eq(frame->length, 0);
 
   frame->promised_stream_id = 2;
   uint8_t d[] = {
@@ -503,34 +503,34 @@ START_TEST(test_h2_frame_emit_push_promise_with_payload)
 
   h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
 
-  ck_assert_int_eq(binary_buffer_size(&bb), 17);
-  ck_assert_int_eq(OUT(0), 0);
-  ck_assert_int_eq(OUT(1), 0);
-  ck_assert_int_eq(OUT(2), 8);
-  ck_assert_int_eq(OUT(3), FRAME_TYPE_PUSH_PROMISE);
-  ck_assert_int_eq(OUT(4), FLAG_END_HEADERS);
-  ck_assert_int_eq(OUT(5), 0);
-  ck_assert_int_eq(OUT(6), 0);
-  ck_assert_int_eq(OUT(7), 0);
-  ck_assert_int_eq(OUT(8), 1);
-  ck_assert_int_eq(OUT(9), 0);
-  ck_assert_int_eq(OUT(10), 0);
-  ck_assert_int_eq(OUT(11), 0);
-  ck_assert_int_eq(OUT(12), 2);
-  ck_assert_int_eq(OUT(13), 0xde);
-  ck_assert_int_eq(OUT(14), 0xad);
-  ck_assert_int_eq(OUT(15), 0xbe);
-  ck_assert_int_eq(OUT(16), 0xef);
+  ck_assert_uint_eq(binary_buffer_size(&bb), 17);
+  ck_assert_uint_eq(OUT(0), 0);
+  ck_assert_uint_eq(OUT(1), 0);
+  ck_assert_uint_eq(OUT(2), 8);
+  ck_assert_uint_eq(OUT(3), FRAME_TYPE_PUSH_PROMISE);
+  ck_assert_uint_eq(OUT(4), FLAG_END_HEADERS);
+  ck_assert_uint_eq(OUT(5), 0);
+  ck_assert_uint_eq(OUT(6), 0);
+  ck_assert_uint_eq(OUT(7), 0);
+  ck_assert_uint_eq(OUT(8), 1);
+  ck_assert_uint_eq(OUT(9), 0);
+  ck_assert_uint_eq(OUT(10), 0);
+  ck_assert_uint_eq(OUT(11), 0);
+  ck_assert_uint_eq(OUT(12), 2);
+  ck_assert_uint_eq(OUT(13), 0xde);
+  ck_assert_uint_eq(OUT(14), 0xad);
+  ck_assert_uint_eq(OUT(15), 0xbe);
+  ck_assert_uint_eq(OUT(16), 0xef);
 }
 END_TEST
 
 START_TEST(test_h2_frame_emit_goaway)
 {
   h2_frame_goaway_t * frame = (h2_frame_goaway_t *) h2_frame_init(&parser, FRAME_TYPE_GOAWAY, 0, 0);
-  ck_assert_int_eq(frame->stream_id, 0);
-  ck_assert_int_eq(frame->type, FRAME_TYPE_GOAWAY);
-  ck_assert_int_eq(frame->flags, 0);
-  ck_assert_int_eq(frame->length, 0);
+  ck_assert_uint_eq(frame->stream_id, 0);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_GOAWAY);
+  ck_assert_uint_eq(frame->flags, 0);
+  ck_assert_uint_eq(frame->length, 0);
 
   frame->last_stream_id = 0;
   frame->error_code = H2_ERROR_NO_ERROR;
@@ -539,34 +539,34 @@ START_TEST(test_h2_frame_emit_goaway)
 
   h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
 
-  ck_assert_int_eq(binary_buffer_size(&bb), 17);
-  ck_assert_int_eq(OUT(0), 0);
-  ck_assert_int_eq(OUT(1), 0);
-  ck_assert_int_eq(OUT(2), 8);
-  ck_assert_int_eq(OUT(3), FRAME_TYPE_GOAWAY);
-  ck_assert_int_eq(OUT(4), 0);
-  ck_assert_int_eq(OUT(5), 0);
-  ck_assert_int_eq(OUT(6), 0);
-  ck_assert_int_eq(OUT(7), 0);
-  ck_assert_int_eq(OUT(8), 0);
-  ck_assert_int_eq(OUT(9), 0);
-  ck_assert_int_eq(OUT(10), 0);
-  ck_assert_int_eq(OUT(11), 0);
-  ck_assert_int_eq(OUT(12), 0); // last stream id
-  ck_assert_int_eq(OUT(13), 0);
-  ck_assert_int_eq(OUT(14), 0);
-  ck_assert_int_eq(OUT(15), 0);
-  ck_assert_int_eq(OUT(16), 0); //H2_ERROR_NO_ERROR
+  ck_assert_uint_eq(binary_buffer_size(&bb), 17);
+  ck_assert_uint_eq(OUT(0), 0);
+  ck_assert_uint_eq(OUT(1), 0);
+  ck_assert_uint_eq(OUT(2), 8);
+  ck_assert_uint_eq(OUT(3), FRAME_TYPE_GOAWAY);
+  ck_assert_uint_eq(OUT(4), 0);
+  ck_assert_uint_eq(OUT(5), 0);
+  ck_assert_uint_eq(OUT(6), 0);
+  ck_assert_uint_eq(OUT(7), 0);
+  ck_assert_uint_eq(OUT(8), 0);
+  ck_assert_uint_eq(OUT(9), 0);
+  ck_assert_uint_eq(OUT(10), 0);
+  ck_assert_uint_eq(OUT(11), 0);
+  ck_assert_uint_eq(OUT(12), 0); // last stream id
+  ck_assert_uint_eq(OUT(13), 0);
+  ck_assert_uint_eq(OUT(14), 0);
+  ck_assert_uint_eq(OUT(15), 0);
+  ck_assert_uint_eq(OUT(16), 0); //H2_ERROR_NO_ERROR
 }
 END_TEST
 
 START_TEST(test_h2_frame_emit_goaway_with_debug_data)
 {
   h2_frame_goaway_t * frame = (h2_frame_goaway_t *) h2_frame_init(&parser, FRAME_TYPE_GOAWAY, 0, 0);
-  ck_assert_int_eq(frame->stream_id, 0);
-  ck_assert_int_eq(frame->type, FRAME_TYPE_GOAWAY);
-  ck_assert_int_eq(frame->flags, 0);
-  ck_assert_int_eq(frame->length, 0);
+  ck_assert_uint_eq(frame->stream_id, 0);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_GOAWAY);
+  ck_assert_uint_eq(frame->flags, 0);
+  ck_assert_uint_eq(frame->length, 0);
 
   frame->last_stream_id = 1;
   frame->error_code = H2_ERROR_INTERNAL_ERROR;
@@ -576,92 +576,92 @@ START_TEST(test_h2_frame_emit_goaway_with_debug_data)
 
   h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
 
-  ck_assert_int_eq(binary_buffer_size(&bb), 17 + frame->debug_data_length);
-  ck_assert_int_eq(OUT(0), 0);
-  ck_assert_int_eq(OUT(1), 0);
-  ck_assert_int_eq(OUT(2), 8 + frame->debug_data_length);
-  ck_assert_int_eq(OUT(3), FRAME_TYPE_GOAWAY);
-  ck_assert_int_eq(OUT(4), 0);
-  ck_assert_int_eq(OUT(5), 0);
-  ck_assert_int_eq(OUT(6), 0);
-  ck_assert_int_eq(OUT(7), 0);
-  ck_assert_int_eq(OUT(8), 0);
-  ck_assert_int_eq(OUT(9), 0);
-  ck_assert_int_eq(OUT(10), 0);
-  ck_assert_int_eq(OUT(11), 0);
-  ck_assert_int_eq(OUT(12), 1); // last stream id
-  ck_assert_int_eq(OUT(13), 0);
-  ck_assert_int_eq(OUT(14), 0);
-  ck_assert_int_eq(OUT(15), 0);
-  ck_assert_int_eq(OUT(16), 2); // H2_ERROR_INTERNAL_ERROR
+  ck_assert_uint_eq(binary_buffer_size(&bb), 17 + frame->debug_data_length);
+  ck_assert_uint_eq(OUT(0), 0);
+  ck_assert_uint_eq(OUT(1), 0);
+  ck_assert_uint_eq(OUT(2), 8 + frame->debug_data_length);
+  ck_assert_uint_eq(OUT(3), FRAME_TYPE_GOAWAY);
+  ck_assert_uint_eq(OUT(4), 0);
+  ck_assert_uint_eq(OUT(5), 0);
+  ck_assert_uint_eq(OUT(6), 0);
+  ck_assert_uint_eq(OUT(7), 0);
+  ck_assert_uint_eq(OUT(8), 0);
+  ck_assert_uint_eq(OUT(9), 0);
+  ck_assert_uint_eq(OUT(10), 0);
+  ck_assert_uint_eq(OUT(11), 0);
+  ck_assert_uint_eq(OUT(12), 1); // last stream id
+  ck_assert_uint_eq(OUT(13), 0);
+  ck_assert_uint_eq(OUT(14), 0);
+  ck_assert_uint_eq(OUT(15), 0);
+  ck_assert_uint_eq(OUT(16), 2); // H2_ERROR_INTERNAL_ERROR
 }
 END_TEST
 
 START_TEST(test_h2_frame_emit_window_update_for_connection)
 {
   h2_frame_window_update_t * frame = (h2_frame_window_update_t *) h2_frame_init(&parser, FRAME_TYPE_WINDOW_UPDATE, 0, 0);
-  ck_assert_int_eq(frame->stream_id, 0);
-  ck_assert_int_eq(frame->type, FRAME_TYPE_WINDOW_UPDATE);
-  ck_assert_int_eq(frame->flags, 0);
-  ck_assert_int_eq(frame->length, 0);
+  ck_assert_uint_eq(frame->stream_id, 0);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_WINDOW_UPDATE);
+  ck_assert_uint_eq(frame->flags, 0);
+  ck_assert_uint_eq(frame->length, 0);
 
   frame->increment = 0x4000;
 
   h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
 
-  ck_assert_int_eq(binary_buffer_size(&bb), 13);
-  ck_assert_int_eq(OUT(0), 0);
-  ck_assert_int_eq(OUT(1), 0);
-  ck_assert_int_eq(OUT(2), 4);
-  ck_assert_int_eq(OUT(3), FRAME_TYPE_WINDOW_UPDATE);
-  ck_assert_int_eq(OUT(4), 0);
-  ck_assert_int_eq(OUT(5), 0);
-  ck_assert_int_eq(OUT(6), 0);
-  ck_assert_int_eq(OUT(7), 0);
-  ck_assert_int_eq(OUT(8), 0);
-  ck_assert_int_eq(OUT(9), 0);
-  ck_assert_int_eq(OUT(10), 0);
-  ck_assert_int_eq(OUT(11), 0x40);
-  ck_assert_int_eq(OUT(12), 0);
+  ck_assert_uint_eq(binary_buffer_size(&bb), 13);
+  ck_assert_uint_eq(OUT(0), 0);
+  ck_assert_uint_eq(OUT(1), 0);
+  ck_assert_uint_eq(OUT(2), 4);
+  ck_assert_uint_eq(OUT(3), FRAME_TYPE_WINDOW_UPDATE);
+  ck_assert_uint_eq(OUT(4), 0);
+  ck_assert_uint_eq(OUT(5), 0);
+  ck_assert_uint_eq(OUT(6), 0);
+  ck_assert_uint_eq(OUT(7), 0);
+  ck_assert_uint_eq(OUT(8), 0);
+  ck_assert_uint_eq(OUT(9), 0);
+  ck_assert_uint_eq(OUT(10), 0);
+  ck_assert_uint_eq(OUT(11), 0x40);
+  ck_assert_uint_eq(OUT(12), 0);
 }
 END_TEST
 
 START_TEST(test_h2_frame_emit_window_update_for_stream)
 {
   h2_frame_window_update_t * frame = (h2_frame_window_update_t *) h2_frame_init(&parser, FRAME_TYPE_WINDOW_UPDATE, 0, 1);
-  ck_assert_int_eq(frame->stream_id, 1);
-  ck_assert_int_eq(frame->type, FRAME_TYPE_WINDOW_UPDATE);
-  ck_assert_int_eq(frame->flags, 0);
-  ck_assert_int_eq(frame->length, 0);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_WINDOW_UPDATE);
+  ck_assert_uint_eq(frame->flags, 0);
+  ck_assert_uint_eq(frame->length, 0);
 
   frame->increment = 0x4000;
 
   h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
 
-  ck_assert_int_eq(binary_buffer_size(&bb), 13);
-  ck_assert_int_eq(OUT(0), 0);
-  ck_assert_int_eq(OUT(1), 0);
-  ck_assert_int_eq(OUT(2), 4);
-  ck_assert_int_eq(OUT(3), FRAME_TYPE_WINDOW_UPDATE);
-  ck_assert_int_eq(OUT(4), 0);
-  ck_assert_int_eq(OUT(5), 0);
-  ck_assert_int_eq(OUT(6), 0);
-  ck_assert_int_eq(OUT(7), 0);
-  ck_assert_int_eq(OUT(8), 1);
-  ck_assert_int_eq(OUT(9), 0);
-  ck_assert_int_eq(OUT(10), 0);
-  ck_assert_int_eq(OUT(11), 0x40);
-  ck_assert_int_eq(OUT(12), 0);
+  ck_assert_uint_eq(binary_buffer_size(&bb), 13);
+  ck_assert_uint_eq(OUT(0), 0);
+  ck_assert_uint_eq(OUT(1), 0);
+  ck_assert_uint_eq(OUT(2), 4);
+  ck_assert_uint_eq(OUT(3), FRAME_TYPE_WINDOW_UPDATE);
+  ck_assert_uint_eq(OUT(4), 0);
+  ck_assert_uint_eq(OUT(5), 0);
+  ck_assert_uint_eq(OUT(6), 0);
+  ck_assert_uint_eq(OUT(7), 0);
+  ck_assert_uint_eq(OUT(8), 1);
+  ck_assert_uint_eq(OUT(9), 0);
+  ck_assert_uint_eq(OUT(10), 0);
+  ck_assert_uint_eq(OUT(11), 0x40);
+  ck_assert_uint_eq(OUT(12), 0);
 }
 END_TEST
 
 START_TEST(test_h2_frame_emit_continuation)
 {
   h2_frame_continuation_t * frame = (h2_frame_continuation_t *) h2_frame_init(&parser, FRAME_TYPE_CONTINUATION, FLAG_END_HEADERS, 1);
-  ck_assert_int_eq(frame->stream_id, 1);
-  ck_assert_int_eq(frame->type, FRAME_TYPE_CONTINUATION);
-  ck_assert_int_eq(frame->flags, FLAG_END_HEADERS);
-  ck_assert_int_eq(frame->length, 0);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_CONTINUATION);
+  ck_assert_uint_eq(frame->flags, FLAG_END_HEADERS);
+  ck_assert_uint_eq(frame->length, 0);
 
   uint8_t d[] = {
     0xde, 0xad, 0xbe, 0xef
@@ -671,20 +671,20 @@ START_TEST(test_h2_frame_emit_continuation)
 
   h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
 
-  ck_assert_int_eq(binary_buffer_size(&bb), 13);
-  ck_assert_int_eq(OUT(0), 0);
-  ck_assert_int_eq(OUT(1), 0);
-  ck_assert_int_eq(OUT(2), 4);
-  ck_assert_int_eq(OUT(3), FRAME_TYPE_CONTINUATION);
-  ck_assert_int_eq(OUT(4), FLAG_END_HEADERS);
-  ck_assert_int_eq(OUT(5), 0);
-  ck_assert_int_eq(OUT(6), 0);
-  ck_assert_int_eq(OUT(7), 0);
-  ck_assert_int_eq(OUT(8), 1);
-  ck_assert_int_eq(OUT(9), 0xde);
-  ck_assert_int_eq(OUT(10), 0xad);
-  ck_assert_int_eq(OUT(11), 0xbe);
-  ck_assert_int_eq(OUT(12), 0xef);
+  ck_assert_uint_eq(binary_buffer_size(&bb), 13);
+  ck_assert_uint_eq(OUT(0), 0);
+  ck_assert_uint_eq(OUT(1), 0);
+  ck_assert_uint_eq(OUT(2), 4);
+  ck_assert_uint_eq(OUT(3), FRAME_TYPE_CONTINUATION);
+  ck_assert_uint_eq(OUT(4), FLAG_END_HEADERS);
+  ck_assert_uint_eq(OUT(5), 0);
+  ck_assert_uint_eq(OUT(6), 0);
+  ck_assert_uint_eq(OUT(7), 0);
+  ck_assert_uint_eq(OUT(8), 1);
+  ck_assert_uint_eq(OUT(9), 0xde);
+  ck_assert_uint_eq(OUT(10), 0xad);
+  ck_assert_uint_eq(OUT(11), 0xbe);
+  ck_assert_uint_eq(OUT(12), 0xef);
 }
 END_TEST
 
@@ -696,14 +696,15 @@ START_TEST(test_h2_frame_parse_invalid_frame_type)
   size_t buffer_position = 0;
   size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
 
-  h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
 
-  ck_assert_int_eq(buffer_position, 0);
-  ck_assert_int_eq(num_frames_parsed, 0);
+  ck_assert_uint_eq(buffer_position, 0);
+  ck_assert_uint_eq(num_frames_parsed, 0);
 
-  ck_assert_int_eq(num_errors, 1);
+  ck_assert_uint_eq(num_errors, 1);
   caught_error_t * ce = caught_errors[0];
-  ck_assert_int_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
   ck_assert_str_eq(ce->error_string, "Invalid frame type: 0xff");
 }
 END_TEST
@@ -716,20 +717,21 @@ START_TEST(test_h2_frame_parse_data)
   size_t buffer_position = 0;
   size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
 
-  h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
 
-  ck_assert_int_eq(buffer_position, buffer_length);
-  ck_assert_int_eq(num_frames_parsed, 1);
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
   h2_frame_data_t * frame = (h2_frame_data_t *) last_frames[0];
-  ck_assert_int_eq(frame->length, 4);
-  ck_assert_int_eq(frame->type, FRAME_TYPE_DATA);
-  ck_assert_int_eq(frame->flags, FLAG_END_STREAM);
-  ck_assert_int_eq(frame->stream_id, 1);
-  ck_assert_int_eq(frame->payload_length, 4);
-  ck_assert_int_eq(frame->payload[0], 0xde);
-  ck_assert_int_eq(frame->payload[1], 0xad);
-  ck_assert_int_eq(frame->payload[2], 0xbe);
-  ck_assert_int_eq(frame->payload[3], 0xef);
+  ck_assert_uint_eq(frame->length, 4);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_DATA);
+  ck_assert_uint_eq(frame->flags, FLAG_END_STREAM);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->payload_length, 4);
+  ck_assert_uint_eq(frame->payload[0], 0xde);
+  ck_assert_uint_eq(frame->payload[1], 0xad);
+  ck_assert_uint_eq(frame->payload[2], 0xbe);
+  ck_assert_uint_eq(frame->payload[3], 0xef);
 }
 END_TEST
 
@@ -742,20 +744,697 @@ START_TEST(test_h2_frame_parse_data_with_extra_buffer)
   size_t buffer_position = 0;
   size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
 
-  h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
 
-  ck_assert_int_eq(buffer_position, 9 + 4);
-  ck_assert_int_eq(num_frames_parsed, 1);
+  ck_assert_uint_eq(buffer_position, 9 + 4);
+  ck_assert_uint_eq(num_frames_parsed, 1);
   h2_frame_data_t * frame = (h2_frame_data_t *) last_frames[0];
-  ck_assert_int_eq(frame->length, 4);
-  ck_assert_int_eq(frame->type, FRAME_TYPE_DATA);
-  ck_assert_int_eq(frame->flags, FLAG_END_STREAM);
-  ck_assert_int_eq(frame->stream_id, 1);
-  ck_assert_int_eq(frame->payload_length, 4);
-  ck_assert_int_eq(frame->payload[0], 0xde);
-  ck_assert_int_eq(frame->payload[1], 0xad);
-  ck_assert_int_eq(frame->payload[2], 0xbe);
-  ck_assert_int_eq(frame->payload[3], 0xef);
+  ck_assert_uint_eq(frame->length, 4);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_DATA);
+  ck_assert_uint_eq(frame->flags, FLAG_END_STREAM);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->payload_length, 4);
+  ck_assert_uint_eq(frame->payload[0], 0xde);
+  ck_assert_uint_eq(frame->payload[1], 0xad);
+  ck_assert_uint_eq(frame->payload[2], 0xbe);
+  ck_assert_uint_eq(frame->payload[3], 0xef);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_data_with_padding)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x9, FRAME_TYPE_DATA, FLAG_PADDED | FLAG_END_STREAM, 0, 0, 0, 1, 0x04, 0xde, 0xad, 0xbe, 0xef, 0x00, 0x00, 0x00, 0x00
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_data_t * frame = (h2_frame_data_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 9);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_DATA);
+  ck_assert_uint_eq(frame->flags, FLAG_PADDED | FLAG_END_STREAM);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->payload_length, 4);
+  ck_assert_uint_eq(frame->payload[0], 0xde);
+  ck_assert_uint_eq(frame->payload[1], 0xad);
+  ck_assert_uint_eq(frame->payload[2], 0xbe);
+  ck_assert_uint_eq(frame->payload[3], 0xef);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_data_with_1_padding)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x5, FRAME_TYPE_DATA, FLAG_PADDED | FLAG_END_STREAM, 0, 0, 0, 1, 0x00, 0xde, 0xad, 0xbe, 0xef
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_data_t * frame = (h2_frame_data_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 5);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_DATA);
+  ck_assert_uint_eq(frame->flags, FLAG_PADDED | FLAG_END_STREAM);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->payload_length, 4);
+  ck_assert_uint_eq(frame->payload[0], 0xde);
+  ck_assert_uint_eq(frame->payload[1], 0xad);
+  ck_assert_uint_eq(frame->payload[2], 0xbe);
+  ck_assert_uint_eq(frame->payload[3], 0xef);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_data_with_all_padding)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x5, FRAME_TYPE_DATA, FLAG_PADDED | FLAG_END_STREAM, 0, 0, 0, 1, 0x04, 0, 0, 0, 0
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_data_t * frame = (h2_frame_data_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 5);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_DATA);
+  ck_assert_uint_eq(frame->flags, FLAG_PADDED | FLAG_END_STREAM);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->payload_length, 0);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_data_with_max_padding)
+{
+  uint8_t buffer[4 + 1 + 255 + 9] = {
+    0, ((4 + 1 + 255) >> 8) & 0xff, (4 + 1 + 255) & 0xff, FRAME_TYPE_DATA, FLAG_PADDED | FLAG_END_STREAM, 0, 0, 0, 1, 0xff, 0xde, 0xad, 0xbe, 0xef, // + a lot of padding
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_data_t * frame = (h2_frame_data_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 4 + 1 + 255);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_DATA);
+  ck_assert_uint_eq(frame->flags, FLAG_PADDED | FLAG_END_STREAM);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->payload_length, 4);
+  ck_assert_uint_eq(frame->payload[0], 0xde);
+  ck_assert_uint_eq(frame->payload[1], 0xad);
+  ck_assert_uint_eq(frame->payload[2], 0xbe);
+  ck_assert_uint_eq(frame->payload[3], 0xef);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_data_with_too_much_padding)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x5, FRAME_TYPE_DATA, FLAG_PADDED | FLAG_END_STREAM, 0, 0, 0, 1, 0x06, 0xde, 0xad, 0xbe, 0xef
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  // buffer position might be set to the middle of the frame, don't worry about it since
+  // it will throw a protocol error anyway
+  ck_assert_uint_eq(num_frames_parsed, 0);
+
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
+  ck_assert_str_eq(ce->error_string,
+      "Padding length is too large in comparison to frame length: 6 (0x6) >= 5 (0x5)");
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_data_with_too_much_padding_by_1)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x5, FRAME_TYPE_DATA, FLAG_PADDED | FLAG_END_STREAM, 0, 0, 0, 1, 0x05, 0xde, 0xad, 0xbe, 0xef
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  // buffer position might be set to the middle of the frame, don't worry about it since
+  // it will throw a protocol error anyway
+  ck_assert_uint_eq(num_frames_parsed, 0);
+
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
+  ck_assert_str_eq(ce->error_string,
+      "Padding length is too large in comparison to frame length: 5 (0x5) >= 5 (0x5)");
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_data_with_no_stream_id)
+{
+  uint8_t buffer[] = {
+    0, 0, 4, FRAME_TYPE_DATA, FLAG_END_STREAM, 0, 0, 0, 0, 0xde, 0xad, 0xbe, 0xef
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  ck_assert_uint_eq(buffer_position, 0);
+  ck_assert_uint_eq(num_frames_parsed, 0);
+
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
+  ck_assert_str_eq(ce->error_string, "Stream ID must be set for frame type DATA (0x0)");
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_headers)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x4, FRAME_TYPE_HEADERS, FLAG_END_HEADERS, 0, 0, 0, 1, 0xde, 0xad, 0xbe, 0xef
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, 9 + 4);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_headers_t * frame = (h2_frame_headers_t*) last_frames[0];
+  ck_assert_uint_eq(frame->length, 4);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_HEADERS);
+  ck_assert_uint_eq(frame->flags, FLAG_END_HEADERS);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->header_block_fragment_length, 4);
+  ck_assert_uint_eq(frame->header_block_fragment[0], 0xde);
+  ck_assert_uint_eq(frame->header_block_fragment[1], 0xad);
+  ck_assert_uint_eq(frame->header_block_fragment[2], 0xbe);
+  ck_assert_uint_eq(frame->header_block_fragment[3], 0xef);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_headers_plus_data)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x4, FRAME_TYPE_HEADERS, FLAG_END_HEADERS, 0, 0, 0, 1, 0xde, 0xad, 0xbe, 0xef,
+    0, 0, 0x4, FRAME_TYPE_DATA, FLAG_END_STREAM, 0, 0, 0, 1, 0xde, 0xad, 0xbe, 0xef,
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, 9 + 4);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_headers_t * frame = (h2_frame_headers_t*) last_frames[0];
+  ck_assert_uint_eq(frame->length, 4);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_HEADERS);
+  ck_assert_uint_eq(frame->flags, FLAG_END_HEADERS);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->header_block_fragment_length, 4);
+  ck_assert_uint_eq(frame->header_block_fragment[0], 0xde);
+  ck_assert_uint_eq(frame->header_block_fragment[1], 0xad);
+  ck_assert_uint_eq(frame->header_block_fragment[2], 0xbe);
+  ck_assert_uint_eq(frame->header_block_fragment[3], 0xef);
+
+  h2_frame_t * ret2 = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret2 != NULL);
+
+  ck_assert_uint_eq(buffer_position, 9 + 4 + 9 + 4);
+  ck_assert_uint_eq(num_frames_parsed, 2);
+  h2_frame_data_t * data_frame = (h2_frame_data_t *) last_frames[1];
+  ck_assert_uint_eq(data_frame->length, 4);
+  ck_assert_uint_eq(data_frame->type, FRAME_TYPE_DATA);
+  ck_assert_uint_eq(data_frame->flags, FLAG_END_STREAM);
+  ck_assert_uint_eq(data_frame->stream_id, 1);
+  ck_assert_uint_eq(data_frame->payload_length, 4);
+  ck_assert_uint_eq(data_frame->payload[0], 0xde);
+  ck_assert_uint_eq(data_frame->payload[1], 0xad);
+  ck_assert_uint_eq(data_frame->payload[2], 0xbe);
+  ck_assert_uint_eq(data_frame->payload[3], 0xef);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_headers_plus_frame_header_of_next_frame)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x4, FRAME_TYPE_HEADERS, FLAG_END_HEADERS, 0, 0, 0, 1, 0xde, 0xad, 0xbe, 0xef,
+    0, 0, 0x4, FRAME_TYPE_DATA, FLAG_END_STREAM, 0, 0, 0, 1,
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, 9 + 4);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_headers_t * frame = (h2_frame_headers_t*) last_frames[0];
+  ck_assert_uint_eq(frame->length, 4);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_HEADERS);
+  ck_assert_uint_eq(frame->flags, FLAG_END_HEADERS);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->header_block_fragment_length, 4);
+  ck_assert_uint_eq(frame->header_block_fragment[0], 0xde);
+  ck_assert_uint_eq(frame->header_block_fragment[1], 0xad);
+  ck_assert_uint_eq(frame->header_block_fragment[2], 0xbe);
+  ck_assert_uint_eq(frame->header_block_fragment[3], 0xef);
+
+  h2_frame_t * ret2 = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret2 == NULL);
+
+  ck_assert_uint_eq(buffer_position, 9 + 4);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_headers_plus_frame_header_and_then_some)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x4, FRAME_TYPE_HEADERS, FLAG_END_HEADERS, 0, 0, 0, 1, 0xde, 0xad, 0xbe, 0xef,
+    0, 0, 0x4, FRAME_TYPE_DATA, FLAG_END_STREAM, 0, 0, 0, 1, 0xde, 0xad,
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, 9 + 4);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_headers_t * frame = (h2_frame_headers_t*) last_frames[0];
+  ck_assert_uint_eq(frame->length, 4);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_HEADERS);
+  ck_assert_uint_eq(frame->flags, FLAG_END_HEADERS);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->header_block_fragment_length, 4);
+  ck_assert_uint_eq(frame->header_block_fragment[0], 0xde);
+  ck_assert_uint_eq(frame->header_block_fragment[1], 0xad);
+  ck_assert_uint_eq(frame->header_block_fragment[2], 0xbe);
+  ck_assert_uint_eq(frame->header_block_fragment[3], 0xef);
+
+  h2_frame_t * ret2 = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret2 == NULL);
+
+  ck_assert_uint_eq(buffer_position, 9 + 4);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_headers_with_padding)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x9, FRAME_TYPE_HEADERS, FLAG_PADDED | FLAG_END_STREAM, 0, 0, 0, 1, 0x04, 0xde, 0xad, 0xbe, 0xef, 0x00, 0x00, 0x00, 0x00
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_headers_t * frame = (h2_frame_headers_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 9);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_HEADERS);
+  ck_assert_uint_eq(frame->flags, FLAG_PADDED | FLAG_END_STREAM);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->priority_stream_dependency, 0);
+  ck_assert_uint_eq(frame->priority_exclusive, 0);
+  ck_assert_uint_eq(frame->priority_weight, 15); // default is 16, frame reports wire value (value - 1)
+  ck_assert_uint_eq(frame->header_block_fragment_length, 4);
+  ck_assert_uint_eq(frame->header_block_fragment[0], 0xde);
+  ck_assert_uint_eq(frame->header_block_fragment[1], 0xad);
+  ck_assert_uint_eq(frame->header_block_fragment[2], 0xbe);
+  ck_assert_uint_eq(frame->header_block_fragment[3], 0xef);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_headers_with_1_padding)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x5, FRAME_TYPE_HEADERS, FLAG_PADDED | FLAG_END_STREAM, 0, 0, 0, 1, 0x00, 0xde, 0xad, 0xbe, 0xef
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_headers_t * frame = (h2_frame_headers_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 5);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_HEADERS);
+  ck_assert_uint_eq(frame->flags, FLAG_PADDED | FLAG_END_STREAM);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->header_block_fragment_length, 4);
+  ck_assert_uint_eq(frame->header_block_fragment[0], 0xde);
+  ck_assert_uint_eq(frame->header_block_fragment[1], 0xad);
+  ck_assert_uint_eq(frame->header_block_fragment[2], 0xbe);
+  ck_assert_uint_eq(frame->header_block_fragment[3], 0xef);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_headers_with_all_padding)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x5, FRAME_TYPE_HEADERS, FLAG_PADDED | FLAG_END_STREAM, 0, 0, 0, 1, 0x04, 0, 0, 0, 0
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_headers_t * frame = (h2_frame_headers_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 5);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_HEADERS);
+  ck_assert_uint_eq(frame->flags, FLAG_PADDED | FLAG_END_STREAM);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->header_block_fragment_length, 0);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_headers_with_max_padding)
+{
+  uint8_t buffer[4 + 1 + 255 + 9] = {
+    0, ((4 + 1 + 255) >> 8) & 0xff, (4 + 1 + 255) & 0xff, FRAME_TYPE_HEADERS, FLAG_PADDED | FLAG_END_STREAM, 0, 0, 0, 1, 0xff, 0xde, 0xad, 0xbe, 0xef, // + a lot of padding
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_headers_t * frame = (h2_frame_headers_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 4 + 1 + 255);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_HEADERS);
+  ck_assert_uint_eq(frame->flags, FLAG_PADDED | FLAG_END_STREAM);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->header_block_fragment_length, 4);
+  ck_assert_uint_eq(frame->header_block_fragment[0], 0xde);
+  ck_assert_uint_eq(frame->header_block_fragment[1], 0xad);
+  ck_assert_uint_eq(frame->header_block_fragment[2], 0xbe);
+  ck_assert_uint_eq(frame->header_block_fragment[3], 0xef);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_headers_with_too_much_padding)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x5, FRAME_TYPE_HEADERS, FLAG_PADDED | FLAG_END_STREAM, 0, 0, 0, 1, 0x06, 0xde, 0xad, 0xbe, 0xef
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  // buffer position might be set to the middle of the frame, don't worry about it since
+  // it will throw a protocol error anyway
+  ck_assert_uint_eq(num_frames_parsed, 0);
+
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
+  ck_assert_str_eq(ce->error_string,
+      "Padding length is too large in comparison to frame length: 6 (0x6) >= 5 (0x5)");
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_headers_with_too_much_padding_by_1)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x5, FRAME_TYPE_HEADERS, FLAG_PADDED | FLAG_END_STREAM, 0, 0, 0, 1, 0x05, 0xde, 0xad, 0xbe, 0xef
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  // buffer position might be set to the middle of the frame, don't worry about it since
+  // it will throw a protocol error anyway
+  ck_assert_uint_eq(num_frames_parsed, 0);
+
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
+  ck_assert_str_eq(ce->error_string,
+      "Padding length is too large in comparison to frame length: 5 (0x5) >= 5 (0x5)");
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_headers_with_priority)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x9, FRAME_TYPE_HEADERS, FLAG_PRIORITY | FLAG_END_STREAM, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0xde, 0xad, 0xbe, 0xef
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_headers_t * frame = (h2_frame_headers_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 9);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_HEADERS);
+  ck_assert_uint_eq(frame->flags, FLAG_PRIORITY | FLAG_END_STREAM);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->priority_exclusive, 0);
+  ck_assert_uint_eq(frame->priority_stream_dependency, 1);
+  ck_assert_uint_eq(frame->priority_weight, 1);
+  ck_assert_uint_eq(frame->header_block_fragment_length, 4);
+  ck_assert_uint_eq(frame->header_block_fragment[0], 0xde);
+  ck_assert_uint_eq(frame->header_block_fragment[1], 0xad);
+  ck_assert_uint_eq(frame->header_block_fragment[2], 0xbe);
+  ck_assert_uint_eq(frame->header_block_fragment[3], 0xef);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_headers_with_priority_stream_exclusive)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x9, FRAME_TYPE_HEADERS, FLAG_PRIORITY | FLAG_END_STREAM, 0, 0, 0, 1, 0x80, 0, 0, 1, 1, 0xde, 0xad, 0xbe, 0xef
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_headers_t * frame = (h2_frame_headers_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 9);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_HEADERS);
+  ck_assert_uint_eq(frame->flags, FLAG_PRIORITY | FLAG_END_STREAM);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->priority_exclusive, 1);
+  ck_assert_uint_eq(frame->priority_stream_dependency, 1);
+  ck_assert_uint_eq(frame->priority_weight, 1);
+  ck_assert_uint_eq(frame->header_block_fragment_length, 4);
+  ck_assert_uint_eq(frame->header_block_fragment[0], 0xde);
+  ck_assert_uint_eq(frame->header_block_fragment[1], 0xad);
+  ck_assert_uint_eq(frame->header_block_fragment[2], 0xbe);
+  ck_assert_uint_eq(frame->header_block_fragment[3], 0xef);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_headers_with_priority_and_padding)
+{
+  uint8_t buffer[] = {
+    0, 0, 14, FRAME_TYPE_HEADERS, FLAG_PRIORITY | FLAG_PADDED | FLAG_END_STREAM, 0, 0, 0, 1, 4, 0, 0, 0, 1, 1, 0xde, 0xad, 0xbe, 0xef, 0x00, 0x00, 0x00, 0x00
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_headers_t * frame = (h2_frame_headers_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 14);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_HEADERS);
+  ck_assert_uint_eq(frame->flags, FLAG_PADDED | FLAG_PRIORITY | FLAG_END_STREAM);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->priority_exclusive, 0);
+  ck_assert_uint_eq(frame->priority_stream_dependency, 1);
+  ck_assert_uint_eq(frame->priority_weight, 1);
+  ck_assert_uint_eq(frame->header_block_fragment_length, 4);
+  ck_assert_uint_eq(frame->header_block_fragment[0], 0xde);
+  ck_assert_uint_eq(frame->header_block_fragment[1], 0xad);
+  ck_assert_uint_eq(frame->header_block_fragment[2], 0xbe);
+  ck_assert_uint_eq(frame->header_block_fragment[3], 0xef);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_headers_with_no_stream_id)
+{
+  uint8_t buffer[] = {
+    0, 0, 4, FRAME_TYPE_HEADERS, FLAG_END_HEADERS, 0, 0, 0, 0, 0xde, 0xad, 0xbe, 0xef
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  ck_assert_uint_eq(buffer_position, 0);
+  ck_assert_uint_eq(num_frames_parsed, 0);
+
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
+  ck_assert_str_eq(ce->error_string, "Stream ID must be set for frame type HEADERS (0x1)");
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_priority)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x5, FRAME_TYPE_PRIORITY, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_priority_t * frame = (h2_frame_priority_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 5);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_PRIORITY);
+  ck_assert_uint_eq(frame->flags, 0);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->priority_exclusive, 0);
+  ck_assert_uint_eq(frame->priority_stream_dependency, 1);
+  ck_assert_uint_eq(frame->priority_weight, 1);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_priority_with_high_weight)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x5, FRAME_TYPE_PRIORITY, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0xff
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_priority_t * frame = (h2_frame_priority_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 5);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_PRIORITY);
+  ck_assert_uint_eq(frame->flags, 0);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->priority_exclusive, 0);
+  ck_assert_uint_eq(frame->priority_stream_dependency, 1);
+  ck_assert_uint_eq(frame->priority_weight, 0xff);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_priority_with_high_dependency)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x5, FRAME_TYPE_PRIORITY, 0, 0, 0, 0, 1, 0x7f, 0xff, 0xff, 0xff, 15
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_priority_t * frame = (h2_frame_priority_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 5);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_PRIORITY);
+  ck_assert_uint_eq(frame->flags, 0);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->priority_exclusive, 0);
+  ck_assert_uint_eq(frame->priority_stream_dependency, 0x7fffffff);
+  ck_assert_uint_eq(frame->priority_weight, 15);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_priority_with_stream_exclusive)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x5, FRAME_TYPE_PRIORITY, 0, 0, 0, 0, 1, 0x80, 0, 0, 0, 15
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_priority_t * frame = (h2_frame_priority_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 5);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_PRIORITY);
+  ck_assert_uint_eq(frame->flags, 0);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->priority_exclusive, true);
+  ck_assert_uint_eq(frame->priority_stream_dependency, 0);
+  ck_assert_uint_eq(frame->priority_weight, 15);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_priority_with_no_stream_id)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x5, FRAME_TYPE_PRIORITY, 0, 0, 0, 0, 0, 0x80, 0, 0, 0, 15
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  ck_assert_uint_eq(buffer_position, 0);
+  ck_assert_uint_eq(num_frames_parsed, 0);
+
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
+  ck_assert_str_eq(ce->error_string, "Stream ID must be set for frame type PRIORITY (0x2)");
 }
 END_TEST
 
@@ -797,6 +1476,38 @@ Suite * hpack_suite()
 
   tcase_add_test(tc, test_h2_frame_parse_data);
   tcase_add_test(tc, test_h2_frame_parse_data_with_extra_buffer);
+  tcase_add_test(tc, test_h2_frame_parse_data_with_padding);
+  tcase_add_test(tc, test_h2_frame_parse_data_with_1_padding);
+  tcase_add_test(tc, test_h2_frame_parse_data_with_max_padding);
+  tcase_add_test(tc, test_h2_frame_parse_data_with_too_much_padding);
+  tcase_add_test(tc, test_h2_frame_parse_data_with_too_much_padding_by_1);
+  tcase_add_test(tc, test_h2_frame_parse_data_with_all_padding);
+  tcase_add_test(tc, test_h2_frame_parse_data_with_no_stream_id);
+
+  tcase_add_test(tc, test_h2_frame_parse_headers);
+  tcase_add_test(tc, test_h2_frame_parse_headers_plus_data);
+  tcase_add_test(tc, test_h2_frame_parse_headers_plus_frame_header_of_next_frame);
+  tcase_add_test(tc, test_h2_frame_parse_headers_plus_frame_header_and_then_some);
+
+  tcase_add_test(tc, test_h2_frame_parse_headers_with_padding);
+  tcase_add_test(tc, test_h2_frame_parse_headers_with_1_padding);
+  tcase_add_test(tc, test_h2_frame_parse_headers_with_max_padding);
+  tcase_add_test(tc, test_h2_frame_parse_headers_with_too_much_padding);
+  tcase_add_test(tc, test_h2_frame_parse_headers_with_too_much_padding_by_1);
+  tcase_add_test(tc, test_h2_frame_parse_headers_with_all_padding);
+
+  tcase_add_test(tc, test_h2_frame_parse_headers_with_priority);
+  tcase_add_test(tc, test_h2_frame_parse_headers_with_priority_stream_exclusive);
+
+  tcase_add_test(tc, test_h2_frame_parse_headers_with_priority_and_padding);
+
+  tcase_add_test(tc, test_h2_frame_parse_headers_with_no_stream_id);
+
+  tcase_add_test(tc, test_h2_frame_parse_priority);
+  tcase_add_test(tc, test_h2_frame_parse_priority_with_high_weight);
+  tcase_add_test(tc, test_h2_frame_parse_priority_with_high_dependency);
+  tcase_add_test(tc, test_h2_frame_parse_priority_with_stream_exclusive);
+  tcase_add_test(tc, test_h2_frame_parse_priority_with_no_stream_id);
 
   suite_add_tcase(s, tc);
 

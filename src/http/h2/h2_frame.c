@@ -215,6 +215,46 @@ frame_parser_definition_t frame_parser_definitions[] = {
 
 };
 
+/**
+ * Caller should not free the returned string
+ */
+char * frame_type_to_string(enum frame_type_e t)
+{
+  switch (t) {
+    case FRAME_TYPE_DATA:
+      return "DATA";
+
+    case FRAME_TYPE_HEADERS:
+      return "HEADERS";
+
+    case FRAME_TYPE_PRIORITY:
+      return "PRIORITY";
+
+    case FRAME_TYPE_RST_STREAM:
+      return "RST_STREAM";
+
+    case FRAME_TYPE_SETTINGS:
+      return "SETTINGS";
+
+    case FRAME_TYPE_PUSH_PROMISE:
+      return "PUSH_PROMISE";
+
+    case FRAME_TYPE_PING:
+      return "PING";
+
+    case FRAME_TYPE_GOAWAY:
+      return "GOAWAY";
+
+    case FRAME_TYPE_WINDOW_UPDATE:
+      return "WINDOW_UPDATE";
+
+    case FRAME_TYPE_CONTINUATION:
+      return "CONTINUATION";
+  }
+
+  return "UNKNOWN";
+}
+
 bool h2_frame_flag_get(const h2_frame_t * const frame, int mask)
 {
   return frame->flags & mask;
@@ -595,12 +635,20 @@ static bool strip_padding(const h2_frame_parser_t * const parser, uint8_t * padd
     // padding length is actually 1 less than you would expect because the padding length field
     // is one octet as well. So to pad 100 octets, the padding length field is 99 + the implicit
     // one octet from the padding length field
-    *padding_length = get_bits8(*payload, 0xFF);
+    *padding_length = **payload;
 
-    (*payload_length)--;
-    (*payload)++;
-    *payload_length -= *padding_length;
-    log_append(parser->log, LOG_TRACE, "Stripped %ld octets of padding from frame", padding_length);
+    if (*padding_length >= *payload_length) {
+      parser->parse_error(parser->data, 0, H2_ERROR_PROTOCOL_ERROR,
+          "Padding length is too large in comparison to frame length: %ld (0x%x) >= %ld (0x%x)",
+          *padding_length, *padding_length, *payload_length, *payload_length);
+      return false;
+    } else {
+      // payload length takes up 1 byte
+      (*payload_length)--;
+      *payload_length -= *padding_length;
+      (*payload)++;
+      log_append(parser->log, LOG_TRACE, "Stripped %ld octets of padding from frame", padding_length);
+    }
   }
 
   return true;
@@ -652,6 +700,13 @@ static bool h2_frame_parse_headers(const h2_frame_parser_t * const parser, uint8
 
     buf += 5;
     buf_length -= 5;
+  } else {
+    frame->priority_exclusive = DEFAULT_PRIORITY_STREAM_EXCLUSIVE;
+    frame->priority_stream_dependency = DEFAULT_PRIORITY_STREAM_DEPENDENCY;
+    // Subtract 1 to be consistent with what is reported when the priority flag is set.
+    // The value over the wire is 0 to 255. Any code that is looking at this value should use
+    // frame->priority_weight + 1
+    frame->priority_weight = DEFAULT_PRIORITY_WEIGHT - 1;
   }
 
   frame->header_block_fragment = buf;
@@ -781,15 +836,15 @@ static bool h2_frame_is_valid(const h2_frame_parser_t * const parser, h2_frame_t
 
   if (frame->length < def.length_min) {
     parser->parse_error(parser->data, 0, H2_ERROR_FRAME_SIZE_ERROR,
-        "Invalid frame length (below min) for frame type (0x%x): 0x%x, %d",
-        frame->type, frame->length, frame->length);
+        "Invalid frame length (below min) for frame type %s (0x%x): 0x%x, %d",
+        frame_type_to_string(frame->type), frame->type, frame->length, frame->length);
     return false;
   }
 
   if (frame->length > def.length_max) {
     parser->parse_error(parser->data, 0, H2_ERROR_FRAME_SIZE_ERROR,
-        "Invalid frame length (above max) for frame type (0x%x): 0x%x, %d",
-        frame->type, frame->length, frame->length);
+        "Invalid frame length (above max) for frame type %s (0x%x): 0x%x, %d",
+        frame_type_to_string(frame->type), frame->type, frame->length, frame->length);
     return false;
   }
 
@@ -803,7 +858,8 @@ static bool h2_frame_is_valid(const h2_frame_parser_t * const parser, h2_frame_t
 
       if (frame->flags & mask) {
         parser->parse_error(parser->data, 0, H2_ERROR_PROTOCOL_ERROR,
-            "Invalid flag set for frame type (0x%x): 0x%x", frame->type, frame->flags);
+            "Invalid flag set for frame type %s (0x%x): 0x%x",
+            frame_type_to_string(frame->type), frame->type, frame->flags);
         return false;
       }
     }
@@ -811,13 +867,13 @@ static bool h2_frame_is_valid(const h2_frame_parser_t * const parser, h2_frame_t
 
   if (frame->stream_id == 0 && def.must_have_stream_id) {
     parser->parse_error(parser->data, 0, H2_ERROR_PROTOCOL_ERROR,
-        "Stream ID must be set for frame type: 0x%x", frame->type);
+        "Stream ID must be set for frame type %s (0x%x)", frame_type_to_string(frame->type), frame->type);
     return false;
   }
 
   if (frame->stream_id > 0 && def.must_not_have_stream_id) {
     parser->parse_error(parser->data, 0, H2_ERROR_PROTOCOL_ERROR,
-        "Stream ID must not be set for frame type: 0x%x", frame->type);
+        "Stream ID must not be set for frame type %s (0x%x)", frame_type_to_string(frame->type), frame->type);
     return false;
   }
 
@@ -873,7 +929,7 @@ h2_frame_t * h2_frame_parse(const h2_frame_parser_t * const parser, uint8_t * co
 
     if (frame == NULL) {
       parser->parse_error(parser->data, 0, H2_ERROR_PROTOCOL_ERROR,
-          "Unhandled frame type: %d", frame_type);
+        "Unhandled frame type: %s (0x%x)", frame_type_to_string(frame->type), frame->type);
       return NULL;
     } else if (!h2_frame_is_valid(parser, frame)) {
       free(frame);

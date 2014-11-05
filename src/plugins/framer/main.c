@@ -28,46 +28,6 @@ static void framer_plugin_stop(plugin_t * plugin)
   log_append(plugin->log, LOG_INFO, "Framer plugin stopped");
 }
 
-/**
- * Caller should not free the returned string
- */
-static char * frame_type_to_string(enum frame_type_e t)
-{
-  switch (t) {
-    case FRAME_TYPE_DATA:
-      return "DATA";
-
-    case FRAME_TYPE_HEADERS:
-      return "HEADERS";
-
-    case FRAME_TYPE_PRIORITY:
-      return "PRIORITY";
-
-    case FRAME_TYPE_RST_STREAM:
-      return "RST_STREAM";
-
-    case FRAME_TYPE_SETTINGS:
-      return "SETTINGS";
-
-    case FRAME_TYPE_PUSH_PROMISE:
-      return "PUSH_PROMISE";
-
-    case FRAME_TYPE_PING:
-      return "PING";
-
-    case FRAME_TYPE_GOAWAY:
-      return "GOAWAY";
-
-    case FRAME_TYPE_WINDOW_UPDATE:
-      return "WINDOW_UPDATE";
-
-    case FRAME_TYPE_CONTINUATION:
-      return "CONTINUATION";
-  }
-
-  return "UNKNOWN";
-}
-
 static char * error_code_to_string(enum h2_error_code_e e)
 {
   switch (e) {

@@ -11,10 +11,6 @@
 #include "http/request.h"
 #include "http/response.h"
 
-#define DEFAULT_STREAM_EXCLUSIVE_FLAG 0
-#define DEFAULT_STREAM_DEPENDENCY 0
-#define DEFAULT_STREAM_WEIGHT 16
-
 #define MAX_WINDOW_SIZE 0x7FFFFFFF // 2^31 - 1
 #define MAX_CONNECTION_BUFFER_SIZE 0x100000 // 2^20
 
@@ -931,9 +927,9 @@ static h2_stream_t * h2_stream_init(h2_t * const h2, const uint32_t stream_id)
   stream->header_fragments = NULL;
   stream->headers = NULL;
 
-  stream->priority_exclusive = DEFAULT_STREAM_EXCLUSIVE_FLAG;
-  stream->priority_stream_dependency = DEFAULT_STREAM_DEPENDENCY;
-  stream->priority_weight = DEFAULT_STREAM_WEIGHT;
+  stream->priority_exclusive = DEFAULT_PRIORITY_STREAM_EXCLUSIVE;
+  stream->priority_stream_dependency = DEFAULT_PRIORITY_STREAM_DEPENDENCY;
+  stream->priority_weight = DEFAULT_PRIORITY_WEIGHT;;
 
   stream->outgoing_window_size = h2->initial_window_size;
   stream->incoming_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
