@@ -197,7 +197,19 @@ typedef struct h2_t {
 
 } h2_t;
 
-bool h2_detect_connection(uint8_t * buffer, size_t len);
+enum h2_detect_result_e {
+  H2_DETECT_FAILED,
+  H2_DETECT_SUCCESS,
+  H2_DETECT_NEED_MORE_DATA
+};
+
+/**
+ * returns:
+ * H2_DETECT_FAILED = the connection does not look like valid http/2 data
+ * H2_DETECT_SUCCESS = the connection looks like valid http/2 data
+ * H2_DETECT_NEED_MORE_DATA = we need more data to determine if this is valid http/2 data
+ */
+enum h2_detect_result_e h2_detect_connection(uint8_t * buffer, size_t len);
 
 h2_t * h2_init(void * const data, log_context_t * log, log_context_t * hpack_log, const char * tls_version,
                const char * cipher, int cipher_key_size_in_bits, struct plugin_invoker_t * plugin_invoker,

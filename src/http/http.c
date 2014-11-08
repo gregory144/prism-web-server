@@ -241,16 +241,31 @@ static bool detect_protocol(http_connection_t * connection, uint8_t * const buff
   }
 
   bool detected = false;
+  bool h2_failed = false;
+  bool h1_1_failed = false;
 
-  if (h2_detect_connection(full_buffer, full_buffer_length)) {
+  enum h2_detect_result_e h2_result = h2_detect_connection(full_buffer, full_buffer_length);
+  if (h2_result == H2_DETECT_SUCCESS) {
     set_protocol_h2(connection);
     detected = true;
-  } else if (h1_1_detect_connection(full_buffer, full_buffer_length)) {
-    set_protocol_h1_1(connection);
-    detected = true;
+  } else if (h2_result == H2_DETECT_FAILED) {
+    h2_failed = true;
   }
 
   if (!detected) {
+    enum h1_1_detect_result_e h1_1_result = h1_1_detect_connection(full_buffer, full_buffer_length);
+    if (h1_1_result == H1_1_DETECT_SUCCESS) {
+      set_protocol_h1_1(connection);
+      detected = true;
+    } else if (h1_1_result == H1_1_DETECT_FAILED) {
+      h1_1_failed = true;
+    }
+  }
+
+  if (h2_failed && h1_1_failed) {
+    // we could not detect either an h2 or h1_1 connection
+    return false;
+  } else if (!detected) {
     if (fail_hard) {
       // fail if we've read a lot of data and still can't detect
       // the protocol
@@ -287,6 +302,7 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
       http_connection_close(connection);
       return;
     } else if (connection->buffer) {
+      log_append(connection->log, LOG_TRACE, "Could not detect protocol, need more data");
       free(buffer);
 
       read_buffer_length = binary_buffer_size(connection->buffer);
@@ -297,6 +313,7 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
 
   switch (connection->protocol) {
     case NOT_SELECTED:
+      log_append(connection->log, LOG_TRACE, "Protocol not selected");
       free(read_buffer);
       break;
 

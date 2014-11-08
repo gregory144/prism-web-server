@@ -26,15 +26,16 @@ static const char * const HTTP2_CIPHERS[] = {
   "DHE-DSS-AES128-GCM-SHA256"
 };
 
-bool h2_detect_connection(uint8_t * buffer, size_t buffer_length)
+enum h2_detect_result_e h2_detect_connection(uint8_t * buffer, size_t buffer_length)
 {
-  if (buffer_length >= H2_CONNECTION_PREFACE_LENGTH) {
-    if (memcmp(buffer, H2_CONNECTION_PREFACE, H2_CONNECTION_PREFACE_LENGTH) == 0) {
-      return true;
-    }
+  if (buffer_length < H2_CONNECTION_PREFACE_LENGTH) {
+    return H2_DETECT_NEED_MORE_DATA;
+  }
+  if (memcmp(buffer, H2_CONNECTION_PREFACE, H2_CONNECTION_PREFACE_LENGTH) == 0) {
+    return H2_DETECT_SUCCESS;
   }
 
-  return false;
+  return H2_DETECT_FAILED;
 }
 
 static void h2_stream_free(void * value)

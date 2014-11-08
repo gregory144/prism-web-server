@@ -67,7 +67,19 @@ typedef struct {
 
 } h1_1_t;
 
-bool h1_1_detect_connection(uint8_t * buffer, size_t len);
+enum h1_1_detect_result_e {
+  H1_1_DETECT_FAILED,
+  H1_1_DETECT_SUCCESS,
+  H1_1_DETECT_NEED_MORE_DATA
+};
+
+/**
+ * returns:
+ * H1_1_DETECT_FAILED = the connection does not look like valid http/1.1 data
+ * H1_1_DETECT_SUCCESS = the connection looks like valid http/1.1 data
+ * H1_1_DETECT_NEED_MORE_DATA = we need more data to determine if this is valid http/1.1 data
+ */
+enum h1_1_detect_result_e h1_1_detect_connection(uint8_t * buffer, size_t len);
 
 h1_1_t * h1_1_init(void * const data, log_context_t * log, const char * scheme, const char * hostname,
                    const int port, struct plugin_invoker_t * plugin_invoker, const h1_1_write_cb writer,

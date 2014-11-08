@@ -5,10 +5,14 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "util.h"
 
 #include "h1_1.h"
+
+#define MAX_METHOD_LENGTH 32
+#define MAX_PATH_LENGTH 1024
 
 static int hp_message_begin_cb(http_parser * http_parser);
 static int hp_url_cb(http_parser * http_parser, const char * at, size_t length);
@@ -43,7 +47,7 @@ enum detect_state {
   NEWLINE
 };
 
-bool h1_1_detect_connection(uint8_t * buffer, size_t buffer_length)
+enum h1_1_detect_result_e h1_1_detect_connection(uint8_t * buffer, size_t buffer_length)
 {
   // check for a line that vaguely looks like:
   // GET /path HTTP/1.1\r\n
@@ -52,12 +56,24 @@ bool h1_1_detect_connection(uint8_t * buffer, size_t buffer_length)
 
   uint8_t * curr = buffer;
 
+  size_t method_length = 0;
+  size_t path_length = 0;
+
   while (curr < buffer + buffer_length) {
     switch (state) {
       case METHOD: {
         // find the first space
         if (curr[0] == ' ') {
           state = PATH;
+        } else if (isupper(curr[0])) {
+          method_length++;
+          if (method_length > MAX_METHOD_LENGTH) {
+            // we've read too many upper case characters
+            return H1_1_DETECT_FAILED;
+          }
+        } else {
+          // we've found a non-space or non upper case character
+          return H1_1_DETECT_FAILED;
         }
 
         break;
@@ -67,6 +83,11 @@ bool h1_1_detect_connection(uint8_t * buffer, size_t buffer_length)
         // find the second space
         if (curr[0] == ' ') {
           state = VERSION_H;
+        } else {
+          path_length++;
+          if (path_length > MAX_PATH_LENGTH) {
+            return H1_1_DETECT_FAILED;
+          }
         }
 
         break;
@@ -76,7 +97,7 @@ bool h1_1_detect_connection(uint8_t * buffer, size_t buffer_length)
         if (curr[0] == 'H') {
           state = VERSION_HT;
         } else {
-          return false;
+          return H1_1_DETECT_FAILED;
         }
 
         break;
@@ -86,7 +107,7 @@ bool h1_1_detect_connection(uint8_t * buffer, size_t buffer_length)
         if (curr[0] == 'T') {
           state = VERSION_HTT;
         } else {
-          return false;
+          return H1_1_DETECT_FAILED;
         }
 
         break;
@@ -96,7 +117,7 @@ bool h1_1_detect_connection(uint8_t * buffer, size_t buffer_length)
         if (curr[0] == 'T') {
           state = VERSION_HTTP;
         } else {
-          return false;
+          return H1_1_DETECT_FAILED;
         }
 
         break;
@@ -106,7 +127,7 @@ bool h1_1_detect_connection(uint8_t * buffer, size_t buffer_length)
         if (curr[0] == 'P') {
           state = VERSION_HTTP_SLASH;
         } else {
-          return false;
+          return H1_1_DETECT_FAILED;
         }
 
         break;
@@ -116,7 +137,7 @@ bool h1_1_detect_connection(uint8_t * buffer, size_t buffer_length)
         if (curr[0] == '/') {
           state = MAJOR;
         } else {
-          return false;
+          return H1_1_DETECT_FAILED;
         }
 
         break;
@@ -126,7 +147,7 @@ bool h1_1_detect_connection(uint8_t * buffer, size_t buffer_length)
         if (curr[0] == '1') {
           state = VERSION_SEP;
         } else {
-          return false;
+          return H1_1_DETECT_FAILED;
         }
 
         break;
@@ -136,7 +157,7 @@ bool h1_1_detect_connection(uint8_t * buffer, size_t buffer_length)
         if (curr[0] == '.') {
           state = MINOR;
         } else {
-          return false;
+          return H1_1_DETECT_FAILED;
         }
 
         break;
@@ -146,7 +167,7 @@ bool h1_1_detect_connection(uint8_t * buffer, size_t buffer_length)
         if (curr[0] == '1' || curr[0] == '0') {
           state = NEWLINE;
         } else {
-          return false;
+          return H1_1_DETECT_FAILED;
         }
 
         break;
@@ -156,20 +177,20 @@ bool h1_1_detect_connection(uint8_t * buffer, size_t buffer_length)
         if (curr[0] == '\r' || curr[0] == '\n') {
           return true;
         } else {
-          return false;
+          return H1_1_DETECT_FAILED;
         }
 
         break;
       }
 
       default:
-        return false;
+        return H1_1_DETECT_FAILED;
     }
 
     curr++;
   }
 
-  return false;
+  return H1_1_DETECT_NEED_MORE_DATA;
 }
 
 static bool h1_1_respond_with_error_code(h1_1_t * const h1_1, int code)
