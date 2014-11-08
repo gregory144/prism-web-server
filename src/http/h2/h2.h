@@ -84,6 +84,8 @@ typedef struct {
    */
   uint32_t id;
 
+  bool incoming_push;
+
   /**
    * The current state of the stream, one of:
    *
@@ -156,6 +158,17 @@ typedef struct h2_t {
   size_t last_stream_id;
   long outgoing_window_size;
   long incoming_window_size;
+
+  /**
+   * Only one outgoing settings frame can be sent at one time.
+   * Otherwise, we can't keep track of which settings frame the
+   * client is acknowledging.
+   */
+  bool settings_pending;
+
+  bool incoming_push_enabled;
+  bool incoming_push_enabled_pending;
+  bool incoming_push_enabled_pending_value;
 
   // is the connection waiting to be gracefully closed?
   bool closing;

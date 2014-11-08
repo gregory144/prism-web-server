@@ -1808,6 +1808,34 @@ START_TEST(test_h2_frame_parse_settings_with_multiple_settings)
 }
 END_TEST
 
+START_TEST(test_h2_frame_parse_push_promise)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x8, FRAME_TYPE_PUSH_PROMISE, FLAG_END_HEADERS, 0, 0, 0, 1,
+    0, 0, 0, 2, 0xde, 0xad, 0xbe, 0xef
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, 9 + 8);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_push_promise_t * frame = (h2_frame_push_promise_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 8);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_PUSH_PROMISE);
+  ck_assert_uint_eq(frame->flags, FLAG_END_HEADERS);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->promised_stream_id, 2);
+  ck_assert_uint_eq(frame->header_block_fragment_length, 4);
+  ck_assert_uint_eq(frame->header_block_fragment[0], 0xde);
+  ck_assert_uint_eq(frame->header_block_fragment[1], 0xad);
+  ck_assert_uint_eq(frame->header_block_fragment[2], 0xbe);
+  ck_assert_uint_eq(frame->header_block_fragment[3], 0xef);
+}
+END_TEST
+
 Suite * hpack_suite()
 {
   Suite * s = suite_create("h2_frame");
@@ -1895,6 +1923,8 @@ Suite * hpack_suite()
   tcase_add_test(tc, test_h2_frame_parse_settings_with_low_max_frame_size);
   tcase_add_test(tc, test_h2_frame_parse_settings_with_high_max_frame_size);
   tcase_add_test(tc, test_h2_frame_parse_settings_with_invalid_frame_length);
+
+  tcase_add_test(tc, test_h2_frame_parse_push_promise);
 
   suite_add_tcase(s, tc);
 

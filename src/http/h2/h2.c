@@ -152,6 +152,12 @@ h2_t * h2_init(void * const data, log_context_t * log, log_context_t * hpack_log
   h2->current_stream_id = 2;
   h2->outgoing_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
   h2->incoming_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
+
+  h2->settings_pending = false;
+  h2->incoming_push_enabled = true;
+  h2->incoming_push_enabled_pending = false;
+  h2->incoming_push_enabled_pending_value = false;
+
   h2->closing = false;
   h2->closed = false;
 
@@ -759,8 +765,14 @@ static bool h2_send_settings_ack(const h2_t * const h2)
   return h2_frame_write(h2, (h2_frame_t *) frame);
 }
 
-static bool h2_send_default_settings(const h2_t * const h2)
+static bool h2_send_default_settings(h2_t * const h2)
 {
+  if (h2->settings_pending) {
+    h2_emit_error_and_close(h2, 0, H2_ERROR_INTERNAL_ERROR,
+        "Tried to send 2 settings frames at once");
+    return false;
+  }
+
   uint8_t flags = 0;
 
   h2_frame_settings_t * frame = (h2_frame_settings_t *) h2_frame_init(&h2->frame_parser,
@@ -770,6 +782,10 @@ static bool h2_send_default_settings(const h2_t * const h2)
   frame->settings[0].value = 0;
 
   log_append(h2->log, LOG_DEBUG, "Writing default settings frame");
+
+  h2->settings_pending = true;
+  h2->incoming_push_enabled_pending = true;
+  h2->incoming_push_enabled_pending_value = false;
 
   return h2_frame_write(h2, (h2_frame_t *) frame);
 }
@@ -903,7 +919,7 @@ static bool h2_setting_set(h2_t * const h2, const h2_setting_t * setting)
   return true;
 }
 
-static h2_stream_t * h2_stream_init(h2_t * const h2, const uint32_t stream_id)
+static h2_stream_t * h2_stream_init(h2_t * const h2, const uint32_t stream_id, bool incoming_push)
 {
 
   log_append(h2->log, LOG_TRACE, "Opening stream #%u", stream_id);
@@ -911,8 +927,8 @@ static h2_stream_t * h2_stream_init(h2_t * const h2, const uint32_t stream_id)
   h2_stream_t * stream = h2_stream_get(h2, stream_id);
 
   if (stream != NULL) {
-    h2_emit_error_and_close(h2, stream_id, H2_ERROR_PROTOCOL_ERROR,
-                         "Got a headers frame for an existing stream");
+    h2_emit_error_and_close_va(h2, 0, H2_ERROR_PROTOCOL_ERROR,
+                         "Tried to initialize an existing stream: %u", stream_id);
     return NULL;
   }
 
@@ -941,6 +957,7 @@ static h2_stream_t * h2_stream_init(h2_t * const h2, const uint32_t stream_id)
   stream->queued_data_frames = NULL;
 
   stream->id = stream_id;
+  stream->incoming_push = incoming_push;
   stream->state = STREAM_STATE_IDLE;
   stream->closing = false;
   stream->header_fragments = NULL;
@@ -997,7 +1014,7 @@ static bool h2_trigger_request(h2_t * const h2, h2_stream_t * const stream)
 
 bool h2_request_begin(h2_t * const h2, header_list_t * headers, uint8_t * buf, size_t buf_length)
 {
-  h2_stream_t * stream = h2_stream_init(h2, 1);
+  h2_stream_t * stream = h2_stream_init(h2, 1, false);
   ASSERT_OR_RETURN_FALSE(stream);
   stream->headers = headers;
 
@@ -1169,7 +1186,7 @@ static bool h2_parse_header_fragments(h2_t * const h2, h2_stream_t * const strea
 
 static bool h2_incoming_frame_headers(h2_t * const h2, const h2_frame_headers_t * const frame)
 {
-  h2_stream_t * stream = h2_stream_init(h2, frame->stream_id);
+  h2_stream_t * stream = h2_stream_init(h2, frame->stream_id, false);
 
   if (!stream) {
     return false;
@@ -1194,6 +1211,7 @@ static bool h2_incoming_frame_headers(h2_t * const h2, const h2_frame_headers_t 
 
     if (!success) {
       h2_emit_error_and_close(h2, stream->id, H2_ERROR_INTERNAL_ERROR, "Unable to process stream");
+      return false;
     }
   } else {
     // TODO mark stream as waiting for continuation frame
@@ -1202,12 +1220,56 @@ static bool h2_incoming_frame_headers(h2_t * const h2, const h2_frame_headers_t 
   return true;
 }
 
-static bool h2_incoming_frame_continuation(h2_t * const h2,
-    const h2_frame_continuation_t * const frame)
+static bool h2_received_push_promise(h2_t * const h2, h2_stream_t * stream)
+{
+
+  if (h2->incoming_push_enabled) {
+
+    h2_emit_error_and_close(h2, stream->id, H2_ERROR_REFUSED_STREAM, NULL);
+    return true;
+
+  } else {
+
+    h2_emit_error_and_close_va(h2, 0, H2_ERROR_PROTOCOL_ERROR,
+        "Received %s (0x%x) frame, but SETTINGS_PUSH_ENABLED is off",
+        frame_type_to_string(FRAME_TYPE_PUSH_PROMISE), FRAME_TYPE_PUSH_PROMISE);
+    return false;
+
+  }
+
+}
+
+static bool h2_incoming_frame_push_promise(h2_t * const h2, const h2_frame_push_promise_t * const frame)
+{
+  h2_stream_t * stream = h2_stream_init(h2, frame->stream_id, true);
+
+  if (!stream) {
+    return false;
+  }
+
+  if (FRAME_FLAG(frame, FLAG_END_HEADERS)) {
+    // parse the headers
+    log_append(h2->log, LOG_TRACE, "Parsing push promise");
+
+    bool success = h2_received_push_promise(h2, stream);
+
+    if (!success) {
+      h2_emit_error_and_close(h2, stream->id, H2_ERROR_INTERNAL_ERROR, "Unable to process push promise");
+      return false;
+    }
+  } else {
+    // TODO mark stream as waiting for continuation frame
+  }
+
+  return true;
+}
+
+static bool h2_incoming_frame_continuation(h2_t * const h2, const h2_frame_continuation_t * const frame)
 {
   h2_stream_t * stream = h2_stream_get(h2, frame->stream_id);
 
-  if (!h2_stream_add_header_fragment(stream, frame->header_block_fragment, frame->header_block_fragment_length)) {
+  if (!h2_stream_add_header_fragment(stream, frame->header_block_fragment,
+        frame->header_block_fragment_length)) {
     return false;
   }
 
@@ -1216,7 +1278,11 @@ static bool h2_incoming_frame_continuation(h2_t * const h2,
     // parse the headers
     log_append(h2->log, LOG_TRACE, "Parsing headers + continuations");
 
-    return h2_parse_header_fragments(h2, stream);
+    if (stream->incoming_push) {
+      return h2_received_push_promise(h2, stream);
+    } else {
+      return h2_parse_header_fragments(h2, stream);
+    }
   }
 
   return true;
@@ -1229,7 +1295,13 @@ static bool h2_incoming_frame_settings(h2_t * const h2, const h2_frame_settings_
 
     if (frame->length != 0) {
       h2_emit_error_and_close_va(h2, 0, H2_ERROR_FRAME_SIZE_ERROR,
-                           "Non-zero frame size for ACK settings frame: %ld", frame->length);
+                           "Non-zero frame size for ACK settings frame: %lu", frame->length);
+      return false;
+    }
+
+    if (!h2->settings_pending) {
+      h2_emit_error_and_close_va(h2, 0, H2_ERROR_INTERNAL_ERROR,
+          "Received unknown %s (0x%x) ACK.", frame_type_to_string(frame->type), frame->type);
       return false;
     }
 
@@ -1238,6 +1310,13 @@ static bool h2_incoming_frame_settings(h2_t * const h2, const h2_frame_settings_
     // Mark the settings frame we sent as acknowledged.
     // We currently don't send any settings that require
     // synchonization
+    if (h2->incoming_push_enabled_pending) {
+      h2->incoming_push_enabled = h2->incoming_push_enabled_pending_value;
+      h2->incoming_push_enabled_pending = false;
+    }
+
+    h2->settings_pending = false;
+
     return true;
 
   } else {
@@ -1406,8 +1485,8 @@ static bool h2_incoming_frame(void * data, const h2_frame_t * const frame)
       break;
 
     case FRAME_TYPE_PUSH_PROMISE:
-      h2_emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR, "Server does not accept PUSH_PROMISE frames");
-      success = false;
+      plugin_invoke(h2->plugin_invoker, INCOMING_FRAME_PUSH_PROMISE, frame, h2->buffer_position);
+      success = h2_incoming_frame_push_promise(h2, (h2_frame_push_promise_t *) frame);
       break;
 
     case FRAME_TYPE_PING:
@@ -1722,7 +1801,7 @@ http_request_t * h2_push_init(h2_stream_t * stream, http_request_t * const origi
                h2->outgoing_concurrent_streams, stream->id);
   }
 
-  h2_stream_t * pushed_stream = h2_stream_init(h2, h2->current_stream_id);
+  h2_stream_t * pushed_stream = h2_stream_init(h2, h2->current_stream_id, false);
   ASSERT_OR_RETURN_NULL(pushed_stream);
   h2->current_stream_id += 2;
 

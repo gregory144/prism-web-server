@@ -120,7 +120,7 @@ frame_parser_definition_t frame_parser_definitions[] = {
 
   {
     // PUSH_PROMISE frame
-    0, // length min
+    4, // length min
     0x4000, // length max 2^14
     0x5, // type
     {
@@ -133,8 +133,8 @@ frame_parser_definition_t frame_parser_definitions[] = {
       false,
       false
     },
-    false,
-    true
+    true,
+    false
   },
 
   {
@@ -726,6 +726,29 @@ static bool h2_frame_parse_headers(const h2_frame_parser_t * const parser, uint8
   return true;
 }
 
+static bool h2_frame_parse_push_promise(const h2_frame_parser_t * const parser, uint8_t * buf,
+    h2_frame_push_promise_t * const frame)
+{
+  size_t buf_length = frame->length;
+
+  bool padded = FRAME_FLAG(frame, FLAG_PADDED);
+  uint8_t padding_length = 0;
+
+  if (!strip_padding(parser, &padding_length, &buf, &buf_length, padded)) {
+    log_append(parser->log, LOG_ERROR, "Problem with padding on header frame");
+    return false;
+  }
+
+  frame->padding_length = padding_length;
+
+  frame->promised_stream_id = get_bits32(buf, 0x7FFFFFFF);
+
+  frame->header_block_fragment = buf + 4;
+  frame->header_block_fragment_length = buf_length - 4;
+
+  return true;
+}
+
 static bool h2_frame_parse_continuation(const h2_frame_parser_t * const parser, uint8_t * buf,
                                         h2_frame_continuation_t * const frame)
 {
@@ -1029,8 +1052,9 @@ h2_frame_t * h2_frame_parse(const h2_frame_parser_t * const parser, uint8_t * co
         break;
 
       case FRAME_TYPE_PUSH_PROMISE:
-        log_append(parser->log, LOG_ERROR, "Server should not receive push promise frame");
-        success = false;
+        success = h2_frame_parse_push_promise(parser, buffer + *buffer_position,
+            (h2_frame_push_promise_t *) frame);
+        break;
 
       case FRAME_TYPE_PING:
         success = h2_frame_parse_ping(parser, buffer + *buffer_position,
