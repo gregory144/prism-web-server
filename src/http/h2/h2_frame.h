@@ -32,6 +32,12 @@ enum frame_type_e {
 #define SETTING_VALUE_SIZE 4
 #define SETTING_SIZE (SETTING_ID_SIZE + SETTING_VALUE_SIZE)
 
+#define MAX_SETTINGS_PER_FRAME 6
+
+#define MAX_INITIAL_WINDOW_SIZE 0x7fffffff
+#define MIN_MAX_FRAME_SIZE 0x4000
+#define MAX_MAX_FRAME_SIZE 0xFFFFFF
+
 #define PING_OPAQUE_DATA_LENGTH 8
 
 #define FRAME_TYPE_MIN FRAME_TYPE_DATA
@@ -87,7 +93,7 @@ typedef struct {
 
   size_t num_settings;
 
-  h2_setting_t settings[6];
+  h2_setting_t settings[MAX_SETTINGS_PER_FRAME];
 
 } h2_frame_settings_t;
 

@@ -877,8 +877,10 @@ static bool h2_setting_set(h2_t * const h2, const h2_setting_t * setting)
       break;
 
     default:
-      h2_emit_error_and_close_va(h2, 0, H2_ERROR_PROTOCOL_ERROR, "Invalid setting: %d", setting->id);
-      return false;
+      // unknown settings should be ignored
+      log_append(h2->log, LOG_DEBUG, "Unknown setting: id: %u (0x%x), value: %u (0x%x)",
+          setting->id, setting->id, value, value);
+      return true;
   }
 
   return true;

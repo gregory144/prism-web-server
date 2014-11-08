@@ -729,13 +729,23 @@ static bool h2_frame_parse_continuation(const h2_frame_parser_t * const parser, 
 }
 
 bool h2_parse_settings_payload(const h2_frame_parser_t * const parser, uint8_t * buf,
-    size_t buffer_length, size_t * num_settings,
-                                      h2_setting_t * settings)
+    size_t buffer_length, size_t * num_settings, h2_setting_t * settings)
 {
+
+  // verify the frame length is a multiple of SETTING_SIZE
+  if (buffer_length % SETTING_SIZE != 0) {
+    parser->parse_error(parser->data, 0, H2_ERROR_FRAME_SIZE_ERROR,
+        "%s (0x%x) frame length must be a multiple of %u but was: %u (0x%x)",
+        frame_type_to_string(FRAME_TYPE_SETTINGS), FRAME_TYPE_SETTINGS, SETTING_SIZE,
+        buffer_length, buffer_length);
+    return false;
+  }
+
   *num_settings = buffer_length / SETTING_SIZE;
 
-  if (*num_settings > 6) {
-    log_append(parser->log, LOG_ERROR, "Up to 6 settings per frame supported: %ld", *num_settings);
+  if (*num_settings > MAX_SETTINGS_PER_FRAME) {
+    parser->parse_error(parser->data, 0, H2_ERROR_INTERNAL_ERROR,
+        "Up to %u settings per frame are supported", MAX_SETTINGS_PER_FRAME);
     return false;
   }
 
@@ -746,6 +756,31 @@ bool h2_parse_settings_payload(const h2_frame_parser_t * const parser, uint8_t *
     uint8_t * curr_setting = buf + (i * SETTING_SIZE);
     curr->id = get_bits16(curr_setting, 0xFFFF);
     curr->value = get_bits32(curr_setting + SETTING_ID_SIZE, 0xFFFFFFFF);
+
+    if (curr->id == SETTINGS_ENABLE_PUSH && curr->value > 1) {
+      parser->parse_error(parser->data, 0, H2_ERROR_PROTOCOL_ERROR,
+          "SETTINGS_ENABLE_PUSH value must be 0 or 1 but was: %u (0x%x)", curr->value, curr->value);
+      return false;
+    }
+    if (curr->id == SETTINGS_INITIAL_WINDOW_SIZE && curr->value > MAX_INITIAL_WINDOW_SIZE) {
+      parser->parse_error(parser->data, 0, H2_ERROR_PROTOCOL_ERROR,
+          "SETTINGS_INITIAL_WINDOW_SIZE value must not be greater than 0x%x "
+          "but was: %u (0x%x)", MAX_INITIAL_WINDOW_SIZE, curr->value, curr->value);
+      return false;
+    }
+    // frame size must be between 2^14 and 2^24-1 (inclusive).
+    if (curr->id == SETTINGS_MAX_FRAME_SIZE && curr->value < MIN_MAX_FRAME_SIZE) {
+      parser->parse_error(parser->data, 0, H2_ERROR_PROTOCOL_ERROR,
+          "SETTINGS_MAX_FRAME_SIZE value must be between 0x%x and 0x%x (inclusive) "
+          "but was: %u (0x%x)", MIN_MAX_FRAME_SIZE, MAX_MAX_FRAME_SIZE, curr->value, curr->value);
+      return false;
+    }
+    if (curr->id == SETTINGS_MAX_FRAME_SIZE && curr->value > MAX_MAX_FRAME_SIZE) {
+      parser->parse_error(parser->data, 0, H2_ERROR_PROTOCOL_ERROR,
+          "SETTINGS_MAX_FRAME_SIZE value must be between 0x%x and 0x%x (inclusive) "
+          "but was: %u (0x%x)", MIN_MAX_FRAME_SIZE, MAX_MAX_FRAME_SIZE, curr->value, curr->value);
+      return false;
+    }
   }
 
   return true;
@@ -757,6 +792,15 @@ static bool h2_frame_parse_settings(const h2_frame_parser_t * const parser, uint
   if (!FRAME_FLAG(frame, FLAG_ACK)) {
     return h2_parse_settings_payload(parser, buf, frame->length, &frame->num_settings, frame->settings);
   } else {
+
+    // verify the payload is empty
+    if (frame->length > 0) {
+      parser->parse_error(parser->data, 0, H2_ERROR_FRAME_SIZE_ERROR,
+          "%s (0x%x) ACK frame must have 0 length but was: %u (0x%x)",
+          frame_type_to_string(frame->type), frame->type, frame->length, frame->length);
+      return false;
+    }
+
     frame->num_settings = 0;
   }
 
@@ -836,14 +880,14 @@ static bool h2_frame_is_valid(const h2_frame_parser_t * const parser, h2_frame_t
 
   if (frame->length < def.length_min) {
     parser->parse_error(parser->data, 0, H2_ERROR_FRAME_SIZE_ERROR,
-        "Invalid frame length (below min) for frame type %s (0x%x): 0x%x, %d",
+        "Invalid frame length (below min) for frame type %s (0x%x): 0x%x, %u",
         frame_type_to_string(frame->type), frame->type, frame->length, frame->length);
     return false;
   }
 
   if (frame->length > def.length_max) {
     parser->parse_error(parser->data, 0, H2_ERROR_FRAME_SIZE_ERROR,
-        "Invalid frame length (above max) for frame type %s (0x%x): 0x%x, %d",
+        "Invalid frame length (above max) for frame type %s (0x%x): 0x%x, %u",
         frame_type_to_string(frame->type), frame->type, frame->length, frame->length);
     return false;
   }

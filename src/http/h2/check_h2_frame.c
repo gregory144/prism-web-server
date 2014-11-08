@@ -1438,6 +1438,295 @@ START_TEST(test_h2_frame_parse_priority_with_no_stream_id)
 }
 END_TEST
 
+START_TEST(test_h2_frame_parse_rst_stream)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x4, FRAME_TYPE_RST_STREAM, 0, 0, 0, 0, 1, 0, 0, 0, H2_ERROR_INTERNAL_ERROR
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_rst_stream_t * frame = (h2_frame_rst_stream_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 4);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_RST_STREAM);
+  ck_assert_uint_eq(frame->flags, 0);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->error_code, H2_ERROR_INTERNAL_ERROR);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_rst_stream_with_invalid_stream_id)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x4, FRAME_TYPE_RST_STREAM, 0, 0, 0, 0, 0, 0, 0, 0, H2_ERROR_INTERNAL_ERROR
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  ck_assert_uint_eq(num_frames_parsed, 0);
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
+  ck_assert_str_eq(ce->error_string, "Stream ID must be set for frame type RST_STREAM (0x3)");
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_settings_ack)
+{
+  uint8_t buffer[] = {
+    0, 0, 0, FRAME_TYPE_SETTINGS, FLAG_ACK, 0, 0, 0, 0
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_settings_t * frame = (h2_frame_settings_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 0);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_SETTINGS);
+  ck_assert_uint_eq(frame->flags, FLAG_ACK);
+  ck_assert_uint_eq(frame->stream_id, 0);
+  ck_assert_uint_eq(frame->num_settings, 0);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_settings_ack_with_invalid_length)
+{
+  uint8_t buffer[] = {
+    0, 0, 5, FRAME_TYPE_SETTINGS, FLAG_ACK, 0, 0, 0, 0, SETTINGS_ENABLE_PUSH, 0, 0, 0, 0
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  ck_assert_uint_eq(num_frames_parsed, 0);
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_FRAME_SIZE_ERROR);
+  ck_assert_str_eq(ce->error_string, "SETTINGS (0x4) ACK frame must have 0 length but was: 5 (0x5)");
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_settings_with_payload)
+{
+  uint8_t buffer[] = {
+    0, 0, 6, FRAME_TYPE_SETTINGS, 0, 0, 0, 0, 0, 0, SETTINGS_ENABLE_PUSH, 0, 0, 0, 0
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_settings_t * frame = (h2_frame_settings_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 6);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_SETTINGS);
+  ck_assert_uint_eq(frame->flags, 0);
+  ck_assert_uint_eq(frame->stream_id, 0);
+  ck_assert_uint_eq(frame->num_settings, 1);
+  ck_assert_uint_eq(frame->settings[0].id, SETTINGS_ENABLE_PUSH);
+  ck_assert_uint_eq(frame->settings[0].value, 0);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_settings_with_invalid_frame_length)
+{
+  uint8_t buffer[] = {
+    0, 0, 5, FRAME_TYPE_SETTINGS, 0, 0, 0, 0, 0, 0, SETTINGS_ENABLE_PUSH, 0, 0, 0
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  ck_assert_uint_eq(num_frames_parsed, 0);
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_FRAME_SIZE_ERROR);
+  ck_assert_str_eq(ce->error_string, "SETTINGS (0x4) frame length must be a multiple of 6 but was: 5 (0x5)");
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_settings_with_too_many_settings)
+{
+  uint8_t buffer[] = {
+    0, 0, 6 * 7, FRAME_TYPE_SETTINGS, 0, 0, 0, 0, 0,
+    0, SETTINGS_HEADER_TABLE_SIZE, 0, 0, 0, 0,
+    0, SETTINGS_ENABLE_PUSH, 0, 0, 0, 0,
+    0, SETTINGS_MAX_CONCURRENT_STREAMS, 0, 0, 0, 0,
+    0, SETTINGS_INITIAL_WINDOW_SIZE, 0, 0, 0, 0,
+    0, SETTINGS_MAX_FRAME_SIZE, 0, 0, 0, 0,
+    0, SETTINGS_MAX_HEADER_LIST_SIZE, 0, 0, 0, 0,
+    0, 100, 0, 0, 0, 0
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  ck_assert_uint_eq(num_frames_parsed, 0);
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_INTERNAL_ERROR);
+  ck_assert_str_eq(ce->error_string, "Up to 6 settings per frame are supported");
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_settings_with_bad_push_enabled_value)
+{
+  uint8_t buffer[] = {
+    0, 0, 6 * 1, FRAME_TYPE_SETTINGS, 0, 0, 0, 0, 0,
+    0, SETTINGS_ENABLE_PUSH, 0, 0, 0, 2
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  ck_assert_uint_eq(num_frames_parsed, 0);
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
+  ck_assert_str_eq(ce->error_string, "SETTINGS_ENABLE_PUSH value must be 0 or 1 but was: 2 (0x2)");
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_settings_with_bad_initial_window_size)
+{
+  uint8_t buffer[] = {
+    0, 0, 6 * 1, FRAME_TYPE_SETTINGS, 0, 0, 0, 0, 0,
+    0, SETTINGS_INITIAL_WINDOW_SIZE, 0xff, 0xff, 0xff, 0xff
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  ck_assert_uint_eq(num_frames_parsed, 0);
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
+  ck_assert_str_eq(ce->error_string,
+      "SETTINGS_INITIAL_WINDOW_SIZE value must not be greater than 0x7fffffff "
+      "but was: 4294967295 (0xffffffff)");
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_settings_with_low_max_frame_size)
+{
+  uint8_t buffer[] = {
+    0, 0, 6 * 1, FRAME_TYPE_SETTINGS, 0, 0, 0, 0, 0,
+    0, SETTINGS_MAX_FRAME_SIZE, 0, 0, 0x20, 0
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  ck_assert_uint_eq(num_frames_parsed, 0);
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
+  ck_assert_str_eq(ce->error_string,
+      "SETTINGS_MAX_FRAME_SIZE value must be between 0x4000 and 0xffffff (inclusive) "
+      "but was: 8192 (0x2000)");
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_settings_with_high_max_frame_size)
+{
+  uint8_t buffer[] = {
+    0, 0, 6 * 1, FRAME_TYPE_SETTINGS, 0, 0, 0, 0, 0,
+    0, SETTINGS_MAX_FRAME_SIZE, 0xf0, 0, 0, 0
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  ck_assert_uint_eq(num_frames_parsed, 0);
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
+  ck_assert_str_eq(ce->error_string,
+      "SETTINGS_MAX_FRAME_SIZE value must be between 0x4000 and 0xffffff (inclusive) "
+      "but was: 4026531840 (0xf0000000)");
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_settings_with_unknown_setting_id)
+{
+  uint8_t buffer[] = {
+    0, 0, 6, FRAME_TYPE_SETTINGS, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_settings_t * frame = (h2_frame_settings_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 6);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_SETTINGS);
+  ck_assert_uint_eq(frame->flags, 0);
+  ck_assert_uint_eq(frame->stream_id, 0);
+  ck_assert_uint_eq(frame->num_settings, 1);
+  ck_assert_uint_eq(frame->settings[0].id, 100);
+  ck_assert_uint_eq(frame->settings[0].value, 0);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_settings_with_multiple_settings)
+{
+  uint8_t buffer[] = {
+    0, 0, 12, FRAME_TYPE_SETTINGS, 0, 0, 0, 0, 0,
+    0, SETTINGS_MAX_CONCURRENT_STREAMS, 0, 0, 0, 100,
+    0, SETTINGS_MAX_FRAME_SIZE, 0, 0, 0x40, 0x00
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_settings_t * frame = (h2_frame_settings_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 12);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_SETTINGS);
+  ck_assert_uint_eq(frame->flags, 0);
+  ck_assert_uint_eq(frame->stream_id, 0);
+  ck_assert_uint_eq(frame->num_settings, 2);
+  ck_assert_uint_eq(frame->settings[0].id, SETTINGS_MAX_CONCURRENT_STREAMS);
+  ck_assert_uint_eq(frame->settings[0].value, 100);
+  ck_assert_uint_eq(frame->settings[1].id, SETTINGS_MAX_FRAME_SIZE);
+  ck_assert_uint_eq(frame->settings[1].value, 0x4000);
+}
+END_TEST
+
 Suite * hpack_suite()
 {
   Suite * s = suite_create("h2_frame");
@@ -1508,6 +1797,21 @@ Suite * hpack_suite()
   tcase_add_test(tc, test_h2_frame_parse_priority_with_high_dependency);
   tcase_add_test(tc, test_h2_frame_parse_priority_with_stream_exclusive);
   tcase_add_test(tc, test_h2_frame_parse_priority_with_no_stream_id);
+
+  tcase_add_test(tc, test_h2_frame_parse_rst_stream);
+  tcase_add_test(tc, test_h2_frame_parse_rst_stream_with_invalid_stream_id);
+
+  tcase_add_test(tc, test_h2_frame_parse_settings_ack);
+  tcase_add_test(tc, test_h2_frame_parse_settings_ack_with_invalid_length);
+  tcase_add_test(tc, test_h2_frame_parse_settings_with_payload);
+  tcase_add_test(tc, test_h2_frame_parse_settings_with_multiple_settings);
+  tcase_add_test(tc, test_h2_frame_parse_settings_with_unknown_setting_id);
+  tcase_add_test(tc, test_h2_frame_parse_settings_with_too_many_settings);
+  tcase_add_test(tc, test_h2_frame_parse_settings_with_bad_push_enabled_value);
+  tcase_add_test(tc, test_h2_frame_parse_settings_with_bad_initial_window_size);
+  tcase_add_test(tc, test_h2_frame_parse_settings_with_low_max_frame_size);
+  tcase_add_test(tc, test_h2_frame_parse_settings_with_high_max_frame_size);
+  tcase_add_test(tc, test_h2_frame_parse_settings_with_invalid_frame_length);
 
   suite_add_tcase(s, tc);
 
