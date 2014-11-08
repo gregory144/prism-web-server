@@ -545,7 +545,7 @@ static void h1_1_parse(h1_1_t * const h1_1, uint8_t * const buffer, const size_t
       log_append(h1_1->log, LOG_ERROR, "Error parsing HTTP1 request: %s", http_errno_description(err));
       h1_1_bad_request(h1_1);
     } else {
-      log_append(h1_1->log, LOG_ERROR, "Could not process all of buffer: %ld / %ld", ret, len);
+      log_append(h1_1->log, LOG_ERROR, "Could not process all of buffer: %zu / %zu", ret, len);
     }
 
     h1_1_close(h1_1);
@@ -588,7 +588,7 @@ bool h1_1_response_write(h1_1_t * h1_1, http_response_t * const response, uint8_
   binary_buffer_reset(h1_1->write_buffer, 0);
 
   char status_line[256];
-  snprintf(status_line, 256, "HTTP/1.%d %d \r\n", h1_1->is_1_1 ? 1 : 0, response->status);
+  snprintf(status_line, 256, "HTTP/1.%d %u \r\n", h1_1->is_1_1 ? 1 : 0, response->status);
   binary_buffer_write(h1_1->write_buffer, (uint8_t *) &status_line, strlen(status_line));
 
   header_list_iter_t iter;

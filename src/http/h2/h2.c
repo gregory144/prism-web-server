@@ -85,7 +85,7 @@ static void h2_stream_close(h2_t * const h2, h2_stream_t * const stream, bool fo
 
   if (force || (stream->closing && !stream->queued_data_frames)) {
 
-    log_append(h2->log, LOG_TRACE, "Closing stream #%d", stream->id);
+    log_append(h2->log, LOG_TRACE, "Closing stream #%u", stream->id);
 
     stream->state = STREAM_STATE_CLOSED;
 
@@ -409,7 +409,7 @@ static bool h2_send_headers(h2_t * const h2, const h2_stream_t * const stream,
   frame->priority_stream_dependency = stream->priority_stream_dependency;
   frame->priority_weight = stream->priority_weight;
 
-  log_append(h2->log, LOG_DEBUG, "Writing headers frame: stream %d", stream->id);
+  log_append(h2->log, LOG_DEBUG, "Writing headers frame: stream %u", stream->id);
 
   if (!h2_frame_write(h2, (h2_frame_t *) frame)) {
     free(hpack_buf);
@@ -495,7 +495,7 @@ static bool h2_send_push_promise(h2_t * const h2, const h2_stream_t * const push
   // padding is not currently supported
   frame->padding_length = 0;
 
-  log_append(h2->log, LOG_DEBUG, "Writing push promise frame: stream %d", pushed_stream->id);
+  log_append(h2->log, LOG_DEBUG, "Writing push promise frame: stream %u", pushed_stream->id);
 
   if (!h2_frame_write(h2, (h2_frame_t *) frame)) {
     free(hpack_buf);
@@ -550,7 +550,7 @@ static bool h2_send_data_frame(const h2_t * const h2, const h2_stream_t * const 
   frame->payload = queued_frame->buf;
   frame->payload_length = queued_frame->buf_length;
 
-  log_append(h2->log, LOG_DEBUG, "Writing data frame: stream %d, %ld octets", stream->id, queued_frame->buf_length);
+  log_append(h2->log, LOG_DEBUG, "Writing data frame: stream %u, %lu octets", stream->id, queued_frame->buf_length);
 
   return h2_frame_write(h2, (h2_frame_t *) frame);
 }
@@ -559,7 +559,7 @@ static bool h2_stream_trigger_send_data(h2_t * const h2, h2_stream_t * const str
 {
 
   while (stream->queued_data_frames) {
-    log_append(h2->log, LOG_TRACE, "Sending queued data for stream: %d", stream->id);
+    log_append(h2->log, LOG_TRACE, "Sending queued data for stream: %u", stream->id);
 
     h2_queued_frame_t * frame = stream->queued_data_frames;
     size_t frame_payload_size = frame->buf_length;
@@ -849,13 +849,13 @@ static void h2_adjust_initial_window_size(h2_t * const h2, const long difference
 
 static bool h2_setting_set(h2_t * const h2, const h2_setting_t * setting)
 {
-  log_append(h2->log, LOG_TRACE, "Settings: %d: %d", setting->id, setting->value);
+  log_append(h2->log, LOG_TRACE, "Settings: %u: %u", setting->id, setting->value);
 
   enum settings_e value = setting->value;
 
   switch (setting->id) {
     case SETTINGS_HEADER_TABLE_SIZE:
-      log_append(h2->log, LOG_TRACE, "Settings: Got table size: %d", value);
+      log_append(h2->log, LOG_TRACE, "Settings: Got table size: %u", value);
 
       h2->header_table_size = value;
       hpack_header_table_adjust_size(h2->decoding_context, value);
@@ -868,26 +868,26 @@ static bool h2_setting_set(h2_t * const h2, const h2_setting_t * setting)
       break;
 
     case SETTINGS_MAX_CONCURRENT_STREAMS:
-      log_append(h2->log, LOG_TRACE, "Settings: Max concurrent streams: %d", value);
+      log_append(h2->log, LOG_TRACE, "Settings: Max concurrent streams: %u", value);
 
       h2->max_concurrent_streams = value;
       break;
 
     case SETTINGS_INITIAL_WINDOW_SIZE:
-      log_append(h2->log, LOG_TRACE, "Settings: Initial window size: %d", value);
+      log_append(h2->log, LOG_TRACE, "Settings: Initial window size: %u", value);
 
       h2_adjust_initial_window_size(h2, value - h2->initial_window_size);
       h2->initial_window_size = value;
       break;
 
     case SETTINGS_MAX_FRAME_SIZE:
-      log_append(h2->log, LOG_TRACE, "Settings: Initial max frame size: %d", value);
+      log_append(h2->log, LOG_TRACE, "Settings: Initial max frame size: %u", value);
 
       h2->max_frame_size = value;
       break;
 
     case SETTINGS_MAX_HEADER_LIST_SIZE:
-      log_append(h2->log, LOG_TRACE, "Settings: Initial max header list size: %d", value);
+      log_append(h2->log, LOG_TRACE, "Settings: Initial max header list size: %u", value);
 
       // TODO - send to hpack encoding context
       h2->max_header_list_size = value;
@@ -906,7 +906,7 @@ static bool h2_setting_set(h2_t * const h2, const h2_setting_t * setting)
 static h2_stream_t * h2_stream_init(h2_t * const h2, const uint32_t stream_id)
 {
 
-  log_append(h2->log, LOG_TRACE, "Opening stream #%d", stream_id);
+  log_append(h2->log, LOG_TRACE, "Opening stream #%u", stream_id);
 
   h2_stream_t * stream = h2_stream_get(h2, stream_id);
 
@@ -920,7 +920,7 @@ static h2_stream_t * h2_stream_init(h2_t * const h2, const uint32_t stream_id)
 
   if (!stream) {
     h2_emit_error_and_close_va(h2, stream_id, H2_ERROR_INTERNAL_ERROR,
-                         "Unable to initialize stream: %ld", stream_id);
+                         "Unable to initialize stream: %u", stream_id);
     return NULL;
   }
 
@@ -930,7 +930,7 @@ static h2_stream_t * h2_stream_init(h2_t * const h2, const uint32_t stream_id)
 
   if (!stream_id_key) {
     h2_emit_error_and_close_va(h2, stream_id, H2_ERROR_INTERNAL_ERROR,
-                         "Unable to initialize stream (stream identifier): %ld", stream_id);
+                         "Unable to initialize stream (stream identifier): %u", stream_id);
     free(stream);
     return NULL;
   }
@@ -1020,7 +1020,7 @@ static bool h2_incoming_frame_data(h2_t * const h2, const h2_frame_data_t * cons
 
   if (!stream) {
     h2_emit_error_and_close_va(h2, frame->stream_id, H2_ERROR_PROTOCOL_ERROR,
-                         "Unable to find stream #%d", frame->stream_id);
+                         "Unable to find stream #%u", frame->stream_id);
     return true;
   }
 
@@ -1056,7 +1056,7 @@ static bool h2_incoming_frame_data(h2_t * const h2, const h2_frame_data_t * cons
   if (stream->incoming_window_size < 0) {
 
     h2_emit_error_and_close_va(h2, stream->id, H2_ERROR_FLOW_CONTROL_ERROR,
-                         "Stream #%d: window size is less than 0: %ld", stream->incoming_window_size);
+                         "Stream #%u: window size is less than 0: %ld", stream->id, stream->incoming_window_size);
 
   } else if (!last_data_frame && (stream->incoming_window_size < 0.75 * DEFAULT_INITIAL_WINDOW_SIZE)) {
 
@@ -1115,7 +1115,7 @@ static bool h2_parse_header_fragments(h2_t * const h2, h2_stream_t * const strea
   h2_header_fragment_t * current = stream->header_fragments;
 
   for (; current; current = current->next) {
-    log_append(h2->log, LOG_TRACE, "Counting header fragment lengths: %ld", current->length);
+    log_append(h2->log, LOG_TRACE, "Counting header fragment lengths: %lu", current->length);
 
     headers_length += current->length;
   }
@@ -1131,7 +1131,7 @@ static bool h2_parse_header_fragments(h2_t * const h2, h2_stream_t * const strea
   current = stream->header_fragments;
 
   while (current) {
-    log_append(h2->log, LOG_TRACE, "Appending header fragment (%ld octets)", current->length);
+    log_append(h2->log, LOG_TRACE, "Appending header fragment (%lu octets)", current->length);
 
     memcpy(header_appender, current->buffer, current->length);
     header_appender += current->length;
@@ -1143,7 +1143,7 @@ static bool h2_parse_header_fragments(h2_t * const h2, h2_stream_t * const strea
 
   *header_appender = '\0';
 
-  log_append(h2->log, LOG_TRACE, "Got headers: (%ld octets), decoding", headers_length);
+  log_append(h2->log, LOG_TRACE, "Got headers: (%lu octets), decoding", headers_length);
 
   stream->headers = hpack_decode(h2->decoding_context, headers, headers_length);
 
@@ -1246,14 +1246,16 @@ static bool h2_incoming_frame_settings(h2_t * const h2, const h2_frame_settings_
       h2_setting_set(h2, setting);
     }
 
-    log_append(h2->log, LOG_TRACE, "Settings: %ld, %d, %ld, %ld", h2->header_table_size, h2->enable_push,
+    log_append(h2->log, LOG_TRACE, "Settings: %lu, %u, %lu, %lu", h2->header_table_size, h2->enable_push,
                h2->max_concurrent_streams, h2->initial_window_size);
 
     bool ret = h2_send_settings_ack(h2);
 
     if (!h2->received_settings) {
       h2->received_settings = true;
-      h2_send_default_settings(h2);
+      if (!h2_send_default_settings(h2)) {
+        return false;
+      }
     }
 
     h2_flush(h2, 0);
@@ -1282,7 +1284,7 @@ static bool h2_increment_stream_window_size(h2_t * const h2, const uint32_t stre
 {
 
   if (h2_stream_closed(h2, stream_id)) {
-    log_append(h2->log, LOG_TRACE, "Can't update stream #%ld's window size, already closed", stream_id);
+    log_append(h2->log, LOG_TRACE, "Can't update stream #%u's window size, already closed", stream_id);
     // the stream may have been recently closed, ignore
     return true;
   }
@@ -1291,7 +1293,7 @@ static bool h2_increment_stream_window_size(h2_t * const h2, const uint32_t stre
 
   if (!stream) {
     h2_emit_error_and_close_va(h2, stream_id, H2_ERROR_PROTOCOL_ERROR,
-                         "Could not find stream #%d to update it's window size", stream_id);
+                         "Could not find stream #%u to update it's window size", stream_id);
     return false;
   }
 
@@ -1314,7 +1316,7 @@ static bool h2_incoming_frame_window_update(h2_t * const h2,
     success = h2_increment_connection_window_size(h2, frame->increment);
   }
 
-  log_append(h2->log, LOG_TRACE, "Received window update, stream: %d, increment: %ld",
+  log_append(h2->log, LOG_TRACE, "Received window update, stream: %u, increment: %u",
              frame->stream_id, frame->increment);
 
   return success;
@@ -1322,7 +1324,7 @@ static bool h2_incoming_frame_window_update(h2_t * const h2,
 
 static bool h2_incoming_frame_rst_stream(h2_t * const h2, h2_frame_rst_stream_t * const frame)
 {
-  log_append(h2->log, LOG_WARN, "Received reset stream: stream #%d, error code: %s (0x%x)",
+  log_append(h2->log, LOG_WARN, "Received reset stream: stream #%u, error code: %s (0x%x)",
              frame->stream_id, h2_error_to_string(frame->error_code), frame->error_code);
 
   h2_stream_t * stream = h2_stream_get(h2, frame->stream_id);
@@ -1337,7 +1339,7 @@ static bool h2_incoming_frame_priority(h2_t * const h2, h2_frame_priority_t * co
   h2_stream_t * stream = h2_stream_get(h2, frame->stream_id);
 
   if (!stream) {
-    h2_emit_error_and_close_va(h2, frame->stream_id, H2_ERROR_PROTOCOL_ERROR, "Unknown stream id: %d",
+    h2_emit_error_and_close_va(h2, frame->stream_id, H2_ERROR_PROTOCOL_ERROR, "Unknown stream id: %u",
                          frame->stream_id);
     return true;
   }
@@ -1352,12 +1354,12 @@ static bool h2_incoming_frame_priority(h2_t * const h2, h2_frame_priority_t * co
 static bool h2_incoming_frame_goaway(h2_t * const h2, h2_frame_goaway_t * const frame)
 {
   if (frame->error_code == H2_ERROR_NO_ERROR) {
-    log_append(h2->log, LOG_TRACE, "Received goaway, last stream: %d, error code: %s (0x%x), debug_data: %s",
+    log_append(h2->log, LOG_TRACE, "Received goaway, last stream: %u, error code: %s (0x%x), debug_data: %s",
                frame->last_stream_id, h2_error_to_string(frame->error_code),
                frame->error_code, frame->debug_data);
     h2_mark_closing(h2);
   } else {
-    log_append(h2->log, LOG_ERROR, "Received goaway, last stream: %d, error code: %s (0x%x), debug_data: %s",
+    log_append(h2->log, LOG_ERROR, "Received goaway, last stream: %u, error code: %s (0x%x), debug_data: %s",
                frame->last_stream_id, h2_error_to_string(frame->error_code),
                frame->error_code, frame->debug_data);
   }
@@ -1429,7 +1431,7 @@ static bool h2_incoming_frame(void * data, const h2_frame_t * const frame)
       break;
 
     default:
-      h2_emit_error_and_close_va(h2, 0, H2_ERROR_INTERNAL_ERROR, "Unhandled frame type: %d", frame->type);
+      h2_emit_error_and_close_va(h2, 0, H2_ERROR_INTERNAL_ERROR, "Unhandled frame type: %u", frame->type);
       success = false;
       break;
   }
@@ -1537,12 +1539,12 @@ static bool h2_add_from_buffer(h2_t * const h2)
  */
 void h2_read(h2_t * const h2, uint8_t * const buffer, const size_t len)
 {
-  log_append(h2->log, LOG_TRACE, "Reading from buffer: %ld", len);
+  log_append(h2->log, LOG_TRACE, "Reading from buffer: %zu", len);
 
   size_t unprocessed_bytes = h2->buffer_length;
 
   if (unprocessed_bytes > 0) {
-    log_append(h2->log, LOG_TRACE, "Appending new data to unprocessed bytes %ld + %ld = %ld",
+    log_append(h2->log, LOG_TRACE, "Appending new data to unprocessed bytes %zu + %zu = %zu",
                unprocessed_bytes, len, unprocessed_bytes + len);
     // there are still unprocessed bytes
     h2->buffer = realloc(h2->buffer, unprocessed_bytes + len);
@@ -1607,7 +1609,7 @@ void h2_read(h2_t * const h2, uint8_t * const buffer, const size_t len)
   unprocessed_bytes = h2->buffer_length - h2->buffer_position;
 
   if (!h2->closing && unprocessed_bytes > 0) {
-    log_append(h2->log, LOG_TRACE, "Unable to process last %ld bytes", unprocessed_bytes);
+    log_append(h2->log, LOG_TRACE, "Unable to process last %zu bytes", unprocessed_bytes);
     // use memmove because it might overlap
     memmove(h2->buffer, h2->buffer + h2->buffer_position, unprocessed_bytes);
     h2->buffer = realloc(h2->buffer, unprocessed_bytes);
@@ -1633,7 +1635,7 @@ bool h2_response_write(h2_stream_t * stream, http_response_t * const response, u
   h2_t * h2 = stream->h2;
 
   char status_buf[10];
-  snprintf(status_buf, 10, "%d", response->status);
+  snprintf(status_buf, 10, "%u", response->status);
   // add the status header
   http_response_pseudo_header_add(response, ":status", status_buf);
 
@@ -1712,11 +1714,11 @@ http_request_t * h2_push_init(h2_stream_t * stream, http_request_t * const origi
   }
 
   if (h2->outgoing_concurrent_streams >= h2->max_concurrent_streams) {
-    log_append(h2->log, LOG_DEBUG, "Tried opening more than %ld outgoing concurrent streams: stream #%d",
+    log_append(h2->log, LOG_DEBUG, "Tried opening more than %zu outgoing concurrent streams: stream #%u",
                h2->max_concurrent_streams, stream->id);
     return NULL;
   } else {
-    log_append(h2->log, LOG_DEBUG, "Push #%ld for stream: stream #%d\n",
+    log_append(h2->log, LOG_DEBUG, "Push #%zu for stream: stream #%u\n",
                h2->outgoing_concurrent_streams, stream->id);
   }
 

@@ -403,7 +403,7 @@ static bool tls_read_decrypted_data_and_pass_to_app(tls_client_ctx_t * client_ct
     int retval = SSL_read(client_ctx->ssl, read_buf, TLS_BUF_LENGTH);
 
     if (retval > 0) {
-      log_append(client_ctx->log, LOG_TRACE, "SSL_read returned %ld", retval);
+      log_append(client_ctx->log, LOG_TRACE, "SSL_read returned %d", retval);
 
       client_ctx->writing_to_app = true;
 
@@ -560,8 +560,8 @@ bool tls_decrypt_data_and_pass_to_app(tls_client_ctx_t * client_ctx, uint8_t * b
     int retval = BIO_write(client_ctx->network_bio, buf + written, length - written);
 
     if (retval > 0) {
-      log_append(client_ctx->log, LOG_TRACE, "Wrote %d/%ld octets of encrypted data to network BIO for decryption", retval,
-                 length);
+      log_append(client_ctx->log, LOG_TRACE, "Wrote %d/%zu octets of encrypted data to network BIO for decryption",
+          retval, length);
       written += retval;
     } else if (BIO_should_retry(client_ctx->network_bio)) {
       // the network BIO buffer maybe full - try freeing some space by
@@ -617,7 +617,7 @@ bool tls_decrypt_data_and_pass_to_app(tls_client_ctx_t * client_ctx, uint8_t * b
 bool tls_encrypt_data_and_pass_to_network(tls_client_ctx_t * client_ctx, uint8_t * buf, size_t length)
 {
 
-  log_append(client_ctx->log, LOG_TRACE, "Encrypting %ld octets of data from application", length);
+  log_append(client_ctx->log, LOG_TRACE, "Encrypting %zu octets of data from application", length);
 
   size_t written = 0;
   size_t remaining_length = length;
@@ -626,10 +626,10 @@ bool tls_encrypt_data_and_pass_to_network(tls_client_ctx_t * client_ctx, uint8_t
     int retval = SSL_write(client_ctx->ssl, buf + written, length - written);
 
     if (retval > 0) {
-      log_append(client_ctx->log, LOG_TRACE, "SSL_write returned: %ld", retval);
+      log_append(client_ctx->log, LOG_TRACE, "SSL_write returned: %d", retval);
       written += retval;
     } else if (tls_ssl_wants_read(client_ctx->ssl, retval)) {
-      log_append(client_ctx->log, LOG_TRACE, "SSL_write: wants read with %ld bytes remaining", remaining_length);
+      log_append(client_ctx->log, LOG_TRACE, "SSL_write: wants read with %zu bytes remaining", remaining_length);
 
       // the ssl write buffer may be full, try to clear it out by
       // reading the already encrypted data from it
@@ -639,7 +639,7 @@ bool tls_encrypt_data_and_pass_to_network(tls_client_ctx_t * client_ctx, uint8_t
 
       // try again
     } else if (tls_ssl_wants_write(client_ctx->ssl, retval)) {
-      log_append(client_ctx->log, LOG_DEBUG, "SSL_write: wants write with %ld bytes remaining", remaining_length);
+      log_append(client_ctx->log, LOG_DEBUG, "SSL_write: wants write with %zu bytes remaining", remaining_length);
 
       if (!tls_read_encrypted_data_and_pass_to_network(client_ctx)) {
         return false;

@@ -650,7 +650,7 @@ static bool strip_padding(const h2_frame_parser_t * const parser, uint8_t * padd
 
     if (*padding_length >= *payload_length) {
       parser->parse_error(parser->data, 0, H2_ERROR_PROTOCOL_ERROR,
-          "Padding length is too large in comparison to frame length: %ld (0x%x) >= %ld (0x%x)",
+          "Padding length is too large in comparison to frame length: %u (0x%x) >= %zu (0x%x)",
           *padding_length, *padding_length, *payload_length, *payload_length);
       return false;
     } else {
@@ -658,7 +658,7 @@ static bool strip_padding(const h2_frame_parser_t * const parser, uint8_t * padd
       (*payload_length)--;
       *payload_length -= *padding_length;
       (*payload)++;
-      log_append(parser->log, LOG_TRACE, "Stripped %ld octets of padding from frame", padding_length);
+      log_append(parser->log, LOG_TRACE, "Stripped %u octets of padding from frame", padding_length);
     }
   }
 
@@ -760,7 +760,7 @@ bool h2_parse_settings_payload(const h2_frame_parser_t * const parser, uint8_t *
     return false;
   }
 
-  log_append(parser->log, LOG_TRACE, "Settings: Found %ld settings", *num_settings);
+  log_append(parser->log, LOG_TRACE, "Settings: Found %zu settings", *num_settings);
 
   for (size_t i = 0; i < *num_settings; i++) {
     h2_setting_t * curr = &settings[i];
@@ -939,7 +939,7 @@ static bool h2_frame_is_valid(const h2_frame_parser_t * const parser, h2_frame_t
 h2_frame_t * h2_frame_parse(const h2_frame_parser_t * const parser, uint8_t * const buffer,
     const size_t buffer_length, size_t * buffer_position)
 {
-  log_append(parser->log, LOG_TRACE, "Reading %ld bytes", buffer_length);
+  log_append(parser->log, LOG_TRACE, "Reading %zu bytes", buffer_length);
 
   if (*buffer_position == buffer_length) {
     log_append(parser->log, LOG_TRACE, "Finished with current buffer");
@@ -1065,7 +1065,7 @@ h2_frame_t * h2_frame_parse(const h2_frame_parser_t * const parser, uint8_t * co
       free(frame);
     }
   } else {
-    log_append(parser->log, LOG_TRACE, "Not enough in buffer to read %ld byte frame payload", frame_length);
+    log_append(parser->log, LOG_TRACE, "Not enough in buffer to read %zu byte frame payload", frame_length);
   }
 
   return NULL;

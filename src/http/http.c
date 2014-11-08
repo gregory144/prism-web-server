@@ -395,7 +395,7 @@ bool http_response_write_error(http_response_t * const response, int code)
   size_t content_length = strlen(resp_text);
 
   char content_length_s[256];
-  snprintf(content_length_s, 255, "%ld", content_length);
+  snprintf(content_length_s, 255, "%zu", content_length);
   http_response_header_add(response, "content-length", content_length_s);
 
   http_response_header_add(response, "content-type", "text/html");

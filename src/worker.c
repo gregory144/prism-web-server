@@ -81,7 +81,7 @@ static void worker_queue(client_t * client, bool eof, uint8_t * buffer, size_t l
   blocking_queue_push(worker->read_queue, worker_buffer);
 
   uv_async_send(&worker->async_handle);
-  log_append(server->log, LOG_TRACE, "Assigning to worker: #%ld with %ld reads", client->worker_index,
+  log_append(server->log, LOG_TRACE, "Assigning to worker: #%zu with %zu reads", client->worker_index,
              worker->assigned_reads);
 }
 
@@ -108,7 +108,7 @@ static bool worker_write_to_network(void * data, uint8_t * buffer, size_t length
 static void worker_uv_cb_written_handle_closed(uv_handle_t * handle)
 {
   client_t * client = handle->data;
-  log_append(client->log, LOG_DEBUG, "Closing client: %ld", client->id);
+  log_append(client->log, LOG_DEBUG, "Closing client: %zu", client->id);
 
   uv_async_send(&client->close_handle);
 }
@@ -136,7 +136,7 @@ static bool worker_http_cb_write(void * data, uint8_t * buffer, size_t length)
 
   client->octets_written += length;
 
-  log_append(server->log, LOG_DEBUG, "Write client #%ld (%ld octets, %ld total)", client->id, length,
+  log_append(server->log, LOG_DEBUG, "Write client #%zu (%zu octets, %zu total)", client->id, length,
              client->octets_written);
   if (log_enabled(client->data_log)) {
     log_append(client->data_log, LOG_TRACE, "Writing data: (%zd octets)", length);
@@ -144,9 +144,9 @@ static bool worker_http_cb_write(void * data, uint8_t * buffer, size_t length)
   }
 
   if (server->config->use_tls) {
-    log_append(server->log, LOG_TRACE, "Passing %ld octets of data from application to TLS handler", length);
+    log_append(server->log, LOG_TRACE, "Passing %zu octets of data from application to TLS handler", length);
     bool ret = tls_encrypt_data_and_pass_to_network(client->tls_ctx, buffer, length);
-    log_append(server->log, LOG_TRACE, "Passed %ld octets of data from application to TLS handler", length);
+    log_append(server->log, LOG_TRACE, "Passed %zu octets of data from application to TLS handler", length);
     return ret;
   } else {
     return worker_write_to_network(client, buffer, length);
@@ -172,7 +172,8 @@ static void worker_parse(client_t * client, uint8_t * buffer, size_t length)
     client->selected_protocol = true;
   }
 
-  log_append(client->log, LOG_DEBUG, "Read client #%ld (%ld octets, %ld total)", client->id, length, client->octets_read);
+  log_append(client->log, LOG_DEBUG, "Read client #%zu (%zu octets, %zu total)",
+      client->id, length, client->octets_read);
 
   http_connection_t * connection = client->connection;
   http_connection_read(connection, buffer, length);
@@ -208,13 +209,13 @@ static void worker_handle(uv_async_t * async_handle)
 
       tls_client_ctx_t * tls_client_ctx = client->tls_ctx;
 
-      log_append(server->log, LOG_TRACE, "Passing %ld octets of data from network to TLS handler", buffer->length);
+      log_append(server->log, LOG_TRACE, "Passing %zu octets of data from network to TLS handler", buffer->length);
 
       if (!tls_decrypt_data_and_pass_to_app(tls_client_ctx, buffer->buffer, buffer->length)) {
         worker_close(client);
       }
 
-      log_append(server->log, LOG_TRACE, "Passed %ld octets of data from network to TLS handler", buffer->length);
+      log_append(server->log, LOG_TRACE, "Passed %zu octets of data from network to TLS handler", buffer->length);
 
     } else {
       worker_parse(client, buffer->buffer, buffer->length);

@@ -450,7 +450,7 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
 
     // content length header
     char content_length_s[256];
-    snprintf(content_length_s, 255, "%ld", fs_request->content_length);
+    snprintf(content_length_s, 255, "%zu", fs_request->content_length);
     http_response_header_add(response, "content-length", content_length_s);
 
     // last modified header
@@ -567,7 +567,7 @@ static void files_plugin_request_handler(plugin_t * plugin, client_t * client, h
 
   // check to make sure the file is in the current directory
   if (path_length < file_server->cwd_length || memcmp(file_server->cwd, path, file_server->cwd_length) != 0) {
-    log_append(file_server->log, LOG_ERROR, "%s (%ld) not in %s (%ld)", path, path_length, file_server->cwd,
+    log_append(file_server->log, LOG_ERROR, "%s (%zu) not in %s (%zu)", path, path_length, file_server->cwd,
                file_server->cwd_length);
     http_response_write_error(response, 404);
     file_server_finish_request(fs_request);

@@ -47,7 +47,7 @@ static bool debug_plugin_request_handler(plugin_t * plugin, client_t * client, h
 
     while (header_list_iterate(&iter)) {
       header_field_t * field = iter.field;
-      log_append(plugin->log, LOG_DEBUG, "'%s' (%ld): '%s' (%ld)",
+      log_append(plugin->log, LOG_DEBUG, "'%s' (%zu): '%s' (%zu)",
                  field->name, field->name_length, field->value, field->value_length);
     }
 
@@ -56,7 +56,7 @@ static bool debug_plugin_request_handler(plugin_t * plugin, client_t * client, h
     multimap_iterator_init(&mm_iter, request->params);
 
     while (multimap_iterate(&mm_iter)) {
-      log_append(plugin->log, LOG_DEBUG, "'%s' (%ld): '%s' (%ld)",
+      log_append(plugin->log, LOG_DEBUG, "'%s' (%zu): '%s' (%zu)",
                  mm_iter.key, strlen(mm_iter.key), mm_iter.value, strlen(mm_iter.value));
     }
   }
@@ -160,7 +160,7 @@ static bool debug_plugin_request_handler(plugin_t * plugin, client_t * client, h
   size_t content_length = strlen(resp_text);
 
   char content_length_s[256];
-  snprintf(content_length_s, 255, "%ld", content_length);
+  snprintf(content_length_s, 255, "%zu", content_length);
   http_response_header_add(response, "content-length", content_length_s);
 
   http_response_header_add(response, "server", PACKAGE_STRING);
@@ -222,7 +222,7 @@ static bool debug_plugin_request_handler(plugin_t * plugin, client_t * client, h
     size_t push_content_length = strlen(push_text);
 
     char push_content_length_s[256];
-    snprintf(push_content_length_s, 255, "%ld", push_content_length);
+    snprintf(push_content_length_s, 255, "%zu", push_content_length);
     http_response_header_add(pushed_response, "content-length", push_content_length_s);
 
     http_response_header_add(pushed_response, "server", PACKAGE_STRING);
@@ -246,7 +246,7 @@ static bool debug_plugin_data_handler(plugin_t * plugin, client_t * client, http
   UNUSED(client);
   UNUSED(request);
 
-  log_append(plugin->log, LOG_TRACE, "Received %ld bytes of data from client (last? %s)",
+  log_append(plugin->log, LOG_TRACE, "Received %zu bytes of data from client (last? %s)",
              length, last ? "yes" : "no");
 
   uint8_t * out = malloc(sizeof(uint8_t) * length);

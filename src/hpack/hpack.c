@@ -192,7 +192,7 @@ void hpack_context_free(hpack_context_t * const context)
 
 static hpack_header_table_entry_t * hpack_header_table_get(hpack_context_t * const context, const size_t index)
 {
-  log_append(context->log, LOG_TRACE, "Getting from header table with adjusted index: %ld", index);
+  log_append(context->log, LOG_TRACE, "Getting from header table with adjusted index: %zu", index);
 
   if (index > 0 && index <= context->header_table->length) {
     return circular_buffer_get(context->header_table, index);
@@ -258,7 +258,7 @@ static hpack_header_table_entry_t * hpack_header_table_add(hpack_context_t * con
   // make sure it fits in the header table before adding it
   if (header->size_in_table <= context->max_size) {
 
-    log_append(context->log, LOG_TRACE, "Adding to header table: '%s' (%ld): '%s' (%ld)",
+    log_append(context->log, LOG_TRACE, "Adding to header table: '%s' (%zu): '%s' (%zu)",
                header->name, header->name_length, header->value, header->value_length);
 
     context->current_size += header->size_in_table;
@@ -303,7 +303,7 @@ static bool hpack_decode_string_literal(
   *current += key_name_result.num_bytes;
   size_t key_name_length = key_name_result.value;
 
-  log_append(context->log, LOG_TRACE, "Decoding string literal length: %ld", key_name_length);
+  log_append(context->log, LOG_TRACE, "Decoding string literal length: %zu", key_name_length);
 
   char * key_name;
 
@@ -363,7 +363,7 @@ static bool hpack_decode_literal_header(
   size_t header_table_index = index_result.value;
   *current += index_result.num_bytes;
 
-  log_append(context->log, LOG_TRACE, "Adding literal header field: %ld, %ld", index_result.value,
+  log_append(context->log, LOG_TRACE, "Adding literal header field: %zu, %zu", index_result.value,
              index_result.num_bytes);
 
   char * key_name = NULL;
@@ -384,7 +384,7 @@ static bool hpack_decode_literal_header(
     key_name_length = ret.length;
     free_name = true;
 
-    log_append(context->log, LOG_TRACE, "Literal name: '%s' (%ld)", key_name, key_name_length);
+    log_append(context->log, LOG_TRACE, "Literal name: '%s' (%zu)", key_name, key_name_length);
 
   } else {
 
@@ -393,7 +393,7 @@ static bool hpack_decode_literal_header(
 
     if (!entry) {
       // TODO protocol error - invalid index
-      log_append(context->log, LOG_ERROR, "Error decoding literal header with indexed name: invalid index (%d)",
+      log_append(context->log, LOG_ERROR, "Error decoding literal header with indexed name: invalid index (%zu)",
                  header_table_index);
       return false;
     }
@@ -424,7 +424,7 @@ static bool hpack_decode_literal_header(
   char * value = ret.value;
   size_t value_length = ret.length;
 
-  log_append(context->log, LOG_TRACE, "Emitting header literal value: %s (%ld), %s (%ld)", key_name, key_name_length,
+  log_append(context->log, LOG_TRACE, "Emitting header literal value: %s (%zu), %s (%zu)", key_name, key_name_length,
              value, value_length);
 
   if (add_to_header_table) {
@@ -468,7 +468,7 @@ static bool hpack_decode_indexed_header(
     hpack_header_table_entry_t * entry = hpack_table_get(context, index);
 
     if (!entry) {
-      log_append(context->log, LOG_ERROR, "Error decoding indexed header: invalid index (%ld)", index);
+      log_append(context->log, LOG_ERROR, "Error decoding indexed header: invalid index (%zu)", index);
       return false;
     }
 
@@ -507,7 +507,7 @@ header_list_t * hpack_decode(hpack_context_t * const context, const uint8_t * co
   header_list_t * header_list = header_list_init(NULL);
   ASSERT_OR_RETURN_NULL(header_list);
 
-  log_append(context->log, LOG_TRACE, "Decompressing headers: %ld, %ld", current, length);
+  log_append(context->log, LOG_TRACE, "Decompressing headers: %zu, %zu", current, length);
 
   while (current < length) {
     uint8_t first_bit = get_bits8(buf + current, 0x80);
@@ -568,7 +568,7 @@ binary_buffer_t * hpack_encode(hpack_context_t * const context, const header_lis
     char * value = iter.field->value;
     size_t value_length = iter.field->value_length;
 
-    log_append(context->log, LOG_TRACE, "Encoding Reponse Header: %s (%ld): %s (%ld)", name, name_length, value,
+    log_append(context->log, LOG_TRACE, "Encoding Reponse Header: %s (%zu): %s (%zu)", name, name_length, value,
                value_length);
 
     // 4.3.2 Literal Header Field without Indexing - New Name
@@ -579,7 +579,7 @@ binary_buffer_t * hpack_encode(hpack_context_t * const context, const header_lis
     ASSERT_OR_RETURN_FALSE(hpack_encode_string_literal(result, value, value_length));
   }
 
-  log_append(context->log, LOG_TRACE, "Encoded headers into %ld bytes", binary_buffer_size(result));
+  log_append(context->log, LOG_TRACE, "Encoded headers into %zu bytes", binary_buffer_size(result));
 
   return result;
 }
