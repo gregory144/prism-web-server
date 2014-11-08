@@ -28,7 +28,7 @@ bool should_continue_parsing = true;
 size_t num_frames_parsed = 0;
 h2_frame_t * last_frames[8];
 
-bool num_errors = 0;
+size_t num_errors = 0;
 caught_error_t * caught_errors[8];
 
 static bool parse_error_cb(void * data, uint32_t stream_id, enum h2_error_code_e error_code,
@@ -52,6 +52,10 @@ static bool parse_error_cb(void * data, uint32_t stream_id, enum h2_error_code_e
   fprintf(stdout, "Parser error: stream id: %" PRIu32 ", error code: %s (0x%x), error_string: %s\n",
       stream_id, h2_error_to_string(error_code), error_code, buf);
 
+  if (num_errors > 7) {
+    fprintf(stdout, "Too many errors!");
+    abort();
+  }
   caught_errors[num_errors++] = ce;
 
   return true;
@@ -62,6 +66,10 @@ static bool incoming_frame_cb(void * data, const h2_frame_t * const frame)
   UNUSED(data);
   printf("Got frame: %" PRIu16 "\n", frame->length);
 
+  if (num_frames_parsed > 7) {
+    fprintf(stdout, "Too many parsed frames!");
+    abort();
+  }
   last_frames[num_frames_parsed++] = (h2_frame_t *) frame;
 
   return true;
@@ -401,6 +409,78 @@ START_TEST(test_h2_frame_emit_rst_stream)
 }
 END_TEST
 
+START_TEST(test_h2_frame_emit_settings)
+{
+  h2_frame_settings_t * frame = (h2_frame_settings_t *) h2_frame_init(&parser, FRAME_TYPE_SETTINGS, 0, 0);
+  ck_assert_uint_eq(frame->stream_id, 0);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_SETTINGS);
+  ck_assert_uint_eq(frame->flags, 0);
+  ck_assert_uint_eq(frame->length, 0);
+
+  frame->num_settings = 1;
+  frame->settings[0].id = 1;
+  frame->settings[0].value = 1;
+  h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
+
+  ck_assert_uint_eq(binary_buffer_size(&bb), 15);
+  ck_assert_uint_eq(OUT(0), 0);
+  ck_assert_uint_eq(OUT(1), 0);
+  ck_assert_uint_eq(OUT(2), 6);
+  ck_assert_uint_eq(OUT(3), FRAME_TYPE_SETTINGS);
+  ck_assert_uint_eq(OUT(4), 0);
+  ck_assert_uint_eq(OUT(5), 0);
+  ck_assert_uint_eq(OUT(6), 0);
+  ck_assert_uint_eq(OUT(7), 0);
+  ck_assert_uint_eq(OUT(8), 0);
+  ck_assert_uint_eq(OUT(9), 0);
+  ck_assert_uint_eq(OUT(10), 1);
+  ck_assert_uint_eq(OUT(11), 0);
+  ck_assert_uint_eq(OUT(12), 0);
+  ck_assert_uint_eq(OUT(13), 0);
+  ck_assert_uint_eq(OUT(14), 1);
+}
+END_TEST
+
+START_TEST(test_h2_frame_emit_settings_with_multiple_settings)
+{
+  h2_frame_settings_t * frame = (h2_frame_settings_t *) h2_frame_init(&parser, FRAME_TYPE_SETTINGS, 0, 0);
+  ck_assert_uint_eq(frame->stream_id, 0);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_SETTINGS);
+  ck_assert_uint_eq(frame->flags, 0);
+  ck_assert_uint_eq(frame->length, 0);
+
+  frame->num_settings = 2;
+  frame->settings[0].id = 1;
+  frame->settings[0].value = 1;
+  frame->settings[1].id = 2;
+  frame->settings[1].value = 2;
+  h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
+
+  ck_assert_uint_eq(binary_buffer_size(&bb), 21);
+  ck_assert_uint_eq(OUT(0), 0);
+  ck_assert_uint_eq(OUT(1), 0);
+  ck_assert_uint_eq(OUT(2), 12);
+  ck_assert_uint_eq(OUT(3), FRAME_TYPE_SETTINGS);
+  ck_assert_uint_eq(OUT(4), 0);
+  ck_assert_uint_eq(OUT(5), 0);
+  ck_assert_uint_eq(OUT(6), 0);
+  ck_assert_uint_eq(OUT(7), 0);
+  ck_assert_uint_eq(OUT(8), 0);
+  ck_assert_uint_eq(OUT(9), 0);
+  ck_assert_uint_eq(OUT(10), 1);
+  ck_assert_uint_eq(OUT(11), 0);
+  ck_assert_uint_eq(OUT(12), 0);
+  ck_assert_uint_eq(OUT(13), 0);
+  ck_assert_uint_eq(OUT(14), 1);
+  ck_assert_uint_eq(OUT(15), 0);
+  ck_assert_uint_eq(OUT(16), 2);
+  ck_assert_uint_eq(OUT(17), 0);
+  ck_assert_uint_eq(OUT(18), 0);
+  ck_assert_uint_eq(OUT(19), 0);
+  ck_assert_uint_eq(OUT(20), 2);
+}
+END_TEST
+
 START_TEST(test_h2_frame_emit_settings_ack)
 {
   h2_frame_settings_t * frame = (h2_frame_settings_t *) h2_frame_init(&parser, FRAME_TYPE_SETTINGS, FLAG_ACK, 0);
@@ -409,6 +489,7 @@ START_TEST(test_h2_frame_emit_settings_ack)
   ck_assert_uint_eq(frame->flags, FLAG_ACK);
   ck_assert_uint_eq(frame->length, 0);
 
+  frame->num_settings = 0;
   h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
 
   ck_assert_uint_eq(binary_buffer_size(&bb), 9);
@@ -1745,6 +1826,8 @@ Suite * hpack_suite()
 
   tcase_add_test(tc, test_h2_frame_emit_rst_stream);
 
+  tcase_add_test(tc, test_h2_frame_emit_settings);
+  tcase_add_test(tc, test_h2_frame_emit_settings_with_multiple_settings);
   tcase_add_test(tc, test_h2_frame_emit_settings_ack);
 
   tcase_add_test(tc, test_h2_frame_emit_push_promise_empty);
