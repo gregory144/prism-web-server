@@ -388,12 +388,11 @@ static bool h2_frame_emit_rst_stream(const h2_frame_parser_t * const parser, bin
   size_t payload_length = error_code_length;
   size_t buf_length = FRAME_HEADER_SIZE + payload_length;
 
-  size_t pos = 0;
   uint8_t buf[buf_length];
 
   frame->length = payload_length;
   h2_frame_header_write(buf, (h2_frame_t *) frame);
-  pos += FRAME_HEADER_SIZE;
+  size_t pos = FRAME_HEADER_SIZE;
 
   uint32_t error_code = frame->error_code;
   buf[pos++] = (error_code >> 24) & 0xFF;
@@ -409,17 +408,29 @@ static bool h2_frame_emit_rst_stream(const h2_frame_parser_t * const parser, bin
 static bool h2_frame_emit_settings(const h2_frame_parser_t * const parser, binary_buffer_t * const bb,
     h2_frame_settings_t * frame)
 {
-  if (!FRAME_FLAG(frame, FLAG_ACK)) {
-    log_append(parser->log, LOG_FATAL, "Can't emit settings frame: Not implemented yet");
-    return false;
-  }
+  UNUSED(parser);
 
-  size_t buf_length = FRAME_HEADER_SIZE;
-
+  size_t payload_length = frame->num_settings * SETTING_SIZE;
+  size_t buf_length = FRAME_HEADER_SIZE + payload_length;
   uint8_t buf[buf_length];
 
-  frame->length = 0;
+  frame->length = payload_length;
   h2_frame_header_write(buf, (h2_frame_t *) frame);
+
+  uint8_t pos = FRAME_HEADER_SIZE;
+
+  for (size_t i = 0; i < frame->num_settings; i++) {
+    h2_setting_t * setting = &frame->settings[i];
+    enum settings_e id = setting->id;
+    uint32_t value = setting->value;
+    log_append(parser->log, LOG_TRACE, "Writing setting: %u (0x%x): %u (0x%x)", id, id, value, value);
+    buf[pos++] = (id>> 8) & 0xFF;
+    buf[pos++] = (id) & 0xFF;
+    buf[pos++] = (value >> 24) & 0xFF;
+    buf[pos++] = (value >> 16) & 0xFF;
+    buf[pos++] = (value >> 8) & 0xFF;
+    buf[pos++] = (value) & 0xFF;
+  }
 
   return binary_buffer_write(bb, buf, buf_length);
 }

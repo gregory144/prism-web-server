@@ -752,8 +752,24 @@ static bool h2_send_settings_ack(const h2_t * const h2)
 
   h2_frame_settings_t * frame = (h2_frame_settings_t *) h2_frame_init(&h2->frame_parser,
       FRAME_TYPE_SETTINGS, flags, 0);
+  frame->num_settings = 0;
 
   log_append(h2->log, LOG_DEBUG, "Writing settings ack frame");
+
+  return h2_frame_write(h2, (h2_frame_t *) frame);
+}
+
+static bool h2_send_default_settings(const h2_t * const h2)
+{
+  uint8_t flags = 0;
+
+  h2_frame_settings_t * frame = (h2_frame_settings_t *) h2_frame_init(&h2->frame_parser,
+      FRAME_TYPE_SETTINGS, flags, 0);
+  frame->num_settings = 1;
+  frame->settings[0].id = SETTINGS_ENABLE_PUSH;
+  frame->settings[0].value = 0;
+
+  log_append(h2->log, LOG_DEBUG, "Writing default settings frame");
 
   return h2_frame_write(h2, (h2_frame_t *) frame);
 }
@@ -1230,12 +1246,15 @@ static bool h2_incoming_frame_settings(h2_t * const h2, const h2_frame_settings_
       h2_setting_set(h2, setting);
     }
 
-    h2->received_settings = true;
-
     log_append(h2->log, LOG_TRACE, "Settings: %ld, %d, %ld, %ld", h2->header_table_size, h2->enable_push,
                h2->max_concurrent_streams, h2->initial_window_size);
 
     bool ret = h2_send_settings_ack(h2);
+
+    if (!h2->received_settings) {
+      h2->received_settings = true;
+      h2_send_default_settings(h2);
+    }
 
     h2_flush(h2, 0);
 
