@@ -150,6 +150,7 @@ h2_t * h2_init(void * const data, log_context_t * log, log_context_t * hpack_log
   h2->received_settings = false;
   h2->last_stream_id = 0;
   h2->current_stream_id = 2;
+  h2->continuation_stream_id = 0;
   h2->outgoing_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
   h2->incoming_window_size = DEFAULT_INITIAL_WINDOW_SIZE;
 
@@ -1170,11 +1171,20 @@ static bool h2_parse_header_fragments(h2_t * const h2, h2_stream_t * const strea
     return false;
   }
 
+  free(headers);
+
+  return true;
+}
+
+static bool h2_received_headers(h2_t * const h2, h2_stream_t * stream)
+{
+  if (!h2_parse_header_fragments(h2, stream)) {
+    return false;
+  }
+
   // TODO - check that the stream is in a valid state to be opened first
   stream->state = STREAM_STATE_OPEN;
   h2->incoming_concurrent_streams++;
-
-  free(headers);
 
   // TODO - check that the stream is not closed?
   if (!h2->closing) {
@@ -1207,14 +1217,11 @@ static bool h2_incoming_frame_headers(h2_t * const h2, const h2_frame_headers_t 
     // parse the headers
     log_append(h2->log, LOG_TRACE, "Parsing headers");
 
-    bool success = h2_parse_header_fragments(h2, stream);
+    return h2_received_headers(h2, stream);
 
-    if (!success) {
-      h2_emit_error_and_close(h2, stream->id, H2_ERROR_INTERNAL_ERROR, "Unable to process stream");
-      return false;
-    }
   } else {
-    // TODO mark stream as waiting for continuation frame
+    // mark the connection as waiting for a continuation frame
+    h2->continuation_stream_id = frame->stream_id;
   }
 
   return true;
@@ -1222,6 +1229,9 @@ static bool h2_incoming_frame_headers(h2_t * const h2, const h2_frame_headers_t 
 
 static bool h2_received_push_promise(h2_t * const h2, h2_stream_t * stream)
 {
+  if (!h2_parse_header_fragments(h2, stream)) {
+    return false;
+  }
 
   if (h2->incoming_push_enabled) {
 
@@ -1241,24 +1251,24 @@ static bool h2_received_push_promise(h2_t * const h2, h2_stream_t * stream)
 
 static bool h2_incoming_frame_push_promise(h2_t * const h2, const h2_frame_push_promise_t * const frame)
 {
-  h2_stream_t * stream = h2_stream_init(h2, frame->stream_id, true);
-
+  h2_stream_t * stream = h2_stream_init(h2, frame->promised_stream_id, true);
   if (!stream) {
     return false;
   }
 
+  if (!h2_stream_add_header_fragment(stream, frame->header_block_fragment,
+                                     frame->header_block_fragment_length)) {
+    return false;
+  }
+
   if (FRAME_FLAG(frame, FLAG_END_HEADERS)) {
-    // parse the headers
     log_append(h2->log, LOG_TRACE, "Parsing push promise");
 
-    bool success = h2_received_push_promise(h2, stream);
+    return h2_received_push_promise(h2, stream);
 
-    if (!success) {
-      h2_emit_error_and_close(h2, stream->id, H2_ERROR_INTERNAL_ERROR, "Unable to process push promise");
-      return false;
-    }
   } else {
-    // TODO mark stream as waiting for continuation frame
+    // mark the connection as waiting for a continuation frame
+    h2->continuation_stream_id = frame->promised_stream_id;
   }
 
   return true;
@@ -1266,7 +1276,13 @@ static bool h2_incoming_frame_push_promise(h2_t * const h2, const h2_frame_push_
 
 static bool h2_incoming_frame_continuation(h2_t * const h2, const h2_frame_continuation_t * const frame)
 {
-  h2_stream_t * stream = h2_stream_get(h2, frame->stream_id);
+  if (h2->continuation_stream_id == 0) {
+    h2_emit_error_and_close_va(h2, 0, H2_ERROR_PROTOCOL_ERROR,
+        "Unexpected %s (0x%x) frame", frame_type_to_string(frame->type), frame->type);
+    return false;
+  }
+  // for a push promise continuation, is this stream ID correct?
+  h2_stream_t * stream = h2_stream_get(h2, h2->continuation_stream_id);
 
   if (!h2_stream_add_header_fragment(stream, frame->header_block_fragment,
         frame->header_block_fragment_length)) {
@@ -1274,14 +1290,16 @@ static bool h2_incoming_frame_continuation(h2_t * const h2, const h2_frame_conti
   }
 
   if (FRAME_FLAG(frame, FLAG_END_HEADERS)) {
-    // TODO unmark stream as waiting for continuation frame
+    // unmark connection as waiting for continuation frame
+    h2->continuation_stream_id = 0;
     // parse the headers
     log_append(h2->log, LOG_TRACE, "Parsing headers + continuations");
+
 
     if (stream->incoming_push) {
       return h2_received_push_promise(h2, stream);
     } else {
-      return h2_parse_header_fragments(h2, stream);
+      return h2_received_headers(h2, stream);
     }
   }
 
@@ -1455,6 +1473,11 @@ static bool h2_incoming_frame(void * data, const h2_frame_t * const frame)
 
   if (!h2->received_settings && frame->type != FRAME_TYPE_SETTINGS) {
     h2_emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR, "Expected settings frame");
+    return false;
+  }
+
+  if (h2->continuation_stream_id != 0 && frame->type != FRAME_TYPE_CONTINUATION) {
+    h2_emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR, "Expected continuation frame");
     return false;
   }
 

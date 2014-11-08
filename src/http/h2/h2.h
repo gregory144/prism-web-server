@@ -154,6 +154,7 @@ typedef struct h2_t {
   bool received_settings;
   // the next stream id that can be used to start a pushed stream
   size_t current_stream_id;
+  uint32_t continuation_stream_id;
   // the last stream id that has started processing
   size_t last_stream_id;
   long outgoing_window_size;
