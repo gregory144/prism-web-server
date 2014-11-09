@@ -318,7 +318,13 @@ static bool h2_send_rst_stream(const h2_t * const h2, uint32_t stream_id,
   return h2_frame_write(h2, (h2_frame_t *) frame);
 }
 
-static bool h2_emit_error_and_close(h2_t * const h2, uint32_t stream_id,
+/**
+ * If stream_id is zero: Emits a GOAWAY frame
+ * Otherwise: Emits a RST_STREAM
+ *
+ * If a goaway frame is sent, marks the connection as closed.
+ */
+static bool h2_emit_error_and_close_with_debug_data(h2_t * const h2, uint32_t stream_id,
                                  enum h2_error_code_e error_code, char * string)
 {
   if (error_code != H2_ERROR_NO_ERROR && string) {
@@ -348,21 +354,20 @@ static bool h2_emit_error_and_close(h2_t * const h2, uint32_t stream_id,
 
 }
 
-static bool h2_emit_error_and_close_va(h2_t * const h2, uint32_t stream_id,
-                                 enum h2_error_code_e error_code, char * format, ...)
+static bool h2_emit_error_and_close(h2_t * const h2, uint32_t stream_id,
+                                 enum h2_error_code_e error_code, char * format, ... )
 {
   size_t buf_length = 1024;
   char buf[buf_length];
 
-  if (error_code != H2_ERROR_NO_ERROR && format) {
+  if (format) {
     va_list ap;
     va_start(ap, format);
     vsnprintf(buf, buf_length, format, ap);
     va_end(ap);
   }
 
-  return h2_emit_error_and_close(h2, stream_id, error_code, format ? buf : NULL);
-
+  return h2_emit_error_and_close_with_debug_data(h2, stream_id, error_code, format ? buf : NULL);
 }
 
 static bool h2_send_headers(h2_t * const h2, const h2_stream_t * const stream,
@@ -373,7 +378,7 @@ static bool h2_send_headers(h2_t * const h2, const h2_stream_t * const stream,
   if (!hpack_encode(h2->encoding_context, headers, &encoded)) {
     // don't send stream ID because we want to generate a goaway - the
     // encoding context may have been corrupted
-    h2_emit_error_and_close(h2, 0, H2_ERROR_INTERNAL_ERROR, "Error encoding headers");
+    h2_emit_error_and_close_with_debug_data(h2, 0, H2_ERROR_INTERNAL_ERROR, "Error encoding headers");
   }
 
   uint8_t * hpack_buf = encoded.buf;
@@ -465,7 +470,7 @@ static bool h2_send_push_promise(h2_t * const h2, const h2_stream_t * const push
   if (!hpack_encode(h2->encoding_context, headers, &encoded)) {
     // don't send stream ID because we want to generate a goaway - the
     // encoding context may have been corrupted
-    h2_emit_error_and_close(h2, 0, H2_ERROR_INTERNAL_ERROR, "Error encoding headers");
+    h2_emit_error_and_close_with_debug_data(h2, 0, H2_ERROR_INTERNAL_ERROR, "Error encoding headers");
     return false;
   }
 
@@ -769,7 +774,7 @@ static bool h2_send_settings_ack(const h2_t * const h2)
 static bool h2_send_default_settings(h2_t * const h2)
 {
   if (h2->settings_pending) {
-    h2_emit_error_and_close(h2, 0, H2_ERROR_INTERNAL_ERROR,
+    h2_emit_error_and_close_with_debug_data(h2, 0, H2_ERROR_INTERNAL_ERROR,
         "Tried to send 2 settings frames at once");
     return false;
   }
@@ -859,7 +864,7 @@ static void h2_adjust_initial_window_size(h2_t * const h2, const long difference
     stream->outgoing_window_size += difference;
 
     if (stream->outgoing_window_size > MAX_WINDOW_SIZE) {
-      h2_emit_error_and_close(h2, stream->id, H2_ERROR_FLOW_CONTROL_ERROR, NULL);
+      h2_emit_error_and_close_with_debug_data(h2, stream->id, H2_ERROR_FLOW_CONTROL_ERROR, NULL);
     }
   }
 }
@@ -928,7 +933,7 @@ static h2_stream_t * h2_stream_init(h2_t * const h2, const uint32_t stream_id, b
   h2_stream_t * stream = h2_stream_get(h2, stream_id);
 
   if (stream != NULL) {
-    h2_emit_error_and_close_va(h2, 0, H2_ERROR_PROTOCOL_ERROR,
+    h2_emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR,
                          "Tried to initialize an existing stream: %u", stream_id);
     return NULL;
   }
@@ -936,7 +941,7 @@ static h2_stream_t * h2_stream_init(h2_t * const h2, const uint32_t stream_id, b
   stream = malloc(sizeof(h2_stream_t));
 
   if (!stream) {
-    h2_emit_error_and_close_va(h2, stream_id, H2_ERROR_INTERNAL_ERROR,
+    h2_emit_error_and_close(h2, stream_id, H2_ERROR_INTERNAL_ERROR,
                          "Unable to initialize stream: %u", stream_id);
     return NULL;
   }
@@ -946,7 +951,7 @@ static h2_stream_t * h2_stream_init(h2_t * const h2, const uint32_t stream_id, b
   long * stream_id_key = malloc(sizeof(long));
 
   if (!stream_id_key) {
-    h2_emit_error_and_close_va(h2, stream_id, H2_ERROR_INTERNAL_ERROR,
+    h2_emit_error_and_close(h2, stream_id, H2_ERROR_INTERNAL_ERROR,
                          "Unable to initialize stream (stream identifier): %u", stream_id);
     free(stream);
     return NULL;
@@ -1037,7 +1042,7 @@ static bool h2_incoming_frame_data(h2_t * const h2, const h2_frame_data_t * cons
   h2_stream_t * stream = h2_stream_get(h2, frame->stream_id);
 
   if (!stream) {
-    h2_emit_error_and_close_va(h2, frame->stream_id, H2_ERROR_PROTOCOL_ERROR,
+    h2_emit_error_and_close(h2, frame->stream_id, H2_ERROR_PROTOCOL_ERROR,
                          "Unable to find stream #%u", frame->stream_id);
     return true;
   }
@@ -1055,7 +1060,7 @@ static bool h2_incoming_frame_data(h2_t * const h2, const h2_frame_data_t * cons
   // do we need to send WINDOW_UPDATE?
   if (h2->incoming_window_size < 0) {
 
-    h2_emit_error_and_close_va(h2, 0, H2_ERROR_FLOW_CONTROL_ERROR,
+    h2_emit_error_and_close(h2, 0, H2_ERROR_FLOW_CONTROL_ERROR,
         "Connection window size is less than 0: %ld", h2->incoming_window_size);
 
   } else if (h2->incoming_window_size < 0.75 * DEFAULT_INITIAL_WINDOW_SIZE) {
@@ -1063,7 +1068,7 @@ static bool h2_incoming_frame_data(h2_t * const h2, const h2_frame_data_t * cons
     size_t increment = DEFAULT_INITIAL_WINDOW_SIZE - h2->incoming_window_size;
 
     if (!h2_send_window_update(h2, 0, increment)) {
-      h2_emit_error_and_close(h2, 0, H2_ERROR_INTERNAL_ERROR, "Unable to emit window update frame");
+      h2_emit_error_and_close_with_debug_data(h2, 0, H2_ERROR_INTERNAL_ERROR, "Unable to emit window update frame");
       return false;
     }
 
@@ -1073,7 +1078,7 @@ static bool h2_incoming_frame_data(h2_t * const h2, const h2_frame_data_t * cons
 
   if (stream->incoming_window_size < 0) {
 
-    h2_emit_error_and_close_va(h2, stream->id, H2_ERROR_FLOW_CONTROL_ERROR,
+    h2_emit_error_and_close(h2, stream->id, H2_ERROR_FLOW_CONTROL_ERROR,
                          "Stream #%u: window size is less than 0: %ld", stream->id, stream->incoming_window_size);
 
   } else if (!last_data_frame && (stream->incoming_window_size < 0.75 * DEFAULT_INITIAL_WINDOW_SIZE)) {
@@ -1240,7 +1245,7 @@ static bool h2_received_push_promise(h2_t * const h2, h2_stream_t * stream)
 
   } else {
 
-    h2_emit_error_and_close_va(h2, 0, H2_ERROR_PROTOCOL_ERROR,
+    h2_emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR,
         "Received %s (0x%x) frame, but SETTINGS_PUSH_ENABLED is off",
         frame_type_to_string(FRAME_TYPE_PUSH_PROMISE), FRAME_TYPE_PUSH_PROMISE);
     return false;
@@ -1277,7 +1282,7 @@ static bool h2_incoming_frame_push_promise(h2_t * const h2, const h2_frame_push_
 static bool h2_incoming_frame_continuation(h2_t * const h2, const h2_frame_continuation_t * const frame)
 {
   if (h2->continuation_stream_id == 0) {
-    h2_emit_error_and_close_va(h2, 0, H2_ERROR_PROTOCOL_ERROR,
+    h2_emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR,
         "Unexpected %s (0x%x) frame", frame_type_to_string(frame->type), frame->type);
     return false;
   }
@@ -1312,13 +1317,13 @@ static bool h2_incoming_frame_settings(h2_t * const h2, const h2_frame_settings_
   if (FRAME_FLAG(frame, FLAG_ACK)) {
 
     if (frame->length != 0) {
-      h2_emit_error_and_close_va(h2, 0, H2_ERROR_FRAME_SIZE_ERROR,
+      h2_emit_error_and_close(h2, 0, H2_ERROR_FRAME_SIZE_ERROR,
                            "Non-zero frame size for ACK settings frame: %lu", frame->length);
       return false;
     }
 
     if (!h2->settings_pending) {
-      h2_emit_error_and_close_va(h2, 0, H2_ERROR_INTERNAL_ERROR,
+      h2_emit_error_and_close(h2, 0, H2_ERROR_INTERNAL_ERROR,
           "Received unknown %s (0x%x) ACK.", frame_type_to_string(frame->type), frame->type);
       return false;
     }
@@ -1389,7 +1394,7 @@ static bool h2_increment_stream_window_size(h2_t * const h2, const uint32_t stre
   h2_stream_t * stream = h2_stream_get(h2, stream_id);
 
   if (!stream) {
-    h2_emit_error_and_close_va(h2, stream_id, H2_ERROR_PROTOCOL_ERROR,
+    h2_emit_error_and_close(h2, stream_id, H2_ERROR_PROTOCOL_ERROR,
                          "Could not find stream #%u to update it's window size", stream_id);
     return false;
   }
@@ -1436,7 +1441,7 @@ static bool h2_incoming_frame_priority(h2_t * const h2, h2_frame_priority_t * co
   h2_stream_t * stream = h2_stream_get(h2, frame->stream_id);
 
   if (!stream) {
-    h2_emit_error_and_close_va(h2, frame->stream_id, H2_ERROR_PROTOCOL_ERROR, "Unknown stream id: %u",
+    h2_emit_error_and_close(h2, frame->stream_id, H2_ERROR_PROTOCOL_ERROR, "Unknown stream id: %u",
                          frame->stream_id);
     return true;
   }
@@ -1472,12 +1477,14 @@ static bool h2_incoming_frame(void * data, const h2_frame_t * const frame)
   bool success = false;
 
   if (!h2->received_settings && frame->type != FRAME_TYPE_SETTINGS) {
-    h2_emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR, "Expected settings frame");
+    h2_emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR,
+        "Expected settings frame but got: %s (0x%x)", frame_type_to_string(frame->type), frame->type);
     return false;
   }
 
   if (h2->continuation_stream_id != 0 && frame->type != FRAME_TYPE_CONTINUATION) {
-    h2_emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR, "Expected continuation frame");
+    h2_emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR,
+        "Expected continuation frame but got: %s (0x%x)", frame_type_to_string(frame->type), frame->type);
     return false;
   }
 
@@ -1533,7 +1540,8 @@ static bool h2_incoming_frame(void * data, const h2_frame_t * const frame)
       break;
 
     default:
-      h2_emit_error_and_close_va(h2, 0, H2_ERROR_INTERNAL_ERROR, "Unhandled frame type: %u", frame->type);
+      h2_emit_error_and_close(h2, 0, H2_ERROR_INTERNAL_ERROR, "Unhandled frame type: %s (0x%x)",
+          frame_type_to_string(frame->type), frame->type);
       success = false;
       break;
   }
@@ -1608,12 +1616,17 @@ static bool h2_parse_error_cb(void * data, uint32_t stream_id, enum h2_error_cod
     char * format, ...)
 {
   h2_t * h2 = data;
-  va_list args;
+  size_t buf_length = 1024;
+  char buf[buf_length];
 
+  va_list args;
   va_start(args, format);
-  bool ret = h2_emit_error_and_close_va(h2, stream_id, error_code, format, args);
+  if (format) {
+    vsnprintf(buf, buf_length, format, args);
+  }
   va_end(args);
-  return ret;
+
+  return h2_emit_error_and_close_with_debug_data(h2, stream_id, error_code, format ? buf : NULL);
 }
 
 /**
@@ -1652,7 +1665,8 @@ void h2_read(h2_t * const h2, uint8_t * const buffer, const size_t len)
     h2->buffer = realloc(h2->buffer, unprocessed_bytes + len);
 
     if (!h2->buffer) {
-      h2_emit_error_and_close(h2, 0, H2_ERROR_INTERNAL_ERROR, "Unable to allocate memory for reading full frame");
+      h2_emit_error_and_close_with_debug_data(h2, 0, H2_ERROR_INTERNAL_ERROR,
+          "Unable to allocate memory for reading full frame");
       free(buffer);
       return;
     }
@@ -1671,7 +1685,7 @@ void h2_read(h2_t * const h2, uint8_t * const buffer, const size_t len)
     if (h2_verify_tls_settings(h2)) {
       h2->verified_tls_settings = true;
     } else {
-      h2_emit_error_and_close(h2, 0, H2_ERROR_INADEQUATE_SECURITY, "Inadequate security");
+      h2_emit_error_and_close_with_debug_data(h2, 0, H2_ERROR_INADEQUATE_SECURITY, "Inadequate security");
       return;
     }
   }
@@ -1702,7 +1716,7 @@ void h2_read(h2_t * const h2, uint8_t * const buffer, const size_t len)
 
   if (h2->buffer_position > h2->buffer_length) {
     // buffer overflow
-    h2_emit_error_and_close(h2, 0, H2_ERROR_INTERNAL_ERROR, NULL);
+    h2_emit_error_and_close_with_debug_data(h2, 0, H2_ERROR_INTERNAL_ERROR, NULL);
     return;
   }
 
@@ -1743,13 +1757,15 @@ bool h2_response_write(h2_stream_t * stream, http_response_t * const response, u
 
   if (stream->state != STREAM_STATE_CLOSED) {
     if (!h2_send_headers(h2, stream, response->headers)) {
-      h2_emit_error_and_close(h2, stream->id, H2_ERROR_INTERNAL_ERROR, "Unable to emit headers");
+      h2_emit_error_and_close_with_debug_data(h2, stream->id, H2_ERROR_INTERNAL_ERROR,
+          "Unable to emit headers");
       return false;
     }
 
     if (data || last) {
       if (!h2_send_data(h2, stream, data, data_length, last)) {
-        h2_emit_error_and_close(h2, stream->id, H2_ERROR_INTERNAL_ERROR, "Unable to emit data");
+        h2_emit_error_and_close_with_debug_data(h2, stream->id, H2_ERROR_INTERNAL_ERROR,
+            "Unable to emit data");
         return false;
       }
     }
@@ -1777,7 +1793,8 @@ bool h2_response_write_data(h2_stream_t * stream, http_response_t * const respon
 
   if (data || last) {
     if (!h2_send_data(h2, stream, data, data_length, last)) {
-      h2_emit_error_and_close(h2, stream->id, H2_ERROR_INTERNAL_ERROR, "Unable to emit data");
+      h2_emit_error_and_close_with_debug_data(h2, stream->id, H2_ERROR_INTERNAL_ERROR,
+          "Unable to emit data");
       return false;
     }
   }

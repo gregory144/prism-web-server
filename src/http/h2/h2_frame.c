@@ -994,6 +994,7 @@ h2_frame_t * h2_frame_parse(const h2_frame_parser_t * const parser, uint8_t * co
 
     // is this a valid frame type?
     if (!h2_frame_is_valid_frame_type(frame_type)) {
+      // TODO - ignore unknown frame types
       // invalid frame type is always a connection error
       parser->parse_error(parser->data, 0, H2_ERROR_PROTOCOL_ERROR, "Invalid frame type: 0x%x", frame_type);
       return NULL;
