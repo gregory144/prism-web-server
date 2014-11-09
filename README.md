@@ -38,11 +38,13 @@ An interoperable HTTP2 server.
 * serious security checks
 * listen on secure port + non-secure port at the same time
 * graceful shutdown
-* error on violation of incoming max concurrent streams
-* better goaway handling, goaway on bad hpack indexes
 * better error handling for libuv calls
 * doxygen documentation
+* main thread does the listen()ing and workers accept/read/write
 * complete spec compliance
+  * ignore unknown frame types
+  * error on violation of incoming max concurrent streams
+  * goaway on bad hpack indexes
 
 #### Up next
 
@@ -53,6 +55,7 @@ An interoperable HTTP2 server.
 
 * finite state machine for handling stream status
 * plugin system that allows access to connections, streams, frames, requests, responses (callbacks)
+  * plugin versioning system - each call has a version number that is checked on plugin load
 
 #### Performance:
 
