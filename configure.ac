@@ -13,6 +13,11 @@ AC_PROG_CXX
 AM_PROG_LIBTOOL
 AC_PROG_RANLIB
 
+AC_CHECK_PROGS([DOXYGEN], [doxygen])
+if test -z "$DOXYGEN";
+  then AC_MSG_WARN([Doxygen not found - continuing without Doxygen support])
+fi
+
 AC_CHECK_HEADERS([stdint.h])
 AC_CHECK_HEADERS([stdlib.h])
 AC_CHECK_HEADERS([string.h])
@@ -69,6 +74,7 @@ AC_SUBST(UTIL_DIR, `pwd`/src/util)
 
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([Makefile
+                 docs/Makefile
                  src/plugins/framer/Makefile
                  src/plugins/debug/Makefile
                  src/plugins/files/Makefile
@@ -80,6 +86,10 @@ AC_CONFIG_FILES([Makefile
                  src/http/h1_1/Makefile
                  src/http/Makefile
                  src/Makefile])
+
+
+AM_CONDITIONAL([HAVE_DOXYGEN],
+               [test -n "$DOXYGEN"])AM_COND_IF([HAVE_DOXYGEN], [AC_CONFIG_FILES([docs/Doxyfile])])
 
 AC_OUTPUT
 

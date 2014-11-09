@@ -1,4 +1,4 @@
-SUBDIRS = src .
+SUBDIRS = src docs .
 
 CC = clang
 ACLOCAL_AMFLAGS = -I m4
