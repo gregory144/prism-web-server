@@ -1836,6 +1836,347 @@ START_TEST(test_h2_frame_parse_push_promise)
 }
 END_TEST
 
+START_TEST(test_h2_frame_parse_push_promise_with_padding)
+{
+  uint8_t buffer[] = {
+    0, 0, 13, FRAME_TYPE_PUSH_PROMISE, FLAG_PADDED | FLAG_END_HEADERS, 0, 0, 0, 1,
+    0x04, 0, 0, 0, 2, 0xde, 0xad, 0xbe, 0xef, 0x00, 0x00, 0x00, 0x00
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_push_promise_t * frame = (h2_frame_push_promise_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 13);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_PUSH_PROMISE);
+  ck_assert_uint_eq(frame->flags, FLAG_PADDED | FLAG_END_HEADERS);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->promised_stream_id, 2);
+  ck_assert_uint_eq(frame->header_block_fragment_length, 4);
+  ck_assert_uint_eq(frame->header_block_fragment[0], 0xde);
+  ck_assert_uint_eq(frame->header_block_fragment[1], 0xad);
+  ck_assert_uint_eq(frame->header_block_fragment[2], 0xbe);
+  ck_assert_uint_eq(frame->header_block_fragment[3], 0xef);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_push_promise_with_invalid_stream_id)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x8, FRAME_TYPE_PUSH_PROMISE, FLAG_END_HEADERS, 0, 0, 0, 0,
+    0, 0, 0, 2, 0xde, 0xad, 0xbe, 0xef
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  ck_assert_uint_eq(num_frames_parsed, 0);
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
+  ck_assert_str_eq(ce->error_string,
+      "Stream ID must be set for frame type PUSH_PROMISE (0x5)");
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_push_promise_with_invalid_promised_stream_id)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x8, FRAME_TYPE_PUSH_PROMISE, FLAG_END_HEADERS, 0, 0, 0, 1,
+    0, 0, 0, 0, 0xde, 0xad, 0xbe, 0xef
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  ck_assert_uint_eq(num_frames_parsed, 0);
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
+  ck_assert_str_eq(ce->error_string,
+      "PUSH_PROMISE (0x5) frame promised stream ID must not be 0");
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_ping)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x8, FRAME_TYPE_PING, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_ping_t * frame = (h2_frame_ping_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 8);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_PING);
+  ck_assert_uint_eq(frame->flags, 0);
+  ck_assert_uint_eq(frame->stream_id, 0);
+  ck_assert_uint_eq(frame->opaque_data[0], 0);
+  ck_assert_uint_eq(frame->opaque_data[1], 0);
+  ck_assert_uint_eq(frame->opaque_data[2], 0);
+  ck_assert_uint_eq(frame->opaque_data[3], 0);
+  ck_assert_uint_eq(frame->opaque_data[4], 0);
+  ck_assert_uint_eq(frame->opaque_data[5], 0);
+  ck_assert_uint_eq(frame->opaque_data[6], 0);
+  ck_assert_uint_eq(frame->opaque_data[7], 0);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_ping_ack)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x8, FRAME_TYPE_PING, FLAG_ACK, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_ping_t * frame = (h2_frame_ping_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 8);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_PING);
+  ck_assert_uint_eq(frame->flags, FLAG_ACK);
+  ck_assert_uint_eq(frame->stream_id, 0);
+  ck_assert_uint_eq(frame->opaque_data[0], 0);
+  ck_assert_uint_eq(frame->opaque_data[1], 0);
+  ck_assert_uint_eq(frame->opaque_data[2], 0);
+  ck_assert_uint_eq(frame->opaque_data[3], 0);
+  ck_assert_uint_eq(frame->opaque_data[4], 0);
+  ck_assert_uint_eq(frame->opaque_data[5], 0);
+  ck_assert_uint_eq(frame->opaque_data[6], 0);
+  ck_assert_uint_eq(frame->opaque_data[7], 0);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_ping_with_invalid_stream_id)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x8, FRAME_TYPE_PING, 0, 0, 0, 0, 1,
+    0, 0, 0, 0, 0, 0, 0, 0
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  ck_assert_uint_eq(num_frames_parsed, 0);
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
+  ck_assert_str_eq(ce->error_string,
+      "Stream ID must not be set for frame type PING (0x6)");
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_ping_with_invalid_length)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x9, FRAME_TYPE_PING, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  ck_assert_uint_eq(num_frames_parsed, 0);
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_FRAME_SIZE_ERROR);
+  ck_assert_str_eq(ce->error_string,
+      "Invalid frame length (above max) for frame type PING (0x6): 9 (0x9)");
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_goaway)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x8, FRAME_TYPE_GOAWAY, 0, 0, 0, 0, 0,
+    0, 0, 0, 2,
+    0, 0, 0, H2_ERROR_NO_ERROR
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_goaway_t * frame = (h2_frame_goaway_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 8);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_GOAWAY);
+  ck_assert_uint_eq(frame->flags, 0);
+  ck_assert_uint_eq(frame->stream_id, 0);
+  ck_assert_uint_eq(frame->last_stream_id, 2);
+  ck_assert_uint_eq(frame->error_code, H2_ERROR_NO_ERROR);
+  ck_assert_uint_eq(frame->debug_data_length, 0);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_goaway_with_debug_data)
+{
+  uint8_t buffer[] = {
+    0, 0, 12, FRAME_TYPE_GOAWAY, 0, 0, 0, 0, 0,
+    0, 0, 0, 2,
+    0, 0, 0, H2_ERROR_NO_ERROR,
+    0xde, 0xad, 0xbe, 0xef
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_goaway_t * frame = (h2_frame_goaway_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 12);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_GOAWAY);
+  ck_assert_uint_eq(frame->flags, 0);
+  ck_assert_uint_eq(frame->stream_id, 0);
+  ck_assert_uint_eq(frame->last_stream_id, 2);
+  ck_assert_uint_eq(frame->error_code, H2_ERROR_NO_ERROR);
+  ck_assert_uint_eq(frame->debug_data_length, 4);
+  ck_assert_uint_eq(frame->debug_data[0], 0xde);
+  ck_assert_uint_eq(frame->debug_data[1], 0xad);
+  ck_assert_uint_eq(frame->debug_data[2], 0xbe);
+  ck_assert_uint_eq(frame->debug_data[3], 0xef);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_goaway_with_invalid_stream_id)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x8, FRAME_TYPE_GOAWAY, 0, 0, 0, 0, 1,
+    0, 0, 0, 2,
+    0, 0, 0, H2_ERROR_NO_ERROR
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  ck_assert_uint_eq(num_frames_parsed, 0);
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
+  ck_assert_str_eq(ce->error_string,
+      "Stream ID must not be set for frame type GOAWAY (0x7)");
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_window_update)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x4, FRAME_TYPE_WINDOW_UPDATE, 0, 0, 0, 0, 0,
+    0, 0, 0, 1
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, buffer_length);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_window_update_t * frame = (h2_frame_window_update_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 4);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_WINDOW_UPDATE);
+  ck_assert_uint_eq(frame->flags, 0);
+  ck_assert_uint_eq(frame->stream_id, 0);
+  ck_assert_uint_eq(frame->increment, 1);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_window_update_with_zero_increment)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x4, FRAME_TYPE_WINDOW_UPDATE, 0, 0, 0, 0, 0,
+    0, 0, 0, 0
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  ck_assert_uint_eq(num_frames_parsed, 0);
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
+  ck_assert_str_eq(ce->error_string,
+      "WINDOW_UPDATE (0x8) increment value must not be 0");
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_continuation)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x4, FRAME_TYPE_CONTINUATION, FLAG_END_HEADERS, 0, 0, 0, 1, 0xde, 0xad, 0xbe, 0xef
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret != NULL);
+
+  ck_assert_uint_eq(buffer_position, 9 + 4);
+  ck_assert_uint_eq(num_frames_parsed, 1);
+  h2_frame_continuation_t * frame = (h2_frame_continuation_t *) last_frames[0];
+  ck_assert_uint_eq(frame->length, 4);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_CONTINUATION);
+  ck_assert_uint_eq(frame->flags, FLAG_END_HEADERS);
+  ck_assert_uint_eq(frame->stream_id, 1);
+  ck_assert_uint_eq(frame->header_block_fragment_length, 4);
+  ck_assert_uint_eq(frame->header_block_fragment[0], 0xde);
+  ck_assert_uint_eq(frame->header_block_fragment[1], 0xad);
+  ck_assert_uint_eq(frame->header_block_fragment[2], 0xbe);
+  ck_assert_uint_eq(frame->header_block_fragment[3], 0xef);
+}
+END_TEST
+
+START_TEST(test_h2_frame_parse_continuation_with_invalid_stream_id)
+{
+  uint8_t buffer[] = {
+    0, 0, 0x4, FRAME_TYPE_CONTINUATION, FLAG_END_HEADERS, 0, 0, 0, 0, 0xde, 0xad, 0xbe, 0xef
+  };
+  size_t buffer_position = 0;
+  size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
+
+  h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
+  ck_assert(ret == NULL);
+
+  ck_assert_uint_eq(num_frames_parsed, 0);
+  ck_assert_uint_eq(num_errors, 1);
+  caught_error_t * ce = caught_errors[0];
+  ck_assert_uint_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
+  ck_assert_str_eq(ce->error_string,
+      "Stream ID must be set for frame type CONTINUATION (0x9)");
+}
+END_TEST
+
 Suite * hpack_suite()
 {
   Suite * s = suite_create("h2_frame");
@@ -1925,6 +2266,24 @@ Suite * hpack_suite()
   tcase_add_test(tc, test_h2_frame_parse_settings_with_invalid_frame_length);
 
   tcase_add_test(tc, test_h2_frame_parse_push_promise);
+  tcase_add_test(tc, test_h2_frame_parse_push_promise_with_invalid_stream_id);
+  tcase_add_test(tc, test_h2_frame_parse_push_promise_with_invalid_promised_stream_id);
+  tcase_add_test(tc, test_h2_frame_parse_push_promise_with_padding);
+
+  tcase_add_test(tc, test_h2_frame_parse_ping);
+  tcase_add_test(tc, test_h2_frame_parse_ping_ack);
+  tcase_add_test(tc, test_h2_frame_parse_ping_with_invalid_length);
+  tcase_add_test(tc, test_h2_frame_parse_ping_with_invalid_stream_id);
+
+  tcase_add_test(tc, test_h2_frame_parse_goaway);
+  tcase_add_test(tc, test_h2_frame_parse_goaway_with_invalid_stream_id);
+  tcase_add_test(tc, test_h2_frame_parse_goaway_with_debug_data);
+
+  tcase_add_test(tc, test_h2_frame_parse_window_update);
+  tcase_add_test(tc, test_h2_frame_parse_window_update_with_zero_increment);
+
+  tcase_add_test(tc, test_h2_frame_parse_continuation);
+  tcase_add_test(tc, test_h2_frame_parse_continuation_with_invalid_stream_id);
 
   suite_add_tcase(s, tc);
 

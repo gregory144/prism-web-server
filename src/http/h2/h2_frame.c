@@ -742,6 +742,12 @@ static bool h2_frame_parse_push_promise(const h2_frame_parser_t * const parser, 
   frame->padding_length = padding_length;
 
   frame->promised_stream_id = get_bits32(buf, 0x7FFFFFFF);
+  if (frame->promised_stream_id == 0) {
+    parser->parse_error(parser->data, 0, H2_ERROR_PROTOCOL_ERROR,
+        "%s (0x%x) frame promised stream ID must not be 0",
+        frame_type_to_string(frame->type), frame->type);
+    return false;
+  }
 
   frame->header_block_fragment = buf + 4;
   frame->header_block_fragment_length = buf_length - 4;
@@ -858,6 +864,13 @@ static bool h2_frame_parse_window_update(const h2_frame_parser_t * const parser,
 
   frame->increment = get_bits32(buf, 0x7FFFFFFF);
 
+  if (frame->increment == 0) {
+    parser->parse_error(parser->data, 0, H2_ERROR_PROTOCOL_ERROR,
+        "%s (0x%x) increment value must not be 0",
+        frame_type_to_string(frame->type), frame->type);
+    return false;
+  }
+
   return true;
 }
 
@@ -921,7 +934,7 @@ static bool h2_frame_is_valid(const h2_frame_parser_t * const parser, h2_frame_t
 
   if (frame->length > def.length_max) {
     parser->parse_error(parser->data, 0, H2_ERROR_FRAME_SIZE_ERROR,
-        "Invalid frame length (above max) for frame type %s (0x%x): 0x%x, %u",
+        "Invalid frame length (above max) for frame type %s (0x%x): %u (0x%x)",
         frame_type_to_string(frame->type), frame->type, frame->length, frame->length);
     return false;
   }
