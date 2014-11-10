@@ -838,21 +838,6 @@ static bool h2_send_window_update(const h2_t * const h2, const uint32_t stream_i
   return true;
 }
 
-/**
- * Returns true if the first part of data is the http connection
- * header string
- */
-static bool h2_recognize_connection_preface(h2_t * const h2)
-{
-
-  if (h2_detect_connection(h2->buffer, h2->buffer_length)) {
-    h2->buffer_position = H2_CONNECTION_PREFACE_LENGTH;
-    return true;
-  }
-
-  return false;
-}
-
 static void h2_adjust_initial_window_size(h2_t * const h2, const long difference)
 {
   hash_table_iter_t iter;
@@ -1691,10 +1676,15 @@ void h2_read(h2_t * const h2, uint8_t * const buffer, const size_t len)
   }
 
   if (!h2->received_connection_preface) {
-    if (h2_recognize_connection_preface(h2)) {
-      h2->received_connection_preface = true;
+    enum h2_detect_result_e result = h2_detect_connection(h2->buffer, h2->buffer_length);
+    if (result == H2_DETECT_SUCCESS) {
+      h2->buffer_position = H2_CONNECTION_PREFACE_LENGTH;
 
       log_append(h2->log, LOG_TRACE, "Found HTTP2 connection");
+    } else if (result == H2_DETECT_NEED_MORE_DATA) {
+      log_append(h2->log, LOG_WARN, "Need more data to detect connection");
+      goto handle_buffer;
+      return;
     } else {
       log_append(h2->log, LOG_WARN, "Found non-HTTP2 connection, closing connection");
 
@@ -1709,6 +1699,8 @@ void h2_read(h2_t * const h2, uint8_t * const buffer, const size_t len)
   while (h2_add_from_buffer(h2));
 
   h2->reading_from_client = false;
+
+handle_buffer:
 
   if (!h2_flush(h2, 0)) {
     log_append(h2->log, LOG_WARN, "Could not flush write buffer");
