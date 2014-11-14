@@ -271,9 +271,11 @@ static bool h2_flush(const h2_t * const h2, size_t new_length)
 
 bool h2_frame_write(const h2_t * const h2, h2_frame_t * const frame)
 {
-  ASSERT_OR_RETURN_FALSE(
-    h2_frame_emit(&h2->frame_parser, (binary_buffer_t *) &h2->write_buffer, (h2_frame_t *) frame)
-  );
+  bool ret = h2_frame_emit(&h2->frame_parser, (binary_buffer_t *) &h2->write_buffer, (h2_frame_t *) frame);
+  free(frame);
+  if (!ret) {
+    return false;
+  }
 
   size_t new_length = binary_buffer_size(&h2->write_buffer);
 
@@ -1678,6 +1680,7 @@ void h2_read(h2_t * const h2, uint8_t * const buffer, const size_t len)
   if (!h2->received_connection_preface) {
     enum h2_detect_result_e result = h2_detect_connection(h2->buffer, h2->buffer_length);
     if (result == H2_DETECT_SUCCESS) {
+      h2->received_connection_preface = true;
       h2->buffer_position = H2_CONNECTION_PREFACE_LENGTH;
 
       log_append(h2->log, LOG_TRACE, "Found HTTP2 connection");

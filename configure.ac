@@ -1,5 +1,5 @@
 AC_INIT([prism],[0.0.1],[greg@gtgross.com])
-AM_INIT_AUTOMAKE([foreign -Wall -Werror])
+AM_INIT_AUTOMAKE([foreign])
 
 AC_GNU_SOURCE
 
@@ -12,6 +12,8 @@ AC_PROG_CC_C99
 AC_PROG_CXX
 AM_PROG_LIBTOOL
 AC_PROG_RANLIB
+AC_PROG_YACC
+AC_PROG_LEX
 
 AC_CHECK_PROGS([DOXYGEN], [doxygen])
 if test -z "$DOXYGEN";

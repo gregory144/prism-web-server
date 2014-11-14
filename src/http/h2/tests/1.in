@@ -1,0 +1,8 @@
+send SETTINGS
+  ENABLE_PUSH: 1
+
+recv SETTINGS ACK
+
+recv SETTINGS
+  ENABLE_PUSH: 0
+

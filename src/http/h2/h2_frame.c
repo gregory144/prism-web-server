@@ -634,8 +634,6 @@ bool h2_frame_emit(const h2_frame_parser_t * const parser, binary_buffer_t * con
       return false;
   }
 
-  h2_frame_free(frame);
-
   return success;
 }
 

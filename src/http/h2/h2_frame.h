@@ -1,6 +1,7 @@
 #ifndef H2_FRAME_H
 #define H2_FRAME_H
 
+#include <stdint.h>
 #include <stdbool.h>
 
 #include "log.h"
@@ -219,7 +220,7 @@ typedef bool (*h2_frame_incoming_cb)(void * data, const h2_frame_t * const frame
 typedef bool (*h2_frame_parse_error_cb)(void * data, uint32_t stream_id,
     enum h2_error_code_e, char * format, ...);
 
-typedef struct {
+typedef struct h2_frame_parser_s {
 
   void * data;
 
