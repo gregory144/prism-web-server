@@ -260,11 +260,8 @@ bool h2_frame_flag_get(const h2_frame_t * const frame, int mask)
   return frame->flags & mask;
 }
 
-h2_frame_t * h2_frame_init(const h2_frame_parser_t * const parser, const uint8_t type,
-                                  const uint8_t flags, const uint32_t stream_id)
+h2_frame_t * h2_frame_init(const uint8_t type, const uint8_t flags, const uint32_t stream_id)
 {
-  UNUSED(parser);
-
   h2_frame_t * frame;
 
   switch (type) {
@@ -351,33 +348,91 @@ static void h2_frame_header_write(uint8_t * const buf, h2_frame_t * frame)
 
 static bool h2_frame_emit_data(const h2_frame_parser_t * const parser, binary_buffer_t * const bb, h2_frame_data_t * frame)
 {
-  uint8_t buf[FRAME_HEADER_SIZE];
-  frame->length = frame->payload_length;
-  h2_frame_header_write(buf, (h2_frame_t *) frame);
-
-  if (!binary_buffer_write(bb, buf, FRAME_HEADER_SIZE)) {
-    log_append(parser->log, LOG_ERROR, "Unable to write data frame header");
+  bool is_padded = FRAME_FLAG(frame, FLAG_PADDED);
+  size_t padding_length_field_length = 0;
+  size_t padding_length = 0;
+  if (is_padded) {
+    padding_length_field_length = 1;
+    padding_length = frame->padding_length;
+  }
+  if (padding_length > MAX_PADDING) {
+    log_append(parser->log, LOG_ERROR, "Too much padding: %u (0x%x)", padding_length, padding_length);
     return false;
   }
 
-  return binary_buffer_write(bb, frame->payload, frame->payload_length);
+  const size_t buf_length = FRAME_HEADER_SIZE + padding_length_field_length;
+  uint8_t buf[buf_length];
+  frame->length = frame->payload_length + padding_length_field_length + padding_length;
+  h2_frame_header_write(buf, (h2_frame_t *) frame);
+
+  if (is_padded) {
+    size_t buf_pos = FRAME_HEADER_SIZE;
+    buf[buf_pos++] = padding_length;
+  }
+
+  if (!binary_buffer_write(bb, buf, buf_length)) {
+    log_append(parser->log, LOG_ERROR, "Unable to write data frame header + padding");
+    return false;
+  }
+
+  if (!binary_buffer_write(bb, frame->payload, frame->payload_length)) {
+    log_append(parser->log, LOG_ERROR, "Unable to write payload");
+    return false;
+  }
+
+  if (is_padded) {
+    uint8_t padding_buf[padding_length];
+    memset(padding_buf, 0, padding_length);
+    return binary_buffer_write(bb, padding_buf, padding_length);
+  } else {
+    return true;
+  }
 }
 
 static bool h2_frame_emit_headers(const h2_frame_parser_t * const parser, binary_buffer_t * const bb,
     h2_frame_headers_t * frame)
 {
-  const size_t buf_length = FRAME_HEADER_SIZE;
-  uint8_t buf[buf_length];
-
-  frame->length = frame->header_block_fragment_length;
-  h2_frame_header_write(buf, (h2_frame_t *) frame);
-
-  if (!binary_buffer_write(bb, buf, FRAME_HEADER_SIZE)) {
-    log_append(parser->log, LOG_ERROR, "Unable to write headers frame header");
+  bool is_padded = FRAME_FLAG(frame, FLAG_PADDED);
+  size_t padding_length_field_length = 0;
+  size_t padding_length = 0;
+  if (is_padded) {
+    padding_length_field_length = 1;
+    padding_length = frame->padding_length;
+  }
+  if (padding_length > MAX_PADDING) {
+    log_append(parser->log, LOG_ERROR, "Too much padding: %u (0x%x)", padding_length, padding_length);
     return false;
   }
 
-  return binary_buffer_write(bb, frame->header_block_fragment, frame->header_block_fragment_length);
+  const size_t buf_length = FRAME_HEADER_SIZE + padding_length_field_length;
+  uint8_t buf[buf_length];
+
+  frame->length = frame->header_block_fragment_length + padding_length_field_length + padding_length;
+  h2_frame_header_write(buf, (h2_frame_t *) frame);
+
+  if (is_padded) {
+    size_t buf_pos = FRAME_HEADER_SIZE;
+    buf[buf_pos++] = padding_length;
+  }
+
+  if (!binary_buffer_write(bb, buf, buf_length)) {
+    log_append(parser->log, LOG_ERROR, "Unable to write headers frame header + padding");
+    return false;
+  }
+
+  if (!binary_buffer_write(bb, frame->header_block_fragment, frame->header_block_fragment_length)) {
+    log_append(parser->log, LOG_ERROR, "Unable to write header fragment");
+    return false;
+  }
+
+  if (is_padded) {
+    uint8_t padding_buf[padding_length];
+    memset(padding_buf, 0, padding_length);
+    return binary_buffer_write(bb, padding_buf, padding_length);
+  } else {
+    return true;
+  }
+
 }
 
 static bool h2_frame_emit_rst_stream(const h2_frame_parser_t * const parser, binary_buffer_t * const bb,
@@ -408,28 +463,31 @@ static bool h2_frame_emit_rst_stream(const h2_frame_parser_t * const parser, bin
 static bool h2_frame_emit_settings(const h2_frame_parser_t * const parser, binary_buffer_t * const bb,
     h2_frame_settings_t * frame)
 {
-  UNUSED(parser);
-
-  size_t payload_length = frame->num_settings * SETTING_SIZE;
+  size_t payload_length = 0;
+  if (!FRAME_FLAG(frame, FLAG_ACK)) {
+    payload_length = frame->num_settings * SETTING_SIZE;
+  }
   size_t buf_length = FRAME_HEADER_SIZE + payload_length;
   uint8_t buf[buf_length];
 
   frame->length = payload_length;
   h2_frame_header_write(buf, (h2_frame_t *) frame);
 
-  uint8_t pos = FRAME_HEADER_SIZE;
+  if (!FRAME_FLAG(frame, FLAG_ACK)) {
+    uint8_t pos = FRAME_HEADER_SIZE;
 
-  for (size_t i = 0; i < frame->num_settings; i++) {
-    h2_setting_t * setting = &frame->settings[i];
-    enum settings_e id = setting->id;
-    uint32_t value = setting->value;
-    log_append(parser->log, LOG_TRACE, "Writing setting: %u (0x%x): %u (0x%x)", id, id, value, value);
-    buf[pos++] = (id>> 8) & 0xFF;
-    buf[pos++] = (id) & 0xFF;
-    buf[pos++] = (value >> 24) & 0xFF;
-    buf[pos++] = (value >> 16) & 0xFF;
-    buf[pos++] = (value >> 8) & 0xFF;
-    buf[pos++] = (value) & 0xFF;
+    for (size_t i = 0; i < frame->num_settings; i++) {
+      h2_setting_t * setting = &frame->settings[i];
+      enum settings_e id = setting->id;
+      uint32_t value = setting->value;
+      log_append(parser->log, LOG_TRACE, "Writing setting: %u (0x%x): %u (0x%x)", id, id, value, value);
+      buf[pos++] = (id>> 8) & 0xFF;
+      buf[pos++] = (id) & 0xFF;
+      buf[pos++] = (value >> 24) & 0xFF;
+      buf[pos++] = (value >> 16) & 0xFF;
+      buf[pos++] = (value >> 8) & 0xFF;
+      buf[pos++] = (value) & 0xFF;
+    }
   }
 
   return binary_buffer_write(bb, buf, buf_length);
@@ -637,8 +695,8 @@ bool h2_frame_emit(const h2_frame_parser_t * const parser, binary_buffer_t * con
   return success;
 }
 
-static bool strip_padding(const h2_frame_parser_t * const parser, uint8_t * padding_length, uint8_t ** payload, size_t * payload_length,
-                          bool padded_on)
+static bool strip_padding(const h2_frame_parser_t * const parser, uint8_t * padding_length, uint8_t ** payload,
+    size_t * payload_length, bool padded_on)
 {
   if (padded_on) {
     // padding length is actually 1 less than you would expect because the padding length field
@@ -1014,7 +1072,7 @@ h2_frame_t * h2_frame_parse(const h2_frame_parser_t * const parser, uint8_t * co
     // TODO - if the previous frame type was headers, and headers haven't been completed,
     // this frame must be a continuation frame, or else this is a protocol error
 
-    h2_frame_t * frame = h2_frame_init(parser, frame_type, frame_flags, stream_id);
+    h2_frame_t * frame = h2_frame_init(frame_type, frame_flags, stream_id);
     frame->length = frame_length;
 
     if (frame == NULL) {
@@ -1101,7 +1159,7 @@ h2_frame_t * h2_frame_parse(const h2_frame_parser_t * const parser, uint8_t * co
       free(frame);
     }
   } else {
-    log_append(parser->log, LOG_TRACE, "Not enough in buffer to read %zu byte frame payload", frame_length);
+    log_append(parser->log, LOG_TRACE, "Not enough in buffer to read %u byte frame payload", frame_length);
   }
 
   return NULL;

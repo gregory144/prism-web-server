@@ -1,0 +1,22 @@
+send SETTINGS
+  ENABLE_PUSH: 1
+
+recv SETTINGS ACK
+
+recv SETTINGS
+  ENABLE_PUSH: 0
+
+send SETTINGS ACK
+
+send PUSH_PROMISE END_HEADERS S1
+  PROMISED: S3
+  ":authority": "0.0.0.0:8443"
+  ":method": "GET"
+  ":scheme": "http"
+  ":path": "/invalid"
+
+recv GOAWAY
+  LAST_STREAM: S0
+  ERROR: PROTOCOL_ERROR
+  ADDITIONAL_DATA: "Received PUSH_PROMISE (0x5) frame, but SETTINGS_PUSH_ENABLED is off"
+

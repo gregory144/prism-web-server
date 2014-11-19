@@ -225,6 +225,10 @@ void h2_free(h2_t * const h2)
 
   binary_buffer_free(&h2->write_buffer);
 
+  if (h2->buffer) {
+    free(h2->buffer);
+  }
+
   free(h2);
 }
 
@@ -298,10 +302,10 @@ static bool h2_send_goaway(const h2_t * const h2, enum h2_error_code_e error_cod
 
   uint8_t flags = 0; // no flags
 
-  h2_frame_goaway_t * frame = (h2_frame_goaway_t *) h2_frame_init(&h2->frame_parser, FRAME_TYPE_GOAWAY,
-      flags, 0);
+  h2_frame_goaway_t * frame = (h2_frame_goaway_t *) h2_frame_init(FRAME_TYPE_GOAWAY, flags, 0);
   frame->stream_id = h2->last_stream_id;
   frame->error_code = error_code;
+  frame->last_stream_id = h2->last_stream_id;
   frame->debug_data = (uint8_t *) debug;
   frame->debug_data_length = debug_length;
 
@@ -313,8 +317,7 @@ static bool h2_send_rst_stream(const h2_t * const h2, uint32_t stream_id,
 {
   uint8_t flags = 0; // no flags
 
-  h2_frame_rst_stream_t * frame = (h2_frame_rst_stream_t *) h2_frame_init(&h2->frame_parser,
-      FRAME_TYPE_RST_STREAM, flags, stream_id);
+  h2_frame_rst_stream_t * frame = (h2_frame_rst_stream_t *) h2_frame_init(FRAME_TYPE_RST_STREAM, flags, stream_id);
   frame->error_code = error_code;
 
   return h2_frame_write(h2, (h2_frame_t *) frame);
@@ -410,8 +413,7 @@ static bool h2_send_headers(h2_t * const h2, const h2_stream_t * const stream,
   } else {
     flags |= FLAG_END_HEADERS;
   }
-  h2_frame_headers_t * frame = (h2_frame_headers_t *) h2_frame_init(&h2->frame_parser,
-      FRAME_TYPE_HEADERS, flags, stream->id);
+  h2_frame_headers_t * frame = (h2_frame_headers_t *) h2_frame_init(FRAME_TYPE_HEADERS, flags, stream->id);
   frame->header_block_fragment = hpack_buf;
   frame->header_block_fragment_length = first_fragment_length;
 
@@ -443,7 +445,7 @@ static bool h2_send_headers(h2_t * const h2, const h2_stream_t * const stream,
         continuation_flags |= FLAG_END_HEADERS;
       }
 
-      h2_frame_continuation_t * cont_frame = (h2_frame_continuation_t *) h2_frame_init(&h2->frame_parser,
+      h2_frame_continuation_t * cont_frame = (h2_frame_continuation_t *) h2_frame_init(
           FRAME_TYPE_CONTINUATION, continuation_flags, stream->id);
       cont_frame->header_block_fragment = hpack_buf + header_block_pos;
       cont_frame->header_block_fragment_length = continuation_frame_length;
@@ -500,7 +502,7 @@ static bool h2_send_push_promise(h2_t * const h2, const h2_stream_t * const push
   } else {
     flags |= FLAG_END_HEADERS;
   }
-  h2_frame_push_promise_t * frame = (h2_frame_push_promise_t *) h2_frame_init(&h2->frame_parser,
+  h2_frame_push_promise_t * frame = (h2_frame_push_promise_t *) h2_frame_init(
       FRAME_TYPE_PUSH_PROMISE, flags, associated_stream_id);
   frame->promised_stream_id = pushed_stream->id;
   frame->header_block_fragment = hpack_buf;
@@ -529,7 +531,7 @@ static bool h2_send_push_promise(h2_t * const h2, const h2_stream_t * const push
         continuation_flags |= FLAG_END_HEADERS;
       }
 
-      h2_frame_continuation_t * cont_frame = (h2_frame_continuation_t *) h2_frame_init(&h2->frame_parser,
+      h2_frame_continuation_t * cont_frame = (h2_frame_continuation_t *) h2_frame_init(
           FRAME_TYPE_CONTINUATION, continuation_flags, associated_stream_id);
       cont_frame->header_block_fragment = hpack_buf + header_block_pos;
       cont_frame->header_block_fragment_length = continuation_frame_length;
@@ -559,8 +561,7 @@ static bool h2_send_data_frame(const h2_t * const h2, const h2_stream_t * const 
     flags |= FLAG_END_STREAM;
   }
 
-  h2_frame_data_t * frame = (h2_frame_data_t *) h2_frame_init(&h2->frame_parser, FRAME_TYPE_DATA,
-      flags, stream->id);
+  h2_frame_data_t * frame = (h2_frame_data_t *) h2_frame_init(FRAME_TYPE_DATA, flags, stream->id);
   frame->payload = queued_frame->buf;
   frame->payload_length = queued_frame->buf_length;
 
@@ -764,8 +765,7 @@ static bool h2_send_settings_ack(const h2_t * const h2)
     flags |= FLAG_ACK;
   }
 
-  h2_frame_settings_t * frame = (h2_frame_settings_t *) h2_frame_init(&h2->frame_parser,
-      FRAME_TYPE_SETTINGS, flags, 0);
+  h2_frame_settings_t * frame = (h2_frame_settings_t *) h2_frame_init(FRAME_TYPE_SETTINGS, flags, 0);
   frame->num_settings = 0;
 
   log_append(h2->log, LOG_DEBUG, "Writing settings ack frame");
@@ -783,8 +783,7 @@ static bool h2_send_default_settings(h2_t * const h2)
 
   uint8_t flags = 0;
 
-  h2_frame_settings_t * frame = (h2_frame_settings_t *) h2_frame_init(&h2->frame_parser,
-      FRAME_TYPE_SETTINGS, flags, 0);
+  h2_frame_settings_t * frame = (h2_frame_settings_t *) h2_frame_init(FRAME_TYPE_SETTINGS, flags, 0);
   frame->num_settings = 1;
   frame->settings[0].id = SETTINGS_ENABLE_PUSH;
   frame->settings[0].value = 0;
@@ -807,7 +806,7 @@ static bool h2_send_ping_ack(const h2_t * const h2, uint8_t * opaque_data)
     flags |= FLAG_ACK;
   }
 
-  h2_frame_ping_t * frame = (h2_frame_ping_t *) h2_frame_init(&h2->frame_parser, FRAME_TYPE_PING, flags, 0);
+  h2_frame_ping_t * frame = (h2_frame_ping_t *) h2_frame_init(FRAME_TYPE_PING, flags, 0);
   frame->opaque_data = opaque_data;
 
   log_append(h2->log, LOG_DEBUG, "Writing ping ack frame");
@@ -820,8 +819,7 @@ static bool h2_send_window_update(const h2_t * const h2, const uint32_t stream_i
 {
   uint8_t flags = 0; // no flags
 
-  h2_frame_window_update_t * frame = (h2_frame_window_update_t *) h2_frame_init(&h2->frame_parser,
-      FRAME_TYPE_WINDOW_UPDATE, flags, stream_id);
+  h2_frame_window_update_t * frame = (h2_frame_window_update_t *) h2_frame_init(FRAME_TYPE_WINDOW_UPDATE, flags, stream_id);
   frame->increment = increment;
 
   log_append(h2->log, LOG_DEBUG, "Writing window update frame");
@@ -965,6 +963,9 @@ static h2_stream_t * h2_stream_init(h2_t * const h2, const uint32_t stream_id, b
 
   stream->associated_stream_id = 0;
 
+  stream->request = NULL;
+  stream->response = NULL;
+
   return stream;
 }
 
@@ -1026,16 +1027,17 @@ bool h2_request_begin(h2_t * const h2, header_list_t * headers, uint8_t * buf, s
 
 static bool h2_incoming_frame_data(h2_t * const h2, const h2_frame_data_t * const frame)
 {
-  h2_stream_t * stream = h2_stream_get(h2, frame->stream_id);
+  // adjust connection window size before any other processing to ensure it stays consistent
+  h2->incoming_window_size -= frame->length;
 
-  if (!stream) {
-    h2_emit_error_and_close(h2, frame->stream_id, H2_ERROR_PROTOCOL_ERROR,
+
+  h2_stream_t * stream = h2_stream_get(h2, frame->stream_id);
+  if (!stream || h2_stream_closed(h2, frame->stream_id)) {
+    h2_emit_error_and_close(h2, frame->stream_id, H2_ERROR_STREAM_CLOSED,
                          "Unable to find stream #%u", frame->stream_id);
     return true;
   }
 
-  // adjust window sizes
-  h2->incoming_window_size -= frame->length;
   stream->incoming_window_size -= frame->length;
 
   // pass on to application
@@ -1224,6 +1226,9 @@ static bool h2_received_push_promise(h2_t * const h2, h2_stream_t * stream)
   if (!h2_parse_header_fragments(h2, stream)) {
     return false;
   }
+
+  h2_stream_mark_closing(h2, stream);
+  h2_stream_close(h2, stream, false);
 
   if (h2->incoming_push_enabled) {
 
@@ -1629,10 +1634,8 @@ static bool h2_add_from_buffer(h2_t * const h2)
   if (frame) {
     free(frame);
     return true;
-  } else {
-    return false;
   }
-
+  return false;
 }
 
 /**
@@ -1655,6 +1658,7 @@ void h2_read(h2_t * const h2, uint8_t * const buffer, const size_t len)
       h2_emit_error_and_close_with_debug_data(h2, 0, H2_ERROR_INTERNAL_ERROR,
           "Unable to allocate memory for reading full frame");
       free(buffer);
+      h2->buffer_length = 0;
       return;
     }
 
@@ -1673,6 +1677,9 @@ void h2_read(h2_t * const h2, uint8_t * const buffer, const size_t len)
       h2->verified_tls_settings = true;
     } else {
       h2_emit_error_and_close_with_debug_data(h2, 0, H2_ERROR_INADEQUATE_SECURITY, "Inadequate security");
+      free(h2->buffer);
+      h2->buffer = NULL;
+      h2->buffer_length = 0;
       return;
     }
   }
@@ -1690,6 +1697,9 @@ void h2_read(h2_t * const h2, uint8_t * const buffer, const size_t len)
       return;
     } else {
       log_append(h2->log, LOG_WARN, "Found non-HTTP2 connection, closing connection");
+      free(h2->buffer);
+      h2->buffer = NULL;
+      h2->buffer_length = 0;
 
       h2_mark_closing(h2);
       h2_close(h2);
@@ -1712,6 +1722,9 @@ handle_buffer:
   if (h2->buffer_position > h2->buffer_length) {
     // buffer overflow
     h2_emit_error_and_close_with_debug_data(h2, 0, H2_ERROR_INTERNAL_ERROR, NULL);
+    h2->buffer = NULL;
+    h2->buffer_length = 0;
+    free(h2->buffer);
     return;
   }
 

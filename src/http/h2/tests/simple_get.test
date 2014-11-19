@@ -1,0 +1,22 @@
+send SETTINGS
+  ENABLE_PUSH: 1
+
+send HEADERS END_HEADERS END_STREAM S1
+  ":authority": "0.0.0.0:8443"
+  ":method": "GET"
+  ":scheme": "http"
+  ":path": "/"
+
+recv SETTINGS ACK
+
+recv SETTINGS
+  ENABLE_PUSH: 0
+
+send SETTINGS ACK
+
+recv HEADERS END_HEADERS S1
+  ":status": "200"
+
+recv DATA END_STREAM S1
+  "Don't forget to bring a towel"
+

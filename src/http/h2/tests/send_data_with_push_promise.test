@@ -1,0 +1,28 @@
+send SETTINGS
+  ENABLE_PUSH: 1
+
+recv SETTINGS ACK
+
+recv SETTINGS
+  ENABLE_PUSH: 0
+
+# send push promise before sending SETTINGS ACK
+# we should get a refused stream instead of a goaway
+send PUSH_PROMISE END_HEADERS S1
+  PROMISED: S3
+  ":authority": "0.0.0.0:8443"
+  ":method": "GET"
+  ":scheme": "http"
+  ":path": "/invalid"
+
+# send a data frame after we'll be receiving a refused stream
+send DATA END_STREAM S3
+  "Good luck"
+
+recv RST_STREAM S3
+  ERROR: REFUSED_STREAM
+
+# expectd a STREAM_CLOSED error back from the DATA frame
+recv RST_STREAM S3
+  ERROR: STREAM_CLOSED
+

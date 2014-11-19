@@ -1,0 +1,27 @@
+send SETTINGS
+  ENABLE_PUSH: 1
+
+recv SETTINGS ACK
+
+recv SETTINGS
+  ENABLE_PUSH: 0
+
+send SETTINGS ACK
+
+send HEADERS END_HEADERS S1
+  ":authority": "0.0.0.0:8443"
+  ":method": "POST"
+  ":scheme": "http"
+  ":path": "/"
+
+# send data with padding
+send DATA END_STREAM S1
+  PADDING: 100
+  "Echo"
+
+recv HEADERS END_HEADERS S1
+  ":status": "200"
+
+recv DATA END_STREAM S1
+  "Echo"
+

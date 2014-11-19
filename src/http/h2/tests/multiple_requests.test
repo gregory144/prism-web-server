@@ -1,0 +1,49 @@
+send SETTINGS
+  ENABLE_PUSH: 1
+
+recv SETTINGS ACK
+
+recv SETTINGS
+  ENABLE_PUSH: 0
+
+send SETTINGS ACK
+
+# send headers with padding
+send HEADERS END_HEADERS END_STREAM S1
+  PADDING: 256
+  ":authority": "0.0.0.0:8443"
+  ":method": "GET"
+  ":scheme": "http"
+  ":path": "/"
+
+recv HEADERS END_HEADERS S1
+  ":status": "200"
+
+recv DATA END_STREAM S1
+  "Don't forget to bring a towel"
+
+send HEADERS END_HEADERS END_STREAM S3
+  PADDING: 0
+  ":authority": "0.0.0.0:8443"
+  ":method": "GET"
+  ":scheme": "http"
+  ":path": "/"
+
+recv HEADERS END_HEADERS S3
+  ":status": "200"
+
+recv DATA END_STREAM S3
+  "Don't forget to bring a towel"
+
+send HEADERS END_HEADERS END_STREAM S5
+  PADDING: 1
+  ":authority": "0.0.0.0:8443"
+  ":method": "GET"
+  ":scheme": "http"
+  ":path": "/"
+
+recv HEADERS END_HEADERS S5
+  ":status": "200"
+
+recv DATA END_STREAM S5
+  "Don't forget to bring a towel"

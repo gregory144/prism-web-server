@@ -37,7 +37,7 @@ enum frame_type_e {
 
 #define MAX_INITIAL_WINDOW_SIZE 0x7fffffff
 #define MIN_MAX_FRAME_SIZE 0x4000
-#define MAX_MAX_FRAME_SIZE 0xFFFFFF
+#define MAX_MAX_FRAME_SIZE 0xffffff
 
 #define PING_OPAQUE_DATA_LENGTH 8
 
@@ -47,6 +47,8 @@ enum frame_type_e {
 #define DEFAULT_PRIORITY_STREAM_EXCLUSIVE 0
 #define DEFAULT_PRIORITY_STREAM_DEPENDENCY 0
 #define DEFAULT_PRIORITY_WEIGHT 16
+
+#define MAX_PADDING 0xff
 
 /**
  * Frame flags
@@ -235,8 +237,7 @@ typedef struct h2_frame_parser_s {
 
 char * frame_type_to_string(enum frame_type_e t);
 
-h2_frame_t * h2_frame_init(const h2_frame_parser_t * const parser, const uint8_t type,
-                                  const uint8_t flags, const uint32_t stream_id);
+h2_frame_t * h2_frame_init(const uint8_t type, const uint8_t flags, const uint32_t stream_id);
 
 void h2_frame_free(h2_frame_t * const frame);
 

@@ -7,3 +7,6 @@ h2_test_cmd_parser.c
 h2_test_cmd_parser.h
 h2_test_cmd_scanner.c
 h2_test_cmd_scanner.h
+h2_test_cmd_parser.dot
+h2_test_cmd_parser.tab.c
+h2_test_cmd_parser.output

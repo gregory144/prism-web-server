@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 
-#include "h2_frame.h"
+#include "h2.h"
 
 enum h2_test_cmd_e {
 
@@ -28,7 +28,16 @@ typedef struct h2_test_cmd_list_s {
 
 } h2_test_cmd_list_t;
 
-h2_test_cmd_list_t * h2_test_cmd_list_parse(h2_frame_parser_t * frame_parser, FILE * fp);
+typedef struct {
+
+  h2_test_cmd_list_t * list;
+
+  hpack_context_t * sending_context;
+  hpack_context_t * receiving_context;
+
+} h2_test_cmd_context_t;
+
+h2_test_cmd_list_t * h2_test_cmd_list_parse(FILE * fp);
 
 h2_test_cmd_list_t * h2_test_cmd_list_append(h2_test_cmd_list_t * frame_list, h2_test_cmd_t * cmd);
 

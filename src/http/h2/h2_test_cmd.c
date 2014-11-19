@@ -13,10 +13,13 @@
 typedef void * yyscan_t;
 #endif
 
-int yyparse(struct h2_frame_parser_s * frame_parser, h2_test_cmd_list_t * * test_cmd, yyscan_t scanner);
+int yyparse(h2_test_cmd_context_t * ctx, yyscan_t scanner);
 
-h2_test_cmd_list_t * h2_test_cmd_list_parse(h2_frame_parser_t * frame_parser, FILE * fp)
+h2_test_cmd_list_t * h2_test_cmd_list_parse(FILE * fp)
 {
+  h2_test_cmd_context_t ctx;
+  ctx.sending_context = hpack_context_init(DEFAULT_HEADER_TABLE_SIZE, NULL);
+  ctx.receiving_context = hpack_context_init(DEFAULT_HEADER_TABLE_SIZE, NULL);
   yyscan_t scanner;
 
   if (yylex_init(&scanner)) {
@@ -27,8 +30,7 @@ h2_test_cmd_list_t * h2_test_cmd_list_parse(h2_frame_parser_t * frame_parser, FI
   YY_BUFFER_STATE state = yy_create_buffer(fp, YY_BUF_SIZE, scanner);
   yy_switch_to_buffer(state, scanner);
 
-  h2_test_cmd_list_t * test_cmd = NULL;
-  if (yyparse(frame_parser, &test_cmd, scanner)) {
+  if (yyparse(&ctx, scanner)) {
     // error parsing
     return NULL;
   }
@@ -37,7 +39,7 @@ h2_test_cmd_list_t * h2_test_cmd_list_parse(h2_frame_parser_t * frame_parser, FI
 
   yylex_destroy(scanner);
 
-  return test_cmd;
+  return ctx.list;
 }
 
 h2_test_cmd_list_t * h2_test_cmd_list_append(h2_test_cmd_list_t * test_cmd, h2_test_cmd_t * cmd)
