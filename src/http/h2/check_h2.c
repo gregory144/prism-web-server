@@ -593,6 +593,9 @@ void test_sequence_file(const char * file_name)
           free(((h2_frame_data_t *)parsed_frame)->payload);
         }
         break;
+      default:
+        // all others don't have freeable members
+        break;
     }
     free(prev->cmd->frame);
     free(prev->cmd);
