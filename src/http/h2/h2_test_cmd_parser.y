@@ -51,6 +51,7 @@ typedef struct {
 
 typedef struct {
 
+  bool is_default;
   bool priority_exclusive;
   uint32_t priority_stream_dependency;
   uint8_t priority_weight;
@@ -66,7 +67,10 @@ typedef struct {
 #define apply_priority(frame, p) \
   (frame)->priority_exclusive = (p)->priority_exclusive; \
   (frame)->priority_stream_dependency = (p)->priority_stream_dependency; \
-  (frame)->priority_weight = (p)->priority_weight;
+  (frame)->priority_weight = (p)->priority_weight; \
+  if (!(p)->is_default) { \
+    (frame)->flags |= FLAG_PRIORITY; \
+  }
 
 #define apply_headers(frame, context, headers) \
     header_list_t * curr = headers; \
@@ -317,6 +321,11 @@ settings_frame
       }
       s->id = curr->setting.id;
       s->value = curr->setting.value;
+
+      if (s->id == SETTINGS_HEADER_TABLE_SIZE) {
+        hpack_header_table_adjust_size(ctx->sending_context, s->value);
+      }
+
       settings_list_t * prev = curr;
       curr = curr->next;
       free(prev);
@@ -434,6 +443,13 @@ frame_padding
 frame_priority
   : priority_exclusive priority_stream_dependency priority_weight {
     $$ = malloc(sizeof(frame_priority_t));
+    if ($1 == DEFAULT_PRIORITY_STREAM_EXCLUSIVE &&
+        $2 == DEFAULT_PRIORITY_STREAM_DEPENDENCY &&
+        $3 == DEFAULT_PRIORITY_WEIGHT) {
+      $$->is_default = true;
+    } else {
+      $$->is_default = false;
+    }
     $$->priority_exclusive = $1;
     $$->priority_stream_dependency = $2;
     $$->priority_weight = $3;

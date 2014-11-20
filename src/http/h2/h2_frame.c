@@ -393,6 +393,7 @@ static bool h2_frame_emit_headers(const h2_frame_parser_t * const parser, binary
     h2_frame_headers_t * frame)
 {
   bool is_padded = FRAME_FLAG(frame, FLAG_PADDED);
+  bool is_priority = FRAME_FLAG(frame, FLAG_PRIORITY);
   size_t padding_length_field_length = 0;
   size_t padding_length = 0;
   if (is_padded) {
@@ -403,16 +404,28 @@ static bool h2_frame_emit_headers(const h2_frame_parser_t * const parser, binary
     log_append(parser->log, LOG_ERROR, "Too much padding: %u (0x%x)", padding_length, padding_length);
     return false;
   }
+  size_t priority_length = 0;
+  if (is_priority) {
+    priority_length = 5;
+  }
 
-  const size_t buf_length = FRAME_HEADER_SIZE + padding_length_field_length;
+  const size_t buf_length = FRAME_HEADER_SIZE + padding_length_field_length + priority_length;
   uint8_t buf[buf_length];
 
-  frame->length = frame->header_block_fragment_length + padding_length_field_length + padding_length;
+  frame->length = padding_length_field_length + priority_length +
+    frame->header_block_fragment_length + padding_length;
   h2_frame_header_write(buf, (h2_frame_t *) frame);
 
+  size_t buf_pos = FRAME_HEADER_SIZE;
   if (is_padded) {
-    size_t buf_pos = FRAME_HEADER_SIZE;
     buf[buf_pos++] = padding_length;
+  }
+  if (is_priority) {
+    buf[buf_pos++] = ((frame->priority_stream_dependency >> 24) & 0x7f) | (frame->priority_exclusive ? 0x80 : 0x00);
+    buf[buf_pos++] = ((frame->priority_stream_dependency >> 16) & 0xff);
+    buf[buf_pos++] = ((frame->priority_stream_dependency >> 8) & 0xff);
+    buf[buf_pos++] = ((frame->priority_stream_dependency >> 0) & 0xff);
+    buf[buf_pos++] = ((frame->priority_weight) & 0xff);
   }
 
   if (!binary_buffer_write(bb, buf, buf_length)) {

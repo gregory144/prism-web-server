@@ -46,6 +46,20 @@ static void h2_stream_free(void * value)
     header_list_free(stream->headers);
   }
 
+  while (stream->header_fragments) {
+
+    h2_header_fragment_t * fragment = stream->header_fragments;
+
+    stream->header_fragments = fragment->next;
+
+    if (fragment->buffer) {
+      free(fragment->buffer);
+    }
+
+    free(fragment);
+
+  }
+
   // Free any remaining data frames. This may need to happen
   // for streams that have been reset
   while (stream->queued_data_frames) {
@@ -384,6 +398,7 @@ static bool h2_send_headers(h2_t * const h2, const h2_stream_t * const stream,
     // don't send stream ID because we want to generate a goaway - the
     // encoding context may have been corrupted
     h2_emit_error_and_close_with_debug_data(h2, 0, H2_ERROR_INTERNAL_ERROR, "Error encoding headers");
+    return false;
   }
 
   uint8_t * hpack_buf = encoded.buf;
@@ -838,7 +853,7 @@ static bool h2_send_window_update(const h2_t * const h2, const uint32_t stream_i
   return true;
 }
 
-static void h2_adjust_initial_window_size(h2_t * const h2, const long difference)
+static bool h2_adjust_initial_window_size(h2_t * const h2, const long difference)
 {
   hash_table_iter_t iter;
   hash_table_iterator_init(&iter, h2->streams);
@@ -850,8 +865,11 @@ static void h2_adjust_initial_window_size(h2_t * const h2, const long difference
 
     if (stream->outgoing_window_size > MAX_WINDOW_SIZE) {
       h2_emit_error_and_close_with_debug_data(h2, stream->id, H2_ERROR_FLOW_CONTROL_ERROR, NULL);
+      return true;
     }
   }
+
+  return true;
 }
 
 static bool h2_setting_set(h2_t * const h2, const h2_setting_t * setting)
@@ -883,7 +901,9 @@ static bool h2_setting_set(h2_t * const h2, const h2_setting_t * setting)
     case SETTINGS_INITIAL_WINDOW_SIZE:
       log_append(h2->log, LOG_TRACE, "Settings: Initial window size: %u", value);
 
-      h2_adjust_initial_window_size(h2, value - h2->initial_window_size);
+      if (!h2_adjust_initial_window_size(h2, value - h2->initial_window_size)) {
+        return false;
+      }
       h2->initial_window_size = value;
       break;
 
@@ -1051,6 +1071,7 @@ static bool h2_incoming_frame_data(h2_t * const h2, const h2_frame_data_t * cons
 
     h2_emit_error_and_close(h2, 0, H2_ERROR_FLOW_CONTROL_ERROR,
         "Connection window size is less than 0: %ld", h2->incoming_window_size);
+    return false;
 
   } else if (h2->incoming_window_size < 0.75 * DEFAULT_INITIAL_WINDOW_SIZE) {
 
@@ -1136,7 +1157,7 @@ static bool h2_parse_header_fragments(h2_t * const h2, h2_stream_t * const strea
 
   if (!headers) {
     h2_emit_error_and_close(h2, stream->id, H2_ERROR_INTERNAL_ERROR, "Unable to allocate memory for headers");
-    return false;
+    return true;
   }
 
   uint8_t * header_appender = headers;
@@ -1152,6 +1173,7 @@ static bool h2_parse_header_fragments(h2_t * const h2, h2_stream_t * const strea
     free(prev->buffer);
     free(prev);
   }
+  stream->header_fragments = NULL;
 
   *header_appender = '\0';
 
@@ -1162,7 +1184,7 @@ static bool h2_parse_header_fragments(h2_t * const h2, h2_stream_t * const strea
   if (!stream->headers) {
     h2_emit_error_and_close(h2, stream->id, H2_ERROR_COMPRESSION_ERROR, "Unable to decode headers");
     free(headers);
-    return false;
+    return true;
   }
 
   free(headers);
@@ -1174,6 +1196,13 @@ static bool h2_received_headers(h2_t * const h2, h2_stream_t * stream)
 {
   if (!h2_parse_header_fragments(h2, stream)) {
     return false;
+  }
+
+  if (stream->priority_stream_dependency == stream->id) {
+    h2_emit_error_and_close(h2, stream->id, H2_ERROR_PROTOCOL_ERROR,
+        "%s (0x%x) frame stream dependency cannot match the stream id",
+        frame_type_to_string(FRAME_TYPE_HEADERS), FRAME_TYPE_HEADERS);
+    return true;
   }
 
   // TODO - check that the stream is in a valid state to be opened first
@@ -1388,7 +1417,7 @@ static bool h2_increment_stream_window_size(h2_t * const h2, const uint32_t stre
   if (!stream) {
     h2_emit_error_and_close(h2, stream_id, H2_ERROR_PROTOCOL_ERROR,
                          "Could not find stream #%u to update it's window size", stream_id);
-    return false;
+    return true;
   }
 
   stream->outgoing_window_size += increment;
@@ -1422,6 +1451,12 @@ static bool h2_incoming_frame_rst_stream(h2_t * const h2, h2_frame_rst_stream_t 
              frame->stream_id, h2_error_to_string(frame->error_code), frame->error_code);
 
   h2_stream_t * stream = h2_stream_get(h2, frame->stream_id);
+  if (stream == NULL) {
+    h2_emit_error_and_close(h2, 0, H2_ERROR_PROTOCOL_ERROR,
+                         "Received %s (0x%x) for stream in IDLE state: %u",
+                         frame_type_to_string(frame->type), frame->type, frame->stream_id);
+    return false;
+  }
 
   h2_stream_close(h2, stream, true);
 

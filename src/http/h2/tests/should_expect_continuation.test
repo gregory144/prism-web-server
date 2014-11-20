@@ -1,0 +1,28 @@
+send SETTINGS
+  ENABLE_PUSH: 1
+
+send HEADERS END_STREAM S1
+  ":authority": "0.0.0.0:8443"
+  ":method": "GET"
+  ":scheme": "http"
+  ":path": "/"
+
+# the client SHOULD be sending a continuation
+# directly after the headers, but instead sends
+# a ping right before
+send PING
+  0x00000000 0x00000000
+
+send CONTINUATION S1
+  "other": "1"
+
+recv SETTINGS ACK
+
+recv SETTINGS
+  ENABLE_PUSH: 0
+
+recv GOAWAY
+  LAST_STREAM: S0
+  ERROR: PROTOCOL_ERROR
+  ADDITIONAL_DATA: "Expected continuation frame but got: PING (0x6)"
+

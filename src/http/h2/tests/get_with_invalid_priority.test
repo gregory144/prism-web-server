@@ -1,0 +1,22 @@
+send SETTINGS
+  ENABLE_PUSH: 1
+
+send HEADERS END_HEADERS END_STREAM S1
+  EXCLUSIVE: 1
+  STREAM_DEPENDENCY: 1
+  WEIGHT: 4
+  ":authority": "0.0.0.0:8443"
+  ":method": "GET"
+  ":scheme": "http"
+  ":path": "/"
+
+recv SETTINGS ACK
+
+recv SETTINGS
+  ENABLE_PUSH: 0
+
+send SETTINGS ACK
+
+recv RST_STREAM S1
+  ERROR_CODE: PROTOCOL_ERROR
+
