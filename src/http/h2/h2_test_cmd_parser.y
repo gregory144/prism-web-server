@@ -81,9 +81,11 @@ typedef struct {
       printf("Too many headers for one frame"); \
       abort(); \
     } \
-    frame->header_block_fragment = hpack_buf; \
+    frame->header_block_fragment = malloc(headers_length); \
+    memcpy(frame->header_block_fragment, hpack_buf, headers_length); \
     frame->header_block_fragment_length = headers_length; \
-    header_list_free(curr);
+    header_list_free(curr); \
+    binary_buffer_free(&encoded);
 
 }
 
@@ -256,6 +258,7 @@ sent_headers_frame
     free($2);
     apply_padding(frame, $3);
     apply_priority(frame, $4);
+    free($4);
     apply_headers(frame, ctx->sending_context, $5);
 
     $$ = (h2_frame_t *) frame;
@@ -268,6 +271,7 @@ received_headers_frame
     free($2);
     apply_padding(frame, $3);
     apply_priority(frame, $4);
+    free($4);
     apply_headers(frame, ctx->receiving_context, $5);
 
     $$ = (h2_frame_t *) frame;
@@ -360,6 +364,7 @@ ping_frame
     h2_frame_ping_t * frame = (h2_frame_ping_t *) h2_frame_init(
       FRAME_TYPE_PING, $2->flags, $2->stream_number);
     free($2);
+    printf("PINGING: %u %u\n", $3, $4);
 
     frame->opaque_data[0] = ($3 >> 24) & 0xff;
     frame->opaque_data[1] = ($3 >> 16) & 0xff;

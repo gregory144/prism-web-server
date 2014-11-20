@@ -24,11 +24,6 @@ static size_t num_test_files;
 static char * test_files[MAX_TEST_FILES];
 
 typedef struct {
-  uint8_t * buf;
-  size_t length;
-} written_buf_t;
-
-typedef struct {
   uint32_t stream_id;
   enum h2_error_code_e error_code;
   char * error_string;
@@ -538,11 +533,11 @@ void test_sequence_file(const char * file_name)
           ck_assert(write_called);
 
           h2_frame_t * expected_frame = curr->cmd->frame;
+          // emit the frame to measure the frame length
+          h2_frame_emit(&throwaway_parser, throwaway_bb, expected_frame);
           printf("Expecting frame: %s %u %u length: %u\n",
               frame_type_to_string(expected_frame->type), expected_frame->flags, expected_frame->stream_id,
               expected_frame->length);
-          // emit the frame to measure the frame length
-          h2_frame_emit(&throwaway_parser, throwaway_bb, expected_frame);
 
           uint8_t * server_out_buf = binary_buffer_start(server_out_bb);
           size_t server_out_length = binary_buffer_size(server_out_bb);
@@ -550,11 +545,15 @@ void test_sequence_file(const char * file_name)
               server_out_buf, server_out_length, &server_out_pos);
 
           ck_assert(!!server_out_frame);
-          printf("Received frame: %s %u %u\n", frame_type_to_string(server_out_frame->type),
-              server_out_frame->flags, server_out_frame->stream_id);
+          printf("Received frame: %s %u %u length: %u\n",
+              frame_type_to_string(server_out_frame->type), server_out_frame->flags, server_out_frame->stream_id,
+              server_out_frame->length);
           if (server_out_frame->type == FRAME_TYPE_GOAWAY) {
             h2_frame_goaway_t * goaway_frame = (h2_frame_goaway_t *) server_out_frame;
-            printf("GOAWAY: %s\n", goaway_frame->debug_data);
+            char buf[goaway_frame->debug_data_length + 1];
+            memcpy(buf, goaway_frame->debug_data, goaway_frame->debug_data_length);
+            buf[goaway_frame->debug_data_length] = '\0';
+            printf("GOAWAY: %s\n", buf);
           }
           ck_assert((server_out_frame && expected_frame) || (!server_out_frame && !expected_frame));
           if (!server_out_frame || !expected_frame) {
@@ -567,6 +566,34 @@ void test_sequence_file(const char * file_name)
     }
     h2_test_cmd_list_t * prev = curr;
     curr = curr->next;
+    h2_frame_t * parsed_frame = prev->cmd->frame;
+    switch (parsed_frame->type) {
+      case FRAME_TYPE_HEADERS:
+        {
+          free(((h2_frame_headers_t *)parsed_frame)->header_block_fragment);
+        }
+        break;
+      case FRAME_TYPE_PUSH_PROMISE:
+        {
+          free(((h2_frame_push_promise_t *)parsed_frame)->header_block_fragment);
+        }
+        break;
+      case FRAME_TYPE_CONTINUATION:
+        {
+          free(((h2_frame_continuation_t *)parsed_frame)->header_block_fragment);
+        }
+        break;
+      case FRAME_TYPE_GOAWAY:
+        {
+          free(((h2_frame_goaway_t *)parsed_frame)->debug_data);
+        }
+        break;
+      case FRAME_TYPE_DATA:
+        {
+          free(((h2_frame_data_t *)parsed_frame)->payload);
+        }
+        break;
+    }
     free(prev->cmd->frame);
     free(prev->cmd);
     free(prev);

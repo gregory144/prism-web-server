@@ -521,10 +521,7 @@ static bool h2_frame_emit_push_promise(const h2_frame_parser_t * const parser, b
 static bool h2_frame_emit_ping(const h2_frame_parser_t * const parser, binary_buffer_t * const bb,
     h2_frame_ping_t * frame)
 {
-  if (!FRAME_FLAG(frame, FLAG_ACK)) {
-    log_append(parser->log, LOG_FATAL, "Can't emit ping frame: Not implemented yet");
-    abort();
-  }
+  UNUSED(parser);
 
   size_t payload_length = PING_OPAQUE_DATA_LENGTH;
   size_t buf_length = FRAME_HEADER_SIZE + payload_length;
@@ -908,7 +905,7 @@ static bool h2_frame_parse_ping(const h2_frame_parser_t * const parser, uint8_t 
 {
   UNUSED(parser);
 
-  frame->opaque_data = buf;
+  memcpy(frame->opaque_data, buf, PING_OPAQUE_DATA_LENGTH);
 
   return true;
 }
@@ -962,9 +959,7 @@ static bool h2_frame_parse_goaway(const h2_frame_parser_t * const parser, uint8_
   frame->error_code = get_bits32(buf + 4, 0xFFFFFFFF);
   frame->debug_data_length = (frame->length - 8);
 
-  frame->debug_data = malloc(frame->debug_data_length + 1);
-  memcpy(frame->debug_data, buf + 8, frame->debug_data_length);
-  frame->debug_data[frame->debug_data_length] = '\0';
+  frame->debug_data = buf + 8;
 
   return true;
 }

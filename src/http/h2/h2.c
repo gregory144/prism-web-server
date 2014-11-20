@@ -797,7 +797,7 @@ static bool h2_send_default_settings(h2_t * const h2)
   return h2_frame_write(h2, (h2_frame_t *) frame);
 }
 
-static bool h2_send_ping_ack(const h2_t * const h2, uint8_t * opaque_data)
+static bool h2_send_ping_ack(const h2_t * const h2, const uint8_t * const opaque_data)
 {
   uint8_t flags = 0;
   bool ack = true;
@@ -807,7 +807,7 @@ static bool h2_send_ping_ack(const h2_t * const h2, uint8_t * opaque_data)
   }
 
   h2_frame_ping_t * frame = (h2_frame_ping_t *) h2_frame_init(FRAME_TYPE_PING, flags, 0);
-  frame->opaque_data = opaque_data;
+  memcpy(frame->opaque_data, opaque_data, PING_OPAQUE_DATA_LENGTH);
 
   log_append(h2->log, LOG_DEBUG, "Writing ping ack frame");
 

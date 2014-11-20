@@ -141,7 +141,7 @@ typedef struct {
 
   H2_FRAME_FIELDS
 
-  uint8_t * opaque_data;
+  uint8_t opaque_data[8];
 
 } h2_frame_ping_t;
 

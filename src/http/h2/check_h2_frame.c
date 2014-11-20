@@ -112,6 +112,43 @@ void teardown()
   }
 }
 
+START_TEST(test_h2_frame_emit_ping)
+{
+  h2_frame_ping_t * frame = (h2_frame_ping_t *) h2_frame_init(FRAME_TYPE_PING, 0, 0);
+  ck_assert_uint_eq(frame->stream_id, 0);
+  ck_assert_uint_eq(frame->type, FRAME_TYPE_PING);
+  ck_assert_uint_eq(frame->flags, 0);
+  ck_assert_uint_eq(frame->length, 0);
+
+  uint8_t d[] = {
+    0xde, 0xad, 0xbe, 0xef,
+    0xde, 0xad, 0xbe, 0xef
+  };
+  memcpy(frame->opaque_data, d, PING_OPAQUE_DATA_LENGTH);
+
+  h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
+
+  ck_assert_uint_eq(binary_buffer_size(&bb), 17);
+  ck_assert_uint_eq(OUT(0), 0);
+  ck_assert_uint_eq(OUT(1), 0);
+  ck_assert_uint_eq(OUT(2), 8);
+  ck_assert_uint_eq(OUT(3), FRAME_TYPE_PING);
+  ck_assert_uint_eq(OUT(4), 0);
+  ck_assert_uint_eq(OUT(5), 0);
+  ck_assert_uint_eq(OUT(6), 0);
+  ck_assert_uint_eq(OUT(7), 0);
+  ck_assert_uint_eq(OUT(8), 0);
+  ck_assert_uint_eq(OUT(9), 0xde);
+  ck_assert_uint_eq(OUT(10), 0xad);
+  ck_assert_uint_eq(OUT(11), 0xbe);
+  ck_assert_uint_eq(OUT(12), 0xef);
+  ck_assert_uint_eq(OUT(13), 0xde);
+  ck_assert_uint_eq(OUT(14), 0xad);
+  ck_assert_uint_eq(OUT(15), 0xbe);
+  ck_assert_uint_eq(OUT(16), 0xef);
+}
+END_TEST
+
 START_TEST(test_h2_frame_emit_ping_ack)
 {
   h2_frame_ping_t * frame = (h2_frame_ping_t *) h2_frame_init(FRAME_TYPE_PING, FLAG_ACK, 0);
@@ -124,7 +161,7 @@ START_TEST(test_h2_frame_emit_ping_ack)
     0xde, 0xad, 0xbe, 0xef,
     0xde, 0xad, 0xbe, 0xef
   };
-  frame->opaque_data = d;
+  memcpy(frame->opaque_data, d, PING_OPAQUE_DATA_LENGTH);
 
   h2_frame_emit(&parser, &bb, (h2_frame_t *) frame);
 
@@ -2285,6 +2322,7 @@ Suite * hpack_suite()
   tcase_add_test(tc, test_h2_frame_emit_push_promise_end_stream);
   tcase_add_test(tc, test_h2_frame_emit_push_promise_with_payload);
 
+  tcase_add_test(tc, test_h2_frame_emit_ping);
   tcase_add_test(tc, test_h2_frame_emit_ping_ack);
 
   tcase_add_test(tc, test_h2_frame_emit_goaway);

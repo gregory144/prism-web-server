@@ -39,6 +39,9 @@ h2_test_cmd_list_t * h2_test_cmd_list_parse(FILE * fp)
 
   yylex_destroy(scanner);
 
+  hpack_context_free(ctx.sending_context);
+  hpack_context_free(ctx.receiving_context);
+
   return ctx.list;
 }
 
