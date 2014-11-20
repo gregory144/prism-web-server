@@ -31,3 +31,4 @@ h2_test_cmd_parser.h: h2_test_cmd_scanner.c
 
 BUILT_SOURCES = h2_test_cmd_parser.c h2_test_cmd_parser.h h2_test_cmd_scanner.c h2_test_cmd_scanner.h
 
+CLEANFILES = h2_test_cmd_parser.c h2_test_cmd_parser.h h2_test_cmd_scanner.c h2_test_cmd_scanner.h libtestcmd_a-h2_test_cmd_parser.c libtestcmd_a-h2_test_cmd_scanner.c
