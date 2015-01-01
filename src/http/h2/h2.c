@@ -1493,8 +1493,6 @@ static bool h2_incoming_frame_goaway(h2_t * const h2, h2_frame_goaway_t * const 
                frame->error_code, frame->debug_data);
   }
 
-  free(frame->debug_data);
-
   return true;
 }
 
