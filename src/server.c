@@ -41,6 +41,7 @@ static void server_sigint_handler(uv_signal_t * sigint_handler, int signum)
   }
 }
 
+// TODO - rename all functions that start with uv_ - those should be reserved for libuv internal functions
 static void uv_cb_alloc_buffer(uv_handle_t * handle, size_t suggested_size, uv_buf_t * buf)
 {
   UNUSED(handle);
