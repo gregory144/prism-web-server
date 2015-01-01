@@ -35,12 +35,18 @@ An interoperable HTTP2 server.
 
 #### Required features
 
+* have worker processes instead of threads to:
+  avoid lock contention in openssl
+  simplify passing data to workers
+  avoid contention for reading/writing to sockets
+  (main thread does the listen()ing and workers accept/read/write)
 * serious security checks
-* listen on secure port + non-secure port at the same time
+  fuzzer using test harness to randomly generate illegal requests
+* configuration
+  * listen on secure port + non-secure port at the same time
 * graceful shutdown
 * better error handling for libuv calls
 * doxygen documentation
-* main thread does the listen()ing and workers accept/read/write
 * complete spec compliance
   * ignore unknown frame types
   * error on violation of incoming max concurrent streams
