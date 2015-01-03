@@ -9,7 +9,8 @@
 
 #include <uv.h>
 
-#include "server.h"
+#include "client.h"
+#include "worker.h"
 #include "plugin.h"
 
 #include "log.h"
@@ -18,17 +19,17 @@
 #include "http/h2/h2.h"
 #include "http/request.h"
 
-static void debug_plugin_start(plugin_t * plugin)
+static void debug_plugin_start(struct plugin_t * plugin)
 {
   log_append(plugin->log, LOG_INFO, "Debug plugin started");
 }
 
-static void debug_plugin_stop(plugin_t * plugin)
+static void debug_plugin_stop(struct plugin_t * plugin)
 {
   log_append(plugin->log, LOG_INFO, "Debug plugin stopped");
 }
 
-static bool debug_plugin_request_handler(plugin_t * plugin, client_t * client, http_request_t * request,
+static bool debug_plugin_request_handler(struct plugin_t * plugin, struct client_t * client, http_request_t * request,
     http_response_t * response)
 {
   UNUSED(client);
@@ -238,7 +239,7 @@ static bool debug_plugin_request_handler(plugin_t * plugin, client_t * client, h
   return true;
 }
 
-static bool debug_plugin_data_handler(plugin_t * plugin, client_t * client, http_request_t * request,
+static bool debug_plugin_data_handler(struct plugin_t * plugin, struct client_t * client, http_request_t * request,
                                       http_response_t * response,
                                       uint8_t * buf, size_t length, bool last, bool free_buf)
 {
@@ -267,7 +268,7 @@ static bool debug_plugin_data_handler(plugin_t * plugin, client_t * client, http
 
 }
 
-static bool debug_plugin_handler(plugin_t * plugin, client_t * client, enum plugin_callback_e cb, va_list args)
+static bool debug_plugin_handler(struct plugin_t * plugin, struct client_t * client, enum plugin_callback_e cb, va_list args)
 {
   switch (cb) {
     case HANDLE_REQUEST:
@@ -293,9 +294,9 @@ static bool debug_plugin_handler(plugin_t * plugin, client_t * client, enum plug
   }
 }
 
-void plugin_initialize(plugin_t * plugin, server_t * server)
+void plugin_initialize(struct plugin_t * plugin, struct worker_t * worker)
 {
-  UNUSED(server);
+  UNUSED(worker);
 
   plugin->handlers->start = debug_plugin_start;
   plugin->handlers->stop = debug_plugin_stop;

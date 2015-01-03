@@ -9,7 +9,8 @@
 
 #include <uv.h>
 
-#include "server.h"
+#include "client.h"
+#include "worker.h"
 #include "plugin.h"
 
 #include "log.h"
@@ -18,12 +19,12 @@
 #include "http/h2/h2.h"
 #include "http/request.h"
 
-static void framer_plugin_start(plugin_t * plugin)
+static void framer_plugin_start(struct plugin_t * plugin)
 {
   log_append(plugin->log, LOG_INFO, "Framer plugin started");
 }
 
-static void framer_plugin_stop(plugin_t * plugin)
+static void framer_plugin_stop(struct plugin_t * plugin)
 {
   log_append(plugin->log, LOG_INFO, "Framer plugin stopped");
 }
@@ -158,7 +159,7 @@ static void flags_to_string(char * buf, size_t buf_len, h2_frame_t * frame)
   }
 }
 
-static void log_frame(plugin_t * plugin, client_t * client,
+static void log_frame(struct plugin_t * plugin, struct client_t * client,
                       h2_frame_t * frame, char * frame_options, bool incoming)
 {
   char frame_flags[FLAGS_TO_STRING_BUF_LEN];
@@ -174,7 +175,7 @@ static void log_frame(plugin_t * plugin, client_t * client,
             );
 }
 
-static void framer_plugin_frame_data(plugin_t * plugin, client_t * client,
+static void framer_plugin_frame_data(struct plugin_t * plugin, struct client_t * client,
                                      h2_frame_data_t * frame, bool incoming)
 {
   bool padded = frame->flags & FLAG_PADDED;
@@ -190,7 +191,7 @@ static void framer_plugin_frame_data(plugin_t * plugin, client_t * client,
   }
 }
 
-static void framer_plugin_frame_headers(plugin_t * plugin, client_t * client,
+static void framer_plugin_frame_headers(struct plugin_t * plugin, struct client_t * client,
                                         h2_frame_headers_t * frame, bool incoming)
 {
   bool padded = frame->flags & FLAG_PADDED;
@@ -224,7 +225,7 @@ static void framer_plugin_frame_headers(plugin_t * plugin, client_t * client,
   }
 }
 
-static void framer_plugin_frame_push_promise(plugin_t * plugin, client_t * client,
+static void framer_plugin_frame_push_promise(struct plugin_t * plugin, struct client_t * client,
     h2_frame_push_promise_t * frame, bool incoming)
 {
   bool padded = frame->flags & FLAG_PADDED;
@@ -242,7 +243,7 @@ static void framer_plugin_frame_push_promise(plugin_t * plugin, client_t * clien
   log_frame(plugin, client, (h2_frame_t *) frame, buf, incoming);
 }
 
-static void framer_plugin_frame_priority(plugin_t * plugin, client_t * client,
+static void framer_plugin_frame_priority(struct plugin_t * plugin, struct client_t * client,
     h2_frame_priority_t * frame, bool incoming)
 {
   size_t buf_len = 128;
@@ -254,8 +255,8 @@ static void framer_plugin_frame_priority(plugin_t * plugin, client_t * client,
   log_frame(plugin, client, (h2_frame_t *) frame, priority_buf, incoming);
 }
 
-static void framer_plugin_frame_rst_stream(plugin_t * plugin,
-    client_t * client, h2_frame_rst_stream_t * frame, bool incoming)
+static void framer_plugin_frame_rst_stream(struct plugin_t * plugin,
+    struct client_t * client, h2_frame_rst_stream_t * frame, bool incoming)
 {
   size_t buf_len = 128;
   char buf[buf_len];
@@ -263,8 +264,8 @@ static void framer_plugin_frame_rst_stream(plugin_t * plugin,
   log_frame(plugin, client, (h2_frame_t *) frame, buf, incoming);
 }
 
-static void framer_plugin_frame_settings(plugin_t * plugin,
-    client_t * client, h2_frame_settings_t * frame, bool incoming)
+static void framer_plugin_frame_settings(struct plugin_t * plugin,
+    struct client_t * client, h2_frame_settings_t * frame, bool incoming)
 {
   size_t buf_len = 1024;
   char buf[buf_len];
@@ -359,8 +360,8 @@ static void framer_plugin_frame_settings(plugin_t * plugin,
   log_frame(plugin, client, (h2_frame_t *) frame, strlen(buf) > 0 ? buf : NULL, incoming);
 }
 
-static void framer_plugin_frame_ping(plugin_t * plugin,
-                                     client_t * client, h2_frame_ping_t * frame, bool incoming)
+static void framer_plugin_frame_ping(struct plugin_t * plugin,
+                                     struct client_t * client, h2_frame_ping_t * frame, bool incoming)
 {
   size_t buf_len = 64;
   char buf[buf_len];
@@ -377,8 +378,8 @@ static void framer_plugin_frame_ping(plugin_t * plugin,
   log_frame(plugin, client, (h2_frame_t *) frame, buf, incoming);
 }
 
-static void framer_plugin_frame_goaway(plugin_t * plugin,
-                                       client_t * client, h2_frame_goaway_t * frame, bool incoming)
+static void framer_plugin_frame_goaway(struct plugin_t * plugin,
+                                       struct client_t * client, h2_frame_goaway_t * frame, bool incoming)
 {
   size_t buf_len = 64 + frame->debug_data_length;
   char buf[buf_len];
@@ -396,8 +397,8 @@ static void framer_plugin_frame_goaway(plugin_t * plugin,
   log_frame(plugin, client, (h2_frame_t *) frame, buf, incoming);
 }
 
-static void framer_plugin_frame_window_update(plugin_t * plugin,
-    client_t * client, h2_frame_window_update_t * frame, bool incoming)
+static void framer_plugin_frame_window_update(struct plugin_t * plugin,
+    struct client_t * client, h2_frame_window_update_t * frame, bool incoming)
 {
   size_t buf_len = 64;
   char buf[buf_len];
@@ -423,13 +424,13 @@ static void framer_plugin_frame_window_update(plugin_t * plugin,
   log_frame(plugin, client, (h2_frame_t *) frame, buf, incoming);
 }
 
-static void framer_plugin_frame_continuation(plugin_t * plugin,
-    client_t * client, h2_frame_continuation_t * frame, bool incoming)
+static void framer_plugin_frame_continuation(struct plugin_t * plugin,
+    struct client_t * client, h2_frame_continuation_t * frame, bool incoming)
 {
   log_frame(plugin, client, (h2_frame_t *) frame, NULL, incoming);
 }
 
-static bool framer_plugin_handler(plugin_t * plugin, client_t * client, enum plugin_callback_e cb, va_list args)
+static bool framer_plugin_handler(struct plugin_t * plugin, struct client_t * client, enum plugin_callback_e cb, va_list args)
 {
   switch (cb) {
     case INCOMING_FRAME_DATA:
@@ -577,9 +578,9 @@ static bool framer_plugin_handler(plugin_t * plugin, client_t * client, enum plu
   }
 }
 
-void plugin_initialize(plugin_t * plugin, server_t * server)
+void plugin_initialize(struct plugin_t * plugin, struct worker_t * worker)
 {
-  UNUSED(server);
+  UNUSED(worker);
 
   plugin->handlers->start = framer_plugin_start;
   plugin->handlers->stop = framer_plugin_stop;

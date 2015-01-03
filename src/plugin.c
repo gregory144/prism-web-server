@@ -2,23 +2,24 @@
 
 #include <uv.h>
 
+#include "worker.h"
 #include "plugin.h"
 
 #include "util.h"
 #include "http/http.h"
 
-plugin_t * plugin_init(plugin_t * plugin, log_context_t * log, char * plugin_file,
-                       struct server_t * server)
+struct plugin_t * plugin_init(struct plugin_t * plugin, log_context_t * log, char * plugin_file,
+                       struct worker_t * worker)
 {
   bool free_plugin = false;
 
   if (!plugin) {
     free_plugin = true;
-    plugin = malloc(sizeof(plugin_t));
+    plugin = malloc(sizeof(struct plugin_t));
   }
 
   plugin->log = log;
-  plugin->handlers = malloc(sizeof(plugin_handlers_t));
+  plugin->handlers = malloc(sizeof(struct plugin_handlers_t));
 
   plugin->data = NULL;
   uv_lib_t * lib = &plugin->lib;
@@ -47,22 +48,20 @@ plugin_t * plugin_init(plugin_t * plugin, log_context_t * log, char * plugin_fil
     return NULL;
   }
 
-  init(plugin, server);
+  init(plugin, worker);
 
   return plugin;
 }
 
 bool plugin_invoke(struct plugin_invoker_t * invoker, enum plugin_callback_e cb, ...)
 {
-  plugin_invoker_t * invoker_def = (plugin_invoker_t *)invoker;
-
   va_list args;
-  plugin_list_t * current = invoker_def->plugins;
+  struct plugin_list_t * current = invoker->plugins;
 
   while (current) {
     va_start(args, cb);
-    plugin_t * plugin = current->plugin;
-    bool ret = plugin->handlers->handle(plugin, invoker_def->client, cb, args);
+    struct plugin_t * plugin = current->plugin;
+    bool ret = plugin->handlers->handle(plugin, invoker->client, cb, args);
     va_end(args);
 
     if (ret) {
@@ -75,17 +74,17 @@ bool plugin_invoke(struct plugin_invoker_t * invoker, enum plugin_callback_e cb,
   return false;
 }
 
-void plugin_start(plugin_t * plugin)
+void plugin_start(struct plugin_t * plugin)
 {
   plugin->handlers->start(plugin);
 }
 
-void plugin_stop(plugin_t * plugin)
+void plugin_stop(struct plugin_t * plugin)
 {
   plugin->handlers->stop(plugin);
 }
 
-void plugin_free(plugin_t * plugin)
+void plugin_free(struct plugin_t * plugin)
 {
   free(plugin->handlers);
   free(plugin);

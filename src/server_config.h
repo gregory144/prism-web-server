@@ -1,0 +1,60 @@
+#ifndef HTTP_SERVER_CONFIG_H
+#define HTTP_SERVER_CONFIG_H
+
+#include <uv.h>
+
+#include "util/log.h"
+
+// TODO - namespace these defines
+#define USE_TLS true
+#define MIN_PORT 1
+#define MAX_PORT 0xFFFF
+#define NUM_WORKERS 4
+#define SERVER_HOSTNAME "0.0.0.0"
+#define SERVER_PORT 8443
+#define DEFAULT_LOG_LEVEL LOG_WARN
+#define PRIVATE_KEY_FILE_NAME "key.pem"
+#define CERTIFICATE_FILE_NAME "cert.pem"
+
+struct plugin_config_t {
+
+  char * filename;
+
+  struct plugin_config_t * next;
+
+};
+
+struct server_config_t {
+
+  int argc;
+  char ** argv;
+
+  long port;
+  char * hostname;
+  bool use_tls;
+  bool start_worker;
+  bool print_help;
+  bool print_version;
+
+  size_t num_workers;
+
+  char * cert_file;
+  char * private_key_file;
+
+  struct plugin_config_t * plugin_configs;
+
+  enum log_level_e default_log_level;
+
+  log_context_t server_log;
+  log_context_t wire_log;
+  log_context_t data_log;
+  log_context_t http_log;
+  log_context_t hpack_log;
+  log_context_t tls_log;
+  log_context_t plugin_log;
+
+};
+
+void server_config_args_parse(struct server_config_t * config, int argc, char ** argv);
+
+#endif

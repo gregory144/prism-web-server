@@ -45,10 +45,10 @@ h2_frame_t * last_frames[8];
 size_t num_errors = 0;
 caught_error_t * caught_errors[8];
 
-static plugin_list_t plugin_list;
-static plugin_handlers_t plugin_handlers;
-static plugin_t request_plugin;
-static plugin_invoker_t invoker;
+static struct plugin_list_t plugin_list;
+static struct plugin_handlers_t plugin_handlers;
+static struct plugin_t request_plugin;
+static struct plugin_invoker_t invoker;
 static h2_t * server_h2;
 
 static bool write_called;
@@ -82,7 +82,7 @@ http_request_t * request_init_cb(void * data, void * user_data, header_list_t * 
 
 struct client_t;
 
-bool plugin_request_handler(plugin_t * plugin, struct client_t * client, http_request_t * request,
+bool plugin_request_handler(struct plugin_t * plugin, struct client_t * client, http_request_t * request,
     http_response_t * response)
 {
   UNUSED(plugin);
@@ -106,7 +106,7 @@ bool plugin_request_handler(plugin_t * plugin, struct client_t * client, http_re
   return h2_response_write(stream, response, (uint8_t *) resp_text, content_length, true);
 }
 
-bool plugin_data_handler(plugin_t * plugin, struct client_t * client, http_request_t * request,
+bool plugin_data_handler(struct plugin_t * plugin, struct client_t * client, http_request_t * request,
                                       http_response_t * response,
                                       uint8_t * buf, size_t length, bool last, bool free_buf)
 {
@@ -134,7 +134,7 @@ bool plugin_data_handler(plugin_t * plugin, struct client_t * client, http_reque
 
 }
 
-static bool plugin_handle(plugin_t * plugin, struct client_t * client, enum plugin_callback_e cb, va_list args)
+static bool plugin_handle(struct plugin_t * plugin, struct client_t * client, enum plugin_callback_e cb, va_list args)
 {
   switch (cb) {
     case HANDLE_REQUEST:

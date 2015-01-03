@@ -11,7 +11,8 @@
 
 #include <uv.h>
 
-#include "server.h"
+#include "client.h"
+#include "worker.h"
 #include "plugin.h"
 
 #include "log.h"
@@ -57,9 +58,9 @@ typedef struct {
 
   log_context_t * log;
 
-  server_t * server;
+  struct worker_t * worker;
 
-  plugin_t * plugin;
+  struct plugin_t * plugin;
 
   multimap_t * type_map;
 
@@ -133,7 +134,7 @@ static void files_plugin_init_type_map(file_server_t * fs)
   fs->default_content_type = default_ct;
 }
 
-static void files_plugin_start(plugin_t * plugin)
+static void files_plugin_start(struct plugin_t * plugin)
 {
   file_server_t * file_server = plugin->data;
 
@@ -166,7 +167,7 @@ static void noop(void * v)
   UNUSED(v);
 }
 
-static void files_plugin_stop(plugin_t * plugin)
+static void files_plugin_stop(struct plugin_t * plugin)
 {
   log_append(plugin->log, LOG_INFO, "Files plugin stopped");
 
@@ -508,13 +509,13 @@ static void file_server_uv_open_cb(uv_fs_t * req)
   uv_fs_req_cleanup(req);
 }
 
-static void files_plugin_request_handler(plugin_t * plugin, client_t * client, http_request_t * request,
+static void files_plugin_request_handler(struct plugin_t * plugin, struct client_t * client, http_request_t * request,
     http_response_t * response)
 {
   file_server_t * file_server = plugin->data;
   file_server_request_t * fs_request = malloc(sizeof(file_server_request_t));
   fs_request->response = response;
-  worker_t * worker = client->server->workers[client->worker_index];
+  struct worker_t * worker = client->worker;
   fs_request->loop = &worker->loop;
   fs_request->file_server = file_server;
   fs_request->stat_req.data = fs_request;
@@ -577,7 +578,7 @@ static void files_plugin_request_handler(plugin_t * plugin, client_t * client, h
   uv_fs_open(fs_request->loop, &fs_request->open_req, fs_request->path, O_RDONLY, 0644, file_server_uv_open_cb);
 }
 
-static void files_plugin_data_handler(plugin_t * plugin, client_t * client, http_request_t * request,
+static void files_plugin_data_handler(struct plugin_t * plugin, struct client_t * client, http_request_t * request,
                                       http_response_t * response,
                                       uint8_t * buf, size_t length, bool last, bool free_buf)
 {
@@ -594,7 +595,7 @@ static void files_plugin_data_handler(plugin_t * plugin, client_t * client, http
 
 }
 
-static bool files_plugin_handler(plugin_t * plugin, client_t * client, enum plugin_callback_e cb, va_list args)
+static bool files_plugin_handler(struct plugin_t * plugin, struct client_t * client, enum plugin_callback_e cb, va_list args)
 {
   switch (cb) {
     case HANDLE_REQUEST:
@@ -622,19 +623,19 @@ static bool files_plugin_handler(plugin_t * plugin, client_t * client, enum plug
   }
 }
 
-void plugin_initialize(plugin_t * plugin, server_t * server)
+void plugin_initialize(struct plugin_t * plugin, struct worker_t * worker)
 {
   plugin->handlers->start = files_plugin_start;
   plugin->handlers->stop = files_plugin_stop;
   plugin->handlers->handle = files_plugin_handler;
 
   file_server_t * file_server = malloc(sizeof(file_server_t));
-  file_server->log = &server->config->plugin_log;
+  file_server->log = &worker->config->plugin_log;
 
   plugin->data = file_server;
 
   file_server->plugin = plugin;
-  file_server->server = server;
+  file_server->worker = worker;
 
   files_plugin_init_type_map(file_server);
 }

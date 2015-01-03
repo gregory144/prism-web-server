@@ -6,8 +6,6 @@
 #include "h2_frame.h"
 #include "h2_test_cmd_parser.h"
 
-char * strdup(char *);
-
 %}
 
 %option warn nodefault

@@ -22,7 +22,7 @@ typedef struct {
 
 binary_buffer_t bb;
 h2_frame_parser_t parser;
-plugin_invoker_t invoker;
+struct plugin_invoker_t invoker;
 
 bool should_continue_parsing = true;
 size_t num_frames_parsed = 0;
