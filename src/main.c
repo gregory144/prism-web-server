@@ -31,27 +31,29 @@ void print_help(char * cmd)
   print_version();
 }
 
-static int run_as_server(struct server_config_t * config)
+static bool run_as_server(struct server_config_t * config)
 {
   struct server_t server;
   server_init(&server, config);
 
-  server_run(&server);
+  if (!server_run(&server)) {
+    return false;
+  }
 
-  return -1;
+  return true;
 }
 
-static int run_as_worker(struct server_config_t * config)
+static bool run_as_worker(struct server_config_t * config)
 {
   struct worker_t worker;
   if (!worker_init(&worker, config)) {
     //TODO error handling
-    abort();
+    return false;
   }
 
   worker_run(&worker);
 
-  return -1;
+  return true;
 }
 
 int main(int argc, char ** argv)
@@ -77,23 +79,13 @@ int main(int argc, char ** argv)
   log_context_init(&config.tls_log, "TLS", stdout, min_level, true);
   log_context_init(&config.plugin_log, "PLUGIN", stdout, min_level, true);
 
-  fprintf(stdout, "Process: %d, stdout\n", getpid());
-  fprintf(stderr, "Process: %d, stderr\n", getpid());
-
+  bool success = false;
   if (config.start_worker) {
-
-    printf("Running as worker\n");
-
-    run_as_worker(&config);
-
+    success = run_as_worker(&config);
   } else {
-
-    printf("Running as server\n");
-
-    run_as_server(&config);
-
+    success = run_as_server(&config);
   }
 
-  exit(EXIT_SUCCESS);
+  exit(success ? EXIT_SUCCESS : EXIT_FAILURE);
 }
 

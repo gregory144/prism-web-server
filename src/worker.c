@@ -24,19 +24,16 @@ static void alloc_pipe_read_buffer(uv_handle_t * handle, size_t suggested_size, 
 {
   UNUSED(handle);
 
-  buf->base = malloc(256);
-  buf->len = 256;
+  buf->base = malloc(suggested_size);
+  buf->len = suggested_size;
 }
 
 static void alloc_buffer(uv_handle_t * handle, size_t suggested_size, uv_buf_t * buf)
 {
   UNUSED(handle);
 
-  /*buf->base = malloc(suggested_size);*/
-  /*buf->len = suggested_size;*/
-  buf->base = malloc(512);
-  printf("Allocating buffer: %p\n", buf->base);
-  buf->len = 512;
+  buf->base = malloc(suggested_size);
+  buf->len = suggested_size;
 }
 
 static void app_write_finished(uv_write_t * req, int status)
@@ -49,22 +46,7 @@ static void app_write_finished(uv_write_t * req, int status)
 
 static bool worker_write_to_network(void * data, uint8_t * buffer, size_t length)
 {
-  /*worker_buffer_t * worker_buffer = malloc(sizeof(worker_buffer_t));*/
-
-  /*// copy bytes to write to new buffer*/
-  /*worker_buffer->buffer = malloc(sizeof(uint8_t) * length);*/
-  /*memcpy(worker_buffer->buffer, buffer, length);*/
-
-  /*worker_buffer->length = length;*/
-  /*worker_buffer->client = client;*/
-  /*worker_buffer->eof = false;*/
-
-  /*blocking_queue_push(client->write_queue, worker_buffer);*/
-  /*uv_async_send(&client->write_handle);*/
-
   struct client_t * client = data;
-
-  fprintf(stderr, "Writing: %d, %lu\n", getpid(), length);
 
   uv_write_t * req = (uv_write_t *) malloc(sizeof(uv_write_t));
   uv_buf_t wrbuf = uv_buf_init((char *) buffer, length);
@@ -115,6 +97,7 @@ static void uv_cb_shutdown(uv_shutdown_t * shutdown_req, int status)
 
   if (!client->closing) {
     client->closing = true;
+    /*log_append(client->log, LOG_FATAL, "Closing client handle: %zu", client->id);*/
     uv_close((uv_handle_t *) &client->tcp, app_close_finished);
   }
 
@@ -123,8 +106,6 @@ static void uv_cb_shutdown(uv_shutdown_t * shutdown_req, int status)
 
 static void worker_close(struct client_t * client)
 {
-  printf("Closing client\n");
-
   uv_shutdown_t * shutdown_req = malloc(sizeof(uv_shutdown_t));
   shutdown_req->data = client;
   uv_shutdown(shutdown_req, (uv_stream_t *) &client->tcp, uv_cb_shutdown);
@@ -133,6 +114,7 @@ static void worker_close(struct client_t * client)
 static void app_close_cb(void * data)
 {
   struct client_t * client = data;
+  /*log_append(client->log, LOG_FATAL, "Closing: %zu", client->id);*/
   worker_close(client);
 }
 
@@ -187,7 +169,6 @@ static void worker_read_from_network(uv_stream_t * uv_client, ssize_t nread, con
       fprintf(stderr, "Read error %s\n", uv_err_name(nread));
     }
     client->eof = true;
-    printf("EOF\n");
     worker_notify_eof(client);
     free(buf->base);
 
@@ -251,12 +232,11 @@ static void worker_on_new_connection(uv_stream_t * pipe_s, ssize_t nread, const 
                                       tls_cb_write_to_app);
   }
 
-
   uv_tcp_init(&worker->loop, &client->tcp);
   client->tcp.data = client;
 
   if (uv_accept(pipe_s, (uv_stream_t *) &client->tcp) == 0) {
-    fprintf(stderr, "Worker %d: Accepted fd %d\n", getpid(), client->tcp.io_watcher.fd);
+    log_append(worker->log, LOG_DEBUG, "Worker %d: Accepted fd %d\n", getpid(), client->tcp.io_watcher.fd);
     uv_read_start((uv_stream_t *) &client->tcp, alloc_buffer, worker_read_from_network);
   } else {
     uv_close((uv_handle_t *) &client->tcp, NULL);
@@ -279,8 +259,6 @@ bool worker_init(struct worker_t * worker, struct server_config_t * config)
   struct plugin_list_t * last = NULL;
 
   while (plugin_config) {
-    printf("Setting up plugin: %p\n", plugin_config);
-    fflush(stdout);
     struct plugin_list_t * current = malloc(sizeof(struct plugin_list_t));
     current->plugin = plugin_init(NULL, &config->plugin_log, plugin_config->filename,
                                   (struct worker_t *) worker);

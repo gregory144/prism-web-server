@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <string.h>
 #include <ctype.h>
 #include <sys/time.h>
@@ -25,6 +26,7 @@ log_context_t * log_context_init(log_context_t * ctx, char * name, FILE * fp, in
   ctx->fp = fp;
   ctx->min_level = min_level;
   ctx->enabled = enabled;
+  ctx->pid = getpid();
   return ctx;
 }
 
@@ -45,7 +47,7 @@ static void log_append_string(log_context_t * ctx, enum log_level_e level, char 
     char date_buf[date_buf_length];
     char * time_str = current_time_with_milliseconds(date_buf, date_buf_length);
 
-    if (fprintf(ctx->fp, "%s\t%s\t[%s]\t%s\n", ctx->name, LEVEL_STR[level], time_str, str) < 0) {
+    if (fprintf(ctx->fp, "%d\t%s\t%s\t[%s]\t%s\n", ctx->pid, ctx->name, LEVEL_STR[level], time_str, str) < 0) {
       abort();
     }
   }

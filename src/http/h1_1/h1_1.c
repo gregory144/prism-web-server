@@ -562,7 +562,6 @@ void h1_1_read(h1_1_t * const h1_1, uint8_t * const buffer, const size_t len)
 {
   h1_1_parse(h1_1, buffer, len);
 
-  printf("Freeing buffer after read: %p\n", buffer);
   free(buffer);
 }
 

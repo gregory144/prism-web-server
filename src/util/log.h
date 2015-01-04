@@ -19,6 +19,7 @@ typedef struct {
   bool enabled;
   enum log_level_e min_level;
   FILE * fp;
+  int pid;
 } log_context_t;
 
 log_context_t * log_context_init(log_context_t * cxt, char * name, FILE * fp, int min_level, bool enabled);

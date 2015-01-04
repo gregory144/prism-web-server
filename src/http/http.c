@@ -291,7 +291,6 @@ static bool detect_protocol(http_connection_t * connection, uint8_t * const buff
  */
 void http_connection_read(http_connection_t * const connection, uint8_t * const buffer, const size_t len)
 {
-  printf("Reading from network\n");
   uint8_t * read_buffer = buffer;
   size_t read_buffer_length = len;
 
@@ -333,7 +332,6 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
 
 void http_connection_eof(http_connection_t * const connection)
 {
-  printf("Reading EOF\n");
   switch (connection->protocol) {
     case NOT_SELECTED:
       // ignore - a connection might have failed the handshake
@@ -354,7 +352,6 @@ void http_connection_eof(http_connection_t * const connection)
 
 bool http_response_write(http_response_t * const response, uint8_t * data, const size_t data_length, bool last)
 {
-  printf("Writing response\n");
   http_request_data_t * req_data = response->request->handler_data;
   void * anon_data = req_data->data;
   http_connection_t * connection = req_data->connection;

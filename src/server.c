@@ -28,12 +28,21 @@ static void close_process_handle(uv_process_t * req, int64_t exit_status, int te
   uv_close((uv_handle_t *) req, NULL);
 }
 
+static void after_close(uv_handle_t * handle)
+{
+  struct server_client_t * server_client = handle->data;
+
+  free(server_client);
+}
+
 void on_write_complete(uv_write_t * req, int status)
 {
   if (status) {
     fprintf(stderr, "Error passing file descriptor to worker: %s\n", uv_err_name(status));
   }
-  free(req->data);
+  struct server_client_t * server_client = req->data;
+
+  uv_close((uv_handle_t *) &server_client->client, after_close);
 }
 
 static void server_on_new_connection(uv_stream_t * uv_server, int status)
@@ -48,10 +57,9 @@ static void server_on_new_connection(uv_stream_t * uv_server, int status)
   struct server_client_t * server_client = malloc(sizeof(struct server_client_t));
   uv_tcp_t * client = &server_client->client;
   uv_tcp_init(&server->loop, client);
+  client->data = server_client;
 
   if (uv_accept(uv_server, (uv_stream_t *) client) == 0) {
-
-    fprintf(stderr, "Accepting new connection\n");
 
     uv_write_t * write_req = &server_client->req;
     write_req->data = server_client;
@@ -62,10 +70,13 @@ static void server_on_new_connection(uv_stream_t * uv_server, int status)
 
     struct child_worker_t * worker = server->workers[server->round_robin_counter];
 
+    log_append(server->log, LOG_DEBUG, "Server %d: Accepted fd %d\n", getpid(), client->io_watcher.fd);
+
     uv_write2(write_req, (uv_stream_t *) &worker->pipe, buf, 1,
         (uv_stream_t *) client, on_write_complete);
     server->round_robin_counter = (server->round_robin_counter + 1) %
       server->config->num_workers;
+
   } else {
     free(server_client);
     uv_close((uv_handle_t *) client, NULL);
@@ -87,10 +98,6 @@ static void setup_workers(struct server_t * server)
     args[i+1] = server->config->argv[i];
   }
   args[server->config->argc+1] = NULL;
-
-  for (int j = 0; j < server->config->argc + 2; j++) {
-    printf("args: %d: %s\n", j, args[j]);
-  }
 
   int num_workers = server->config->num_workers;
 
@@ -117,11 +124,10 @@ static void setup_workers(struct server_t * server)
     worker->options.args = args;
 
     uv_spawn(&server->loop, &worker->req, &worker->options);
-    fprintf(stderr, "Started worker %d\n", worker->req.pid);
   }
 }
 
-int server_run(struct server_t * server)
+bool server_run(struct server_t * server)
 {
   for (size_t i = 0; i < LOGO_LINES_LENGTH; i++) {
     log_append(server->log, LOG_INFO, (char *) LOGO_LINES[i]);
@@ -139,10 +145,13 @@ int server_run(struct server_t * server)
   uv_tcp_bind(&uv_server, (const struct sockaddr *)&bind_addr, 0);
   int r;
   if ((r = uv_listen((uv_stream_t *) &uv_server, LISTEN_BACKLOG, server_on_new_connection))) {
-    fprintf(stderr, "Listen error: %d, %s\n", getpid(), uv_err_name(r));
-    return 2;
+    log_append(server->log, LOG_FATAL, "Listen failed: %s", uv_err_name(r));
+    return false;
   }
-  return uv_run(&server->loop, UV_RUN_DEFAULT);
+  if (uv_run(&server->loop, UV_RUN_DEFAULT)) {
+    return false;
+  }
+  return true;
 }
 
 void server_stop(struct server_t * server)

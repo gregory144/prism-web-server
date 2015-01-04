@@ -39,7 +39,7 @@ struct server_t {
 
 void server_init(struct server_t *, struct server_config_t * config);
 
-int server_run(struct server_t * server);
+bool server_run(struct server_t * server);
 
 void server_stop(struct server_t * server);
 
