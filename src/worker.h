@@ -25,6 +25,8 @@ struct worker_t {
   struct server_config_t * config;
 
   log_context_t * log;
+  log_context_t * data_log;
+  log_context_t * wire_log;
 
   size_t assigned_reads;
 
@@ -59,8 +61,10 @@ struct http_write_req_data_t {
   uv_write_t req;
 };
 
-struct worker_t * worker_init(struct server_config_t * config);
+bool worker_init(struct worker_t * worker, struct server_config_t * config);
 
 int worker_run(struct worker_t * worker);
+
+void worker_stop(struct worker_t * worker);
 
 #endif

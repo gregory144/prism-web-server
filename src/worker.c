@@ -13,7 +13,6 @@
 #include "util/log.h"
 #include "util/util.h"
 #include "http/http.h"
-#include "http/request.h"
 
 #include "worker.h"
 #include "client.h"
@@ -21,53 +20,208 @@
 #define MAX_CLIENTS 0x4000
 #define LISTEN_BACKLOG 1024
 
-/*static int open_clients = 0;*/
-/*static int total_clients = 0;*/
+static void alloc_pipe_read_buffer(uv_handle_t * handle, size_t suggested_size, uv_buf_t * buf)
+{
+  UNUSED(handle);
+
+  buf->base = malloc(256);
+  buf->len = 256;
+}
 
 static void alloc_buffer(uv_handle_t * handle, size_t suggested_size, uv_buf_t * buf)
 {
   UNUSED(handle);
 
-  buf->base = malloc(suggested_size);
-  buf->len = suggested_size;
+  /*buf->base = malloc(suggested_size);*/
+  /*buf->len = suggested_size;*/
+  buf->base = malloc(512);
+  printf("Allocating buffer: %p\n", buf->base);
+  buf->len = 512;
 }
 
-void echo_write(uv_write_t * req, int status)
+static void app_write_finished(uv_write_t * req, int status)
 {
   if (status) {
-    fprintf(stderr, "Write error %s\n", uv_err_name(status));
+    fprintf(stderr, "Write error %d, %s\n", getpid(), uv_err_name(status));
   }
   free(req);
 }
 
-void echo_read(uv_stream_t * client, ssize_t nread, const uv_buf_t * buf)
+static bool worker_write_to_network(void * data, uint8_t * buffer, size_t length)
 {
-  if (nread < 0) {
-    if (nread != UV_EOF)
-      fprintf(stderr, "Read error %s\n", uv_err_name(nread));
-    uv_close((uv_handle_t*) client, NULL);
-    return;
-  }
+  /*worker_buffer_t * worker_buffer = malloc(sizeof(worker_buffer_t));*/
 
-  fprintf(stderr, "Writing: %d, %s\n", getpid(), buf->base);
+  /*// copy bytes to write to new buffer*/
+  /*worker_buffer->buffer = malloc(sizeof(uint8_t) * length);*/
+  /*memcpy(worker_buffer->buffer, buffer, length);*/
 
-  uv_write_t *req = (uv_write_t *) malloc(sizeof(uv_write_t));
-  uv_buf_t wrbuf = uv_buf_init(buf->base, nread);
-  uv_write(req, client, &wrbuf, 1, echo_write);
-  free(buf->base);
+  /*worker_buffer->length = length;*/
+  /*worker_buffer->client = client;*/
+  /*worker_buffer->eof = false;*/
+
+  /*blocking_queue_push(client->write_queue, worker_buffer);*/
+  /*uv_async_send(&client->write_handle);*/
+
+  struct client_t * client = data;
+
+  fprintf(stderr, "Writing: %d, %lu\n", getpid(), length);
+
+  uv_write_t * req = (uv_write_t *) malloc(sizeof(uv_write_t));
+  uv_buf_t wrbuf = uv_buf_init((char *) buffer, length);
+  req->data = client;
+  uv_write(req, (uv_stream_t *) &client->tcp, &wrbuf, 1, app_write_finished);
+
+  return true;
 }
 
-void on_new_connection(uv_stream_t *q, ssize_t nread, const uv_buf_t *buf)
+static bool app_write_cb(void * data, uint8_t * buffer, size_t length)
+{
+  struct client_t * client = data;
+  struct worker_t * worker = client->worker;
+
+  log_append(worker->log, LOG_DEBUG, "Write client #%zu (%zu octets)", client->id, length);
+  if (log_enabled(client->data_log)) {
+    log_append(client->data_log, LOG_TRACE, "Writing data: (%zd octets)", length);
+    log_buffer(client->data_log, LOG_TRACE, buffer, length);
+  }
+
+  if (worker->config->use_tls) {
+    log_append(worker->log, LOG_TRACE, "Passing %zu octets of data from application to TLS handler", length);
+    bool ret = tls_encrypt_data_and_pass_to_network(client->tls_ctx, buffer, length);
+    log_append(worker->log, LOG_TRACE, "Passed %zu octets of data from application to TLS handler", length);
+    return ret;
+  } else {
+    return worker_write_to_network(client, buffer, length);
+  }
+}
+
+static void app_close_finished(uv_handle_t * handle)
+{
+  struct client_t * client = handle->data;
+
+  log_append(client->log, LOG_DEBUG,
+      "Closing connection from uv callback: %zu", client->id);
+
+  client_free(client);
+}
+
+static void uv_cb_shutdown(uv_shutdown_t * shutdown_req, int status)
+{
+  struct client_t * client = shutdown_req->data;
+
+  if (status) {
+    log_append(client->log, LOG_ERROR, "Shutdown error, client: %zu: %s", client->id, uv_strerror(status));
+  }
+
+  if (!client->closing) {
+    client->closing = true;
+    uv_close((uv_handle_t *) &client->tcp, app_close_finished);
+  }
+
+  free(shutdown_req);
+}
+
+static void worker_close(struct client_t * client)
+{
+  printf("Closing client\n");
+
+  uv_shutdown_t * shutdown_req = malloc(sizeof(uv_shutdown_t));
+  shutdown_req->data = client;
+  uv_shutdown(shutdown_req, (uv_stream_t *) &client->tcp, uv_cb_shutdown);
+}
+
+static void app_close_cb(void * data)
+{
+  struct client_t * client = data;
+  worker_close(client);
+}
+
+static void worker_parse(struct client_t * client, uint8_t * buffer, size_t length)
+{
+  if (log_enabled(client->data_log)) {
+    log_append(client->data_log, LOG_TRACE, "Reading data: (%zd octets)", length);
+    log_buffer(client->data_log, LOG_TRACE, buffer, length);
+  }
+
+  if (client->tls_ctx && client->tls_ctx->selected_tls_version) {
+    http_connection_set_tls_details(client->connection, client->tls_ctx->selected_tls_version,
+                                    client->tls_ctx->selected_cipher, client->tls_ctx->cipher_key_size_in_bits);
+  }
+
+  if (!client->selected_protocol && client->tls_ctx && client->tls_ctx->selected_protocol) {
+    http_connection_set_protocol(client->connection, client->tls_ctx->selected_protocol);
+    client->selected_protocol = true;
+  }
+
+  log_append(client->log, LOG_DEBUG, "Read client #%zu (%zu octets)", client->id, length);
+
+  http_connection_t * connection = client->connection;
+  http_connection_read(connection, (uint8_t *) buffer, length);
+}
+
+// pass the decrypted data on to the application
+static bool tls_cb_write_to_app(void * data, uint8_t * buf, size_t length)
+{
+  struct client_t * client = data;
+
+  log_append(client->log, LOG_TRACE, "Passing %zu octets of data from TLS handler to application", length);
+  worker_parse(client, (uint8_t *) buf, length);
+  log_append(client->log, LOG_TRACE, "Passed %zu octets of data from TLS handler to application", length);
+
+  return true;
+}
+
+static void worker_notify_eof(struct client_t * client)
+{
+  http_connection_t * connection = client->connection;
+  http_connection_eof(connection);
+}
+
+static void worker_read_from_network(uv_stream_t * uv_client, ssize_t nread, const uv_buf_t * buf)
+{
+  struct client_t * client = uv_client->data;
+  struct worker_t * worker = client->worker;
+
+  if (nread < 0) {
+    if (nread != UV_EOF) {
+      fprintf(stderr, "Read error %s\n", uv_err_name(nread));
+    }
+    client->eof = true;
+    printf("EOF\n");
+    worker_notify_eof(client);
+    free(buf->base);
+
+  } else if (worker->config->use_tls) {
+
+    tls_client_ctx_t * tls_client_ctx = client->tls_ctx;
+
+    log_append(worker->log, LOG_TRACE, "Passing %zu octets of data from network to TLS handler",
+        nread);
+
+    if (!tls_decrypt_data_and_pass_to_app(tls_client_ctx, (uint8_t *) buf->base, nread)) {
+      worker_close(client);
+    }
+
+    log_append(worker->log, LOG_TRACE, "Passed %zu octets of data from network to TLS handler", nread);
+
+  } else {
+    worker_parse(client, (uint8_t *) buf->base, nread);
+  }
+}
+
+static void worker_on_new_connection(uv_stream_t * pipe_s, ssize_t nread, const uv_buf_t * buf)
 {
   UNUSED(buf);
+
   if (nread < 0) {
-    if (nread != UV_EOF)
+    if (nread != UV_EOF) {
       fprintf(stderr, "Read error %s\n", uv_err_name(nread));
-    uv_close((uv_handle_t*) q, NULL);
+    }
+    uv_close((uv_handle_t *) pipe_s, NULL);
     return;
   }
 
-  uv_pipe_t * pipe = (uv_pipe_t *) q;
+  uv_pipe_t * pipe = (uv_pipe_t *) pipe_s;
   if (!uv_pipe_pending_count(pipe)) {
     fprintf(stderr, "No pending count\n");
     return;
@@ -76,21 +230,81 @@ void on_new_connection(uv_stream_t *q, ssize_t nread, const uv_buf_t *buf)
   uv_handle_type pending = uv_pipe_pending_type(pipe);
   assert(pending == UV_TCP);
 
-  uv_tcp_t * client = (uv_tcp_t*) malloc(sizeof(uv_tcp_t));
   struct worker_t * worker = pipe->data;
-  uv_tcp_init(&worker->loop, client);
-  if (uv_accept(q, (uv_stream_t*) client) == 0) {
-    fprintf(stderr, "Worker %d: Accepted fd %d\n", getpid(), client->io_watcher.fd);
-    uv_read_start((uv_stream_t*) client, alloc_buffer, echo_read);
+
+  struct client_t * client = malloc(sizeof(struct client_t));
+  if (!client || !client_init(client, worker)) {
+    // TODO error handling
+    abort();
   }
-  else {
-    uv_close((uv_handle_t*) client, NULL);
+
+  char * scheme = worker->config->use_tls ? "https" : "http";
+  char * hostname = worker->config->hostname;
+  int port = worker->config->port;
+
+  client->connection = http_connection_init(client, &worker->config->http_log, &worker->config->hpack_log,
+                       scheme, hostname, port, client->plugin_invoker,
+                       app_write_cb, app_close_cb);
+
+  if (worker->config->use_tls) {
+    client->tls_ctx = tls_client_init(worker->tls_ctx, client, worker_write_to_network,
+                                      tls_cb_write_to_app);
   }
+
+
+  uv_tcp_init(&worker->loop, &client->tcp);
+  client->tcp.data = client;
+
+  if (uv_accept(pipe_s, (uv_stream_t *) &client->tcp) == 0) {
+    fprintf(stderr, "Worker %d: Accepted fd %d\n", getpid(), client->tcp.io_watcher.fd);
+    uv_read_start((uv_stream_t *) &client->tcp, alloc_buffer, worker_read_from_network);
+  } else {
+    uv_close((uv_handle_t *) &client->tcp, NULL);
+  }
+
+  free(buf->base);
 }
 
-struct worker_t * worker_init(struct server_config_t * config)
+bool worker_init(struct worker_t * worker, struct server_config_t * config)
 {
-  struct worker_t * worker = malloc(sizeof(struct worker_t));
+
+  if (config->use_tls) {
+    tls_init();
+  }
+
+  worker->config = config;
+  worker->plugins = NULL;
+
+  struct plugin_config_t * plugin_config = config->plugin_configs;
+  struct plugin_list_t * last = NULL;
+
+  while (plugin_config) {
+    printf("Setting up plugin: %p\n", plugin_config);
+    fflush(stdout);
+    struct plugin_list_t * current = malloc(sizeof(struct plugin_list_t));
+    current->plugin = plugin_init(NULL, &config->plugin_log, plugin_config->filename,
+                                  (struct worker_t *) worker);
+    current->next = NULL;
+
+    if (!current->plugin) {
+      return false;
+    }
+
+    if (!worker->plugins) {
+      worker->plugins = current;
+    } else {
+      last->next = current;
+    }
+
+    last = current;
+
+    plugin_config = plugin_config->next;
+  }
+
+  if (config->use_tls) {
+    worker->tls_ctx = tls_server_init(&config->tls_log, config->private_key_file, config->cert_file);
+    ASSERT_OR_RETURN_FALSE(worker->tls_ctx);
+  }
 
   // TODO error handling
   uv_loop_init(&worker->loop);
@@ -99,13 +313,15 @@ struct worker_t * worker_init(struct server_config_t * config)
   uv_pipe_init(&worker->loop, &worker->queue, 1);
   uv_pipe_open(&worker->queue, 0);
   worker->queue.data = worker;
-  uv_read_start((uv_stream_t *) &worker->queue, alloc_buffer, on_new_connection);
+  uv_read_start((uv_stream_t *) &worker->queue, alloc_pipe_read_buffer, worker_on_new_connection);
 
   worker->assigned_reads = 0;
 
   worker->log = &config->server_log;
+  worker->data_log = &config->data_log;
+  worker->wire_log = &config->wire_log;
 
-  return worker;
+  return true;
 }
 
 /*static void worker_uv_async_cb_written(uv_async_t * async_handle)*/
@@ -806,7 +1022,6 @@ int worker_run(struct worker_t * worker)
   /*worker_free(worker);*/
 
   return ret;
-
 }
 
 void worker_stop(struct worker_t * worker)

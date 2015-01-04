@@ -9,6 +9,7 @@
 #include "server.h"
 #include "worker.h"
 
+
 void print_version()
 {
   fprintf(stdout, "%s\n", PACKAGE_STRING);
@@ -42,20 +43,19 @@ static int run_as_server(struct server_config_t * config)
 
 static int run_as_worker(struct server_config_t * config)
 {
-  struct worker_t * worker = worker_init(config);
-
-  if (!worker) {
-    exit(EXIT_FAILURE);
+  struct worker_t worker;
+  if (!worker_init(&worker, config)) {
+    //TODO error handling
+    abort();
   }
 
-  worker_run(worker);
+  worker_run(&worker);
 
   return -1;
 }
 
 int main(int argc, char ** argv)
 {
-
   struct server_config_t config;
   server_config_args_parse(&config, argc, argv);
 
@@ -70,7 +70,7 @@ int main(int argc, char ** argv)
   enum log_level_e min_level = config.default_log_level;
 
   log_context_init(&config.server_log, "SERVER", stdout, min_level, true);
-  log_context_init(&config.wire_log, "WIRE", stdout, LOG_WARN, true); // wire log must be configured separately
+  log_context_init(&config.wire_log, "WIRE", stdout, min_level, true); // wire log must be configured separately
   log_context_init(&config.data_log, "DATA", stdout, min_level, true);
   log_context_init(&config.http_log, "HTTP", stdout, min_level, true);
   log_context_init(&config.hpack_log, "HPACK", stdout, min_level, true);

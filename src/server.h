@@ -31,7 +31,6 @@ struct server_t {
 
   uv_signal_t sigpipe_handler;
   uv_signal_t sigint_handler;
-  uv_tcp_t tcp_handler;
 
   struct child_worker_t ** workers;
   size_t round_robin_counter;
@@ -41,5 +40,7 @@ struct server_t {
 void server_init(struct server_t *, struct server_config_t * config);
 
 int server_run(struct server_t * server);
+
+void server_stop(struct server_t * server);
 
 #endif

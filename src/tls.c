@@ -551,7 +551,6 @@ bool tls_set_protocol(tls_client_ctx_t * client_ctx)
  */
 bool tls_decrypt_data_and_pass_to_app(tls_client_ctx_t * client_ctx, uint8_t * buf, size_t length)
 {
-
   log_append(client_ctx->log, LOG_TRACE, "Writing encrypted data to network BIO");
 
   size_t written = 0;

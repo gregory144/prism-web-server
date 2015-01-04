@@ -1485,12 +1485,12 @@ static bool h2_incoming_frame_goaway(h2_t * const h2, h2_frame_goaway_t * const 
   if (frame->error_code == H2_ERROR_NO_ERROR) {
     log_append(h2->log, LOG_TRACE, "Received goaway, last stream: %u, error code: %s (0x%x), debug_data: %s",
                frame->last_stream_id, h2_error_to_string(frame->error_code),
-               frame->error_code, frame->debug_data);
+               frame->error_code, frame->debug_data_length > 0 ? frame->debug_data : NULL);
     h2_mark_closing(h2);
   } else {
     log_append(h2->log, LOG_ERROR, "Received goaway, last stream: %u, error code: %s (0x%x), debug_data: %s",
                frame->last_stream_id, h2_error_to_string(frame->error_code),
-               frame->error_code, frame->debug_data);
+               frame->error_code, frame->debug_data_length > 0 ? frame->debug_data : NULL);
   }
 
   return true;

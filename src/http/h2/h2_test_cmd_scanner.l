@@ -1,7 +1,5 @@
 %{
-#include <stdio.h>
-#include <stdint.h>
-#include <string.h>
+#include "config.h"
 
 #include "h2_frame.h"
 #include "h2_test_cmd_parser.h"
@@ -98,7 +96,7 @@ L?\"(\\.|[^\\"])*\"     {
                             buf[len] = '\0';
                             yylval->string_bt = buf;
                             return TOKEN_STRING; }
-[a-zA-Z][-a-zA-Z0-9]    { yylval->string_bt = strdup(yytext); return TOKEN_STRING; }
+[a-zA-Z][-a-zA-Z0-9]    { yylval->string_bt = malloc(strlen(yytext) + 1); memcpy(yylval->string_bt, yytext, strlen(yytext)); yylval->string_bt[strlen(yytext)] = '\0'; return TOKEN_STRING; }
 
 \.                      { return TOKEN_DOT; }
 .                       {  }
