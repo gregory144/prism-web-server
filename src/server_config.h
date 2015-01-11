@@ -46,6 +46,7 @@ struct server_config_t {
   enum log_level_e default_log_level;
 
   log_context_t server_log;
+  log_context_t worker_log;
   log_context_t wire_log;
   log_context_t data_log;
   log_context_t http_log;

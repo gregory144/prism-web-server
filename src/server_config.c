@@ -33,7 +33,7 @@ void server_config_args_parse(struct server_config_t * config, int argc, char **
 
   opterr = 0;
 
-  while ((c = getopt(argc, argv, "p:n:e:k:c:w:l:ihva")) != -1) {
+  while ((c = getopt(argc, argv, "p:n:e:k:c:w:l:iahv")) != -1) {
     switch (c) {
       case 'p': // port
         config->port = strtol(optarg, NULL, 10);

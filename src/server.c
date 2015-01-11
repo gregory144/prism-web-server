@@ -17,6 +17,7 @@
 uv_buf_t dummy_buf;
 
 struct server_client_t {
+  struct server_t * server;
   uv_tcp_t client;
   uv_write_t req;
   uv_buf_t buf;
@@ -24,7 +25,9 @@ struct server_client_t {
 
 static void close_process_handle(uv_process_t * req, int64_t exit_status, int term_signal)
 {
-  fprintf(stderr, "Process exited with status %" PRId64 ", signal %d\n", exit_status, term_signal);
+  struct server_t * server = req->data;
+  log_append(server->log, LOG_INFO, "Process exited with status %" PRId64 ", signal %d\n", exit_status, term_signal);
+
   uv_close((uv_handle_t *) req, NULL);
 }
 
@@ -37,24 +40,27 @@ static void after_close(uv_handle_t * handle)
 
 void on_write_complete(uv_write_t * req, int status)
 {
-  if (status) {
-    fprintf(stderr, "Error passing file descriptor to worker: %s\n", uv_err_name(status));
-  }
   struct server_client_t * server_client = req->data;
+  struct server_t * server = server_client->server;
+
+  if (status) {
+    log_append(server->log, LOG_ERROR, "Error passing file descriptor to worker: %s\n", uv_err_name(status));
+  }
 
   uv_close((uv_handle_t *) &server_client->client, after_close);
 }
 
 static void server_on_new_connection(uv_stream_t * uv_server, int status)
 {
+  struct server_t * server = uv_server->data;
+
   if (status == -1) {
-    // error!
+    log_append(server->log, LOG_ERROR, "Error getting new connection: %s\n", uv_err_name(status));
     return;
   }
 
-  struct server_t * server = uv_server->data;
-
   struct server_client_t * server_client = malloc(sizeof(struct server_client_t));
+  server_client->server = server;
   uv_tcp_t * client = &server_client->client;
   uv_tcp_init(&server->loop, client);
   client->data = server_client;
@@ -83,7 +89,7 @@ static void server_on_new_connection(uv_stream_t * uv_server, int status)
   }
 }
 
-static void setup_workers(struct server_t * server)
+static bool setup_workers(struct server_t * server)
 {
   size_t path_size = PATH_SIZE;
   char worker_path[PATH_SIZE];
@@ -123,8 +129,15 @@ static void setup_workers(struct server_t * server)
     worker->options.file = args[0];
     worker->options.args = args;
 
-    uv_spawn(&server->loop, &worker->req, &worker->options);
+    worker->req.data = server;
+
+    int uv_error = uv_spawn(&server->loop, &worker->req, &worker->options);
+    if (uv_error < 0) {
+      log_append(server->log, LOG_FATAL, "Failed to spawn process: %s", uv_err_name(uv_error));
+      return false;
+    }
   }
+  return true;
 }
 
 bool server_run(struct server_t * server)
@@ -134,7 +147,9 @@ bool server_run(struct server_t * server)
   }
   log_append(server->log, LOG_INFO, "Server starting on %s:%ld", server->config->hostname, server->config->port);
 
-  setup_workers(server);
+  if (!setup_workers(server)) {
+    return false;
+  }
 
   uv_tcp_t uv_server;
   uv_tcp_init(&server->loop, &uv_server);
@@ -158,45 +173,8 @@ void server_stop(struct server_t * server)
 {
   log_append(server->log, LOG_INFO, "Server shutting down...");
 
-  /*log_append(server->log, LOG_DEBUG, "Closing %zu workers", server->config->num_workers);*/
-
-  /*// tell the workers to stop*/
-  /*size_t i;*/
-
-  /*for (i = 0; i < server->config->num_workers; i++) {*/
-    /*struct child_worker_t * worker = server->workers[i];*/
-
-    /*log_append(server->log, LOG_DEBUG,*/
-        /*"Closing worker #%zu with %zu assigned reads (pushes: %zu, pops: %zu, length: %zu)",*/
-        /*i, worker->assigned_reads, worker->read_queue->num_pushes, worker->read_queue->num_pops,*/
-        /*worker->read_queue->length);*/
-
-    /*uv_async_send(&worker->stop_handle);*/
-  /*}*/
-
-  /*// wait until the workers stop*/
-  /*for (i = 0; i < server->config->num_workers; i++) {*/
-    /*worker_t * worker = server->workers[i];*/
-
-    /*uv_thread_join(&worker->thread);*/
-  /*}*/
-
-  /*plugin_list_t * current = server->plugins;*/
-
-  /*while (current) {*/
-    /*plugin_stop(current->plugin);*/
-    /*current = current->next;*/
-  /*}*/
-
   uv_stop(&server->loop);
 }
-
-/*static void null_close_cb(uv_handle_t * handle)*/
-/*{*/
-  /*UNUSED(handle);*/
-
-  /*// noop*/
-/*}*/
 
 void server_init(struct server_t * server, struct server_config_t * config)
 {
@@ -210,114 +188,3 @@ void server_init(struct server_t * server, struct server_config_t * config)
   server->round_robin_counter = 0;
 }
 
-/*static void server_free(struct server_t * server)*/
-/*{*/
-  /*[>for (size_t i = 0; i < server->config->num_workers; i++) {<]*/
-    /*[>struct child_worker_t * worker = server->workers[i];<]*/
-    /*[>free(worker);<]*/
-  /*[>}<]*/
-
-  /*free(server->workers);*/
-
-  /*uv_signal_stop(&server->sigint_handler);*/
-  /*uv_signal_stop(&server->sigpipe_handler);*/
-
-  /*uv_close((uv_handle_t *) &server->sigint_handler, null_close_cb);*/
-  /*uv_close((uv_handle_t *) &server->sigpipe_handler, null_close_cb);*/
-  /*uv_close((uv_handle_t *) &server->tcp_handler, null_close_cb);*/
-
-  /*uv_loop_close(&server->loop);*/
-
-  /*free(server);*/
-/*}*/
-
-/*int server_start(struct server_t * server)*/
-/*{*/
-
-  /*plugin_list_t * current = server->plugins;*/
-
-  /*while (current != NULL) {*/
-    /*plugin_start(current->plugin);*/
-    /*current = current->next;*/
-  /*}*/
-
-  /*// set up workers*/
-  /*size_t i;*/
-  /*server->workers = malloc(sizeof(struct child_worker_t *) * server->config->num_workers);*/
-
-  /*for (i = 0; i < server->config->num_workers; i++) {*/
-    /*struct child_worker_t * worker = child_worker_init(server->log);*/
-    /*worker->server = server;*/
-
-    /*uv_thread_create(&worker->thread, worker_work, worker);*/
-
-    /**(server->workers + i) = worker;*/
-  /*}*/
-
-  /*// set up connection listener*/
-  /*uv_tcp_init(&server->loop, &server->tcp_handler);*/
-  /*server->tcp_handler.data = server;*/
-
-  /*struct sockaddr_in bind_addr;*/
-  /*uv_ip4_addr(server->config->hostname, server->config->port, &bind_addr);*/
-  /*uv_tcp_bind(&server->tcp_handler, (struct sockaddr *)&bind_addr, 0);*/
-
-  /*int err = uv_listen((uv_stream_t *) &server->tcp_handler, LISTEN_BACKLOG, uv_cb_listen);*/
-
-  /*if (err < 0) {*/
-    /*log_append(server->log, LOG_ERROR, "Listen error: %s", uv_strerror(err));*/
-    /*return 1;*/
-  /*}*/
-
-  /*for (i = 0; i < LOGO_LINES_LENGTH; i++) {*/
-    /*log_append(server->log, LOG_INFO, (char *) LOGO_LINES[i]);*/
-  /*}*/
-  /*log_append(server->log, LOG_INFO, "Server starting on %s:%ld", server->config->hostname, server->config->port);*/
-
-  /*uv_signal_start(&server->sigpipe_handler, server_sigpipe_handler, SIGPIPE);*/
-  /*uv_signal_start(&server->sigint_handler, server_sigint_handler, SIGINT);*/
-
-  /*int ret = uv_run(&server->loop, UV_RUN_DEFAULT);*/
-
-  /*server_free(server);*/
-
-  /*return ret;*/
-
-/*}*/
-
-/*void server_stop(struct server_t * server)*/
-/*{*/
-  /*log_append(server->log, LOG_INFO, "Server shutting down...");*/
-
-  /*log_append(server->log, LOG_DEBUG, "Closing %zu workers", server->config->num_workers);*/
-
-  /*// tell the workers to stop*/
-  /*size_t i;*/
-
-  /*for (i = 0; i < server->config->num_workers; i++) {*/
-    /*struct child_worker_t * worker = server->workers[i];*/
-
-    /*log_append(server->log, LOG_DEBUG,*/
-        /*"Closing worker #%zu with %zu assigned reads (pushes: %zu, pops: %zu, length: %zu)",*/
-        /*i, worker->assigned_reads, worker->read_queue->num_pushes, worker->read_queue->num_pops,*/
-        /*worker->read_queue->length);*/
-
-    /*uv_async_send(&worker->stop_handle);*/
-  /*}*/
-
-  /*// wait until the workers stop*/
-  /*for (i = 0; i < server->config->num_workers; i++) {*/
-    /*worker_t * worker = server->workers[i];*/
-
-    /*uv_thread_join(&worker->thread);*/
-  /*}*/
-
-  /*plugin_list_t * current = server->plugins;*/
-
-  /*while (current) {*/
-    /*plugin_stop(current->plugin);*/
-    /*current = current->next;*/
-  /*}*/
-
-  /*uv_stop(&server->loop);*/
-/*}*/

@@ -47,7 +47,6 @@ static bool run_as_worker(struct server_config_t * config)
 {
   struct worker_t worker;
   if (!worker_init(&worker, config)) {
-    //TODO error handling
     return false;
   }
 
@@ -72,6 +71,7 @@ int main(int argc, char ** argv)
   enum log_level_e min_level = config.default_log_level;
 
   log_context_init(&config.server_log, "SERVER", stdout, min_level, true);
+  log_context_init(&config.worker_log, "WORKER", stdout, min_level, true);
   log_context_init(&config.wire_log, "WIRE", stdout, min_level, true); // wire log must be configured separately
   log_context_init(&config.data_log, "DATA", stdout, min_level, true);
   log_context_init(&config.http_log, "HTTP", stdout, min_level, true);
