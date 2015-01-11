@@ -35,11 +35,6 @@ An interoperable HTTP2 server.
 
 #### Required features
 
-* have worker processes instead of threads to:
-  avoid lock contention in openssl
-  simplify passing data to workers
-  avoid contention for reading/writing to sockets
-  (main thread does the listen()ing and workers accept/read/write)
 * serious security checks
   fuzzer using test harness to randomly generate illegal requests
 * configuration
