@@ -27,6 +27,7 @@ bool client_init(struct client_t * client, struct worker_t * worker)
   client->closing = false;
   client->closed = false;
   client->eof = false;
+  client->pending_writes = 0;
   client->tls_ctx = NULL;
 
   client->plugin_invoker = malloc(sizeof(struct plugin_invoker_t));

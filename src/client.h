@@ -36,6 +36,7 @@ struct client_t {
 
   size_t id;
   bool closed;
+  size_t pending_writes;
 
   bool selected_protocol;
 

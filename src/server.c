@@ -23,6 +23,23 @@ struct server_client_t {
   uv_buf_t buf;
 };
 
+static void server_sigpipe_handler(uv_signal_t * sigpipe_handler, int signum)
+{
+  struct server_t * server = sigpipe_handler->data;
+  log_append(server->log, LOG_WARN, "Caught SIGPIPE: %d", signum);
+}
+
+static void server_sigint_handler(uv_signal_t * sigint_handler, int signum)
+{
+  struct server_t * server = sigint_handler->data;
+  log_append(server->log, LOG_INFO, "Caught SIGINT: %d", signum);
+
+  if (!server->terminate) {
+    server->terminate = true;
+    server_stop(server);
+  }
+}
+
 static void close_process_handle(uv_process_t * req, int64_t exit_status, int term_signal)
 {
   struct server_t * server = req->data;
@@ -151,6 +168,9 @@ bool server_run(struct server_t * server)
     return false;
   }
 
+  uv_signal_start(&server->sigpipe_handler, server_sigpipe_handler, SIGPIPE);
+  uv_signal_start(&server->sigint_handler, server_sigint_handler, SIGINT);
+
   uv_tcp_t uv_server;
   uv_tcp_init(&server->loop, &uv_server);
   uv_server.data = server;
@@ -185,6 +205,12 @@ void server_init(struct server_t * server, struct server_config_t * config)
   server->data_log = &config->data_log;
   server->config = config;
 
+  server->terminate = false;
   server->round_robin_counter = 0;
+
+  uv_signal_init(&server->loop, &server->sigpipe_handler);
+  server->sigpipe_handler.data = server;
+  uv_signal_init(&server->loop, &server->sigint_handler);
+  server->sigint_handler.data = server;
 }
 

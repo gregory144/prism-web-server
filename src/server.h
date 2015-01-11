@@ -29,6 +29,7 @@ struct server_t {
 
   struct server_config_t * config;
 
+  bool terminate;
   uv_signal_t sigpipe_handler;
   uv_signal_t sigint_handler;
 

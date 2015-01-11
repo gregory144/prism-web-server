@@ -28,11 +28,15 @@ struct worker_t {
   log_context_t * data_log;
   log_context_t * wire_log;
 
+  bool terminate;
   size_t assigned_reads;
 
   uv_loop_t loop;
 
   uv_pipe_t queue;
+
+  uv_signal_t sigpipe_handler;
+  uv_signal_t sigint_handler;
 
   struct plugin_list_t * plugins;
 

@@ -334,7 +334,8 @@ void http_connection_eof(http_connection_t * const connection)
 {
   switch (connection->protocol) {
     case NOT_SELECTED:
-      // ignore - a connection might have failed the handshake
+      log_append(connection->log, LOG_TRACE, "EOF but protocol not selected");
+      http_connection_close(connection);
       return;
 
     case H2:

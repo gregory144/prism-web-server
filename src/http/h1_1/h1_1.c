@@ -549,6 +549,9 @@ static void h1_1_parse(h1_1_t * const h1_1, uint8_t * const buffer, const size_t
     }
 
     h1_1_close(h1_1);
+  } else if (len == 0) {
+    log_append(h1_1->log, LOG_TRACE, "HTTP/1.1 EOF");
+    h1_1_close(h1_1);
   } else {
     log_append(h1_1->log, LOG_DEBUG, "Parsed request");
   }

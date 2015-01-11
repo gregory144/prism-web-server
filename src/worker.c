@@ -20,6 +20,23 @@
 #define MAX_CLIENTS 0x4000
 #define LISTEN_BACKLOG 1024
 
+static void worker_sigpipe_handler(uv_signal_t * sigpipe_handler, int signum)
+{
+  struct worker_t * worker = sigpipe_handler->data;
+  log_append(worker->log, LOG_WARN, "Caught SIGPIPE: %d", signum);
+}
+
+static void worker_sigint_handler(uv_signal_t * sigint_handler, int signum)
+{
+  struct worker_t * worker = sigint_handler->data;
+  log_append(worker->log, LOG_INFO, "Caught SIGINT: %d", signum);
+
+  if (!worker->terminate) {
+    worker->terminate = true;
+    worker_stop(worker);
+  }
+}
+
 static void alloc_pipe_read_buffer(uv_handle_t * handle, size_t suggested_size, uv_buf_t * buf)
 {
   UNUSED(handle);
@@ -45,12 +62,19 @@ static void app_write_finished(uv_write_t * req, int status)
     log_append(worker->log, LOG_ERROR, "Write error: %s", uv_err_name(status));
   }
 
+  client->pending_writes--;
+  if (client->pending_writes == 0) {
+    http_connection_t * connection = client->connection;
+    http_finished_writes(connection);
+  }
+
   free(req);
 }
 
 static bool worker_write_to_network(void * data, uint8_t * buffer, size_t length)
 {
   struct client_t * client = data;
+  client->pending_writes++;
 
   uv_write_t * req = (uv_write_t *) malloc(sizeof(uv_write_t));
   uv_buf_t wrbuf = uv_buf_init((char *) buffer, length);
@@ -169,10 +193,13 @@ static void worker_read_from_network(uv_stream_t * uv_client, ssize_t nread, con
   struct worker_t * worker = client->worker;
 
   if (nread < 0) {
+
     if (nread != UV_EOF) {
-      log_append(worker->log, LOG_ERROR, "Error reading from network: %s", uv_err_name(nread));
+      log_append(worker->log, LOG_ERROR, "Error reading from network for client %ld: %s",
+          client->id, uv_err_name(nread));
       uv_close((uv_handle_t *) uv_client, app_close_finished);
     } else {
+      log_append(worker->log, LOG_DEBUG, "EOF for client: #%ld", client->id);
       client->eof = true;
       worker_notify_eof(client);
     }
@@ -192,7 +219,9 @@ static void worker_read_from_network(uv_stream_t * uv_client, ssize_t nread, con
     log_append(worker->log, LOG_TRACE, "Passed %zu octets of data from network to TLS handler", nread);
 
   } else {
+
     worker_parse(client, (uint8_t *) buf->base, nread);
+
   }
 }
 
@@ -263,6 +292,7 @@ bool worker_init(struct worker_t * worker, struct server_config_t * config)
     tls_init();
   }
 
+  worker->terminate = false;
   worker->config = config;
   worker->plugins = NULL;
 
@@ -301,6 +331,11 @@ bool worker_init(struct worker_t * worker, struct server_config_t * config)
   }
   worker->loop.data = worker;
 
+  uv_signal_init(&worker->loop, &worker->sigpipe_handler);
+  worker->sigpipe_handler.data = worker;
+  uv_signal_init(&worker->loop, &worker->sigint_handler);
+  worker->sigint_handler.data = worker;
+
   uv_pipe_init(&worker->loop, &worker->queue, 1);
   uv_pipe_open(&worker->queue, 0);
   worker->queue.data = worker;
@@ -325,8 +360,8 @@ int worker_run(struct worker_t * worker)
     current = current->next;
   }
 
-  /*uv_signal_start(&worker->sigpipe_handler, server_sigpipe_handler, SIGPIPE);*/
-  /*uv_signal_start(&worker->sigint_handler, server_sigint_handler, SIGINT);*/
+  uv_signal_start(&worker->sigpipe_handler, worker_sigpipe_handler, SIGPIPE);
+  uv_signal_start(&worker->sigint_handler, worker_sigint_handler, SIGINT);
 
   int ret = uv_run(&worker->loop, UV_RUN_DEFAULT);
 
