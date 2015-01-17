@@ -36,9 +36,9 @@ An interoperable HTTP2 server.
 #### Required features
 
 * serious security checks
-  fuzzer using test harness to randomly generate illegal requests
+  * fuzzer using test harness to randomly generate illegal requests
 * configuration
-  * listen on secure port + non-secure port at the same time
+  * load plugins for a specific listen address only
 * graceful shutdown
 * better error handling for libuv calls
 * doxygen documentation

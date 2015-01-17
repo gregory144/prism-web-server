@@ -27,7 +27,7 @@ typedef struct {
 
   log_context_t * log;
 
-  const char * scheme;
+  bool use_tls;
   const char * hostname;
   int port;
 
@@ -81,7 +81,7 @@ enum h1_1_detect_result_e {
  */
 enum h1_1_detect_result_e h1_1_detect_connection(uint8_t * buffer, size_t len);
 
-h1_1_t * h1_1_init(void * const data, log_context_t * log, const char * scheme, const char * hostname,
+h1_1_t * h1_1_init(void * const data, log_context_t * log, bool use_tls, const char * hostname,
                    const int port, struct plugin_invoker_t * plugin_invoker, const h1_1_write_cb writer,
                    const h1_1_write_error_cb error_writer, const h1_1_close_cb closer,
                    const h1_1_request_init_cb request_init, const h1_1_upgrade_cb upgrade_cb);

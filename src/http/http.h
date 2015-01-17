@@ -31,7 +31,7 @@ typedef struct {
   log_context_t * log;
   log_context_t * hpack_log;
 
-  const char * scheme;
+  bool use_tls;
   const char * hostname;
   int port;
 
@@ -60,9 +60,12 @@ typedef struct {
 
 } http_request_data_t;
 
-http_connection_t * http_connection_init(void * const data, log_context_t * log, log_context_t * hpack_log,
-    const char * scheme, const char * hostname, const int port, struct plugin_invoker_t * plugin_invoker,
+http_connection_t * http_connection_init(void * const data, log_context_t * log,
+    log_context_t * hpack_log, struct plugin_invoker_t * plugin_invoker,
     const write_cb writer, const close_cb closer);
+
+void http_connection_set_details(http_connection_t * const connection, const bool use_tls,
+    const char * hostname, const int port);
 
 void http_connection_set_protocol(http_connection_t * const connection, const char * selected_protocol);
 

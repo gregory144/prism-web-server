@@ -24,14 +24,25 @@ struct plugin_config_t {
 
 };
 
+struct listen_address_t {
+
+  struct listen_address_t * next;
+  void * data;
+  size_t index;
+
+  bool use_tls;
+  char * hostname;
+  long port;
+
+};
+
 struct server_config_t {
 
   int argc;
   char ** argv;
 
-  long port;
-  char * hostname;
-  bool use_tls;
+  struct listen_address_t * address_list;
+
   bool start_worker;
   bool print_help;
   bool print_version;

@@ -67,9 +67,10 @@ void on_write_complete(uv_write_t * req, int status)
   uv_close((uv_handle_t *) &server_client->client, after_close);
 }
 
-static void server_on_new_connection(uv_stream_t * uv_server, int status)
+static void server_on_new_connection(uv_stream_t * uv_stream, int status)
 {
-  struct server_t * server = uv_server->data;
+  struct listen_address_t * addr = uv_stream->data;
+  struct server_t * server = addr->data;
 
   if (status == -1) {
     log_append(server->log, LOG_ERROR, "Error getting new connection: %s\n", uv_err_name(status));
@@ -82,13 +83,17 @@ static void server_on_new_connection(uv_stream_t * uv_server, int status)
   uv_tcp_init(&server->loop, client);
   client->data = server_client;
 
-  if (uv_accept(uv_server, (uv_stream_t *) client) == 0) {
+  if (uv_accept(uv_stream, (uv_stream_t *) client) == 0) {
 
     uv_write_t * write_req = &server_client->req;
     write_req->data = server_client;
 
     uv_buf_t * buf = &server_client->buf;
-    buf->base = ".";
+
+    // send the index of the listen_address_t that accepted this
+    // connection to the worker
+    char index_encoded = addr->index;
+    buf->base = &index_encoded;
     buf->len = 1;
 
     struct child_worker_t * worker = server->workers[server->round_robin_counter];
@@ -162,7 +167,7 @@ bool server_run(struct server_t * server)
   for (size_t i = 0; i < LOGO_LINES_LENGTH; i++) {
     log_append(server->log, LOG_INFO, (char *) LOGO_LINES[i]);
   }
-  log_append(server->log, LOG_INFO, "Server starting on %s:%ld", server->config->hostname, server->config->port);
+  log_append(server->log, LOG_INFO, "Server starting");
 
   if (!setup_workers(server)) {
     return false;
@@ -171,17 +176,37 @@ bool server_run(struct server_t * server)
   uv_signal_start(&server->sigpipe_handler, server_sigpipe_handler, SIGPIPE);
   uv_signal_start(&server->sigint_handler, server_sigint_handler, SIGINT);
 
-  uv_tcp_t uv_server;
-  uv_tcp_init(&server->loop, &uv_server);
-  uv_server.data = server;
+  size_t index = 0;
+  struct listen_address_t * curr = server->config->address_list;
+  while (curr) {
+    struct tcp_list_t * tcp_list = malloc(sizeof(struct tcp_list_t));
+    uv_tcp_t * tcp = &tcp_list->uv_server;
+    uv_tcp_init(&server->loop, tcp);
+    tcp->data = curr;
+    curr->data = server;
+    curr->index = index;
 
-  struct sockaddr_in bind_addr;
-  uv_ip4_addr(server->config->hostname, server->config->port, &bind_addr);
-  uv_tcp_bind(&uv_server, (const struct sockaddr *)&bind_addr, 0);
-  int r;
-  if ((r = uv_listen((uv_stream_t *) &uv_server, LISTEN_BACKLOG, server_on_new_connection))) {
-    log_append(server->log, LOG_FATAL, "Listen failed: %s", uv_err_name(r));
-    return false;
+    tcp_list->next = server->tcp_list;
+    server->tcp_list = tcp_list;
+
+    struct sockaddr_in bind_addr;
+    int r;
+    if ((r = uv_ip4_addr(curr->hostname, curr->port, &bind_addr))) {
+      log_append(server->log, LOG_FATAL, "Handling IP Address %s://%s:%ld failed: %s",
+          curr->use_tls ? "https" : "http", curr->hostname, curr->port, uv_err_name(r));
+      return false;
+    }
+    uv_tcp_bind(tcp, (const struct sockaddr *)&bind_addr, 0);
+    if ((r = uv_listen((uv_stream_t *) tcp, LISTEN_BACKLOG, server_on_new_connection))) {
+      log_append(server->log, LOG_FATAL, "Listening on %s://%s:%ld failed: %s",
+          curr->use_tls ? "https" : "http", curr->hostname, curr->port, uv_err_name(r));
+      return false;
+    } else {
+      log_append(server->log, LOG_INFO, "Listening on %s://%s:%ld",
+          curr->use_tls ? "https" : "http", curr->hostname, curr->port);
+    }
+    curr = curr->next;
+    index++;
   }
   if (uv_run(&server->loop, UV_RUN_DEFAULT)) {
     return false;
@@ -194,16 +219,27 @@ void server_stop(struct server_t * server)
   log_append(server->log, LOG_INFO, "Server shutting down...");
 
   uv_stop(&server->loop);
+
+  if (server->workers) {
+    for (size_t i = 0; i < server->config->num_workers; i++) {
+      log_append(server->log, LOG_INFO, "Killing worker: %lu...", i);
+      struct child_worker_t * worker = server->workers[i];
+      uv_process_kill(&worker->req, SIGKILL);
+    }
+  }
 }
 
 void server_init(struct server_t * server, struct server_config_t * config)
 {
   uv_loop_init(&server->loop);
 
+  server->tcp_list = NULL;
+
   server->log = &config->server_log;
   server->wire_log = &config->wire_log;
   server->data_log = &config->data_log;
   server->config = config;
+  server->workers = NULL;
 
   server->terminate = false;
   server->round_robin_counter = 0;

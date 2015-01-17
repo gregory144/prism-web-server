@@ -18,15 +18,15 @@ void print_version()
 void print_help(char * cmd)
 {
   fprintf(stdout, "Usage: %s [OPTION]...\n", cmd);
-  fprintf(stdout, "Example: %s -p %d -n localhost -i\n\n", cmd, SERVER_PORT);
-  fprintf(stdout, "  -p NUM\t\tport\n");
-  fprintf(stdout, "  -n HOSTNAME\t\thostname\n");
-  fprintf(stdout, "  -w NUM_WORKERS\tspecify the number of worker threads to handle requests\n");
-  fprintf(stdout, "  -i\t\t\tturn off TLS\n");
+  fprintf(stdout, "Example: %s -l https://%s:%d\n\n", cmd, SERVER_HOSTNAME, SERVER_PORT);
+  fprintf(stdout, "  -l ADDRESS\t\tscheme, IP address and port: http://0.0.0.0:8080\n");
+  fprintf(stdout, "  -p FILE\t\tlocation of a plugin shared library\n");
   fprintf(stdout, "  -k FILE\t\tlocation of private key file (PEM)\n");
   fprintf(stdout, "  -c FILE\t\tlocation of certificate file (PEM)\n");
-  fprintf(stdout, "  -e FILE\t\tlocation of a plugin shared library\n");
-  fprintf(stdout, "  -l LEVEL\t\tone of: (TRACE|DEBUG|INFO|WARN|ERROR|FATAL), default: WARN\n");
+  fprintf(stdout, "  -w NUM_WORKERS\tspecify the number of worker threads to handle requests\n");
+  fprintf(stdout, "  -L LEVEL\t\tone of: (TRACE|DEBUG|INFO|WARN|ERROR|FATAL), default: WARN\n");
+  fprintf(stdout, "  -h\t\t\this help message\n");
+  fprintf(stdout, "  -v\t\t\tversion information\n");
 
   print_version();
 }
@@ -37,6 +37,9 @@ static bool run_as_server(struct server_config_t * config)
   server_init(&server, config);
 
   if (!server_run(&server)) {
+    // kill child processes if they were started
+    server_stop(&server);
+
     return false;
   }
 

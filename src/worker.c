@@ -95,7 +95,7 @@ static bool app_write_cb(void * data, uint8_t * buffer, size_t length)
     log_buffer(client->data_log, LOG_TRACE, buffer, length);
   }
 
-  if (worker->config->use_tls) {
+  if (client->tls_ctx) {
     log_append(worker->log, LOG_TRACE, "Passing %zu octets of data from application to TLS handler", length);
     bool ret = tls_encrypt_data_and_pass_to_network(client->tls_ctx, buffer, length);
     log_append(worker->log, LOG_TRACE, "Passed %zu octets of data from application to TLS handler", length);
@@ -205,7 +205,7 @@ static void worker_read_from_network(uv_stream_t * uv_client, ssize_t nread, con
     }
     free(buf->base);
 
-  } else if (worker->config->use_tls) {
+  } else if (client->tls_ctx) {
 
     tls_client_ctx_t * tls_client_ctx = client->tls_ctx;
 
@@ -225,10 +225,51 @@ static void worker_read_from_network(uv_stream_t * uv_client, ssize_t nread, con
   }
 }
 
+static void worker_assign_client_details(struct client_t * client, size_t index)
+{
+  /*struct sockaddr_storage sa;*/
+  /*int sa_size = sizeof(sa);*/
+  /*int r;*/
+  /*if ((r = uv_tcp_getsockname(&client->tcp, (struct sockaddr *) &sa, &sa_size))) {*/
+    /*log_append(client->log, LOG_FATAL, "Getting address failed: %s", uv_err_name(r));*/
+    /*abort();*/
+  /*} else {*/
+    /*char dest[256];*/
+    /*int port;*/
+    /*if (sa.ss_family == AF_INET) {*/
+      /*struct sockaddr_in * in = (struct sockaddr_in *) &sa;*/
+      /*uv_ip4_name(in, dest, sizeof(dest) - 1);*/
+      /*port = ntohs(in->sin_port);*/
+    /*} else if (sa.ss_family == AF_INET6) {*/
+      /*struct sockaddr_in6 * in6 = (struct sockaddr_in6 *) &sa;*/
+      /*uv_ip6_name(in6, dest, sizeof(dest) - 1);*/
+      /*port = ntohs(in6->sin6_port);*/
+    /*} else {*/
+      /*log_append(client->log, LOG_FATAL, "Converting address failed: %s", uv_err_name(r));*/
+      /*abort();*/
+    /*}*/
+
+  /*}*/
+  log_append(client->log, LOG_TRACE, "Looking for address index: %lu", index);
+  struct listen_address_t * curr = client->worker->config->address_list;
+  for (size_t i = 0; i < index && curr != NULL; i++, curr = curr->next);
+  if (!curr) {
+    log_append(client->log, LOG_FATAL, "Could not find specified address config: %lu", index);
+    abort();
+  }
+  if (curr->use_tls) {
+    client->tls_ctx = tls_client_init(client->worker->tls_ctx, client, worker_write_to_network,
+                                      tls_cb_write_to_app);
+  }
+
+  http_connection_set_details(client->connection, curr->use_tls, curr->hostname, curr->port);
+
+  log_append(client->log, LOG_DEBUG, "Address is: %s://%s:%ld",
+      curr->use_tls ? "https" : "http", curr->hostname, curr->port);
+}
+
 static void worker_on_new_connection(uv_stream_t * pipe_s, ssize_t nread, const uv_buf_t * buf)
 {
-  UNUSED(buf);
-
   uv_pipe_t * pipe = (uv_pipe_t *) pipe_s;
   struct worker_t * worker = pipe->data;
 
@@ -259,23 +300,19 @@ static void worker_on_new_connection(uv_stream_t * pipe_s, ssize_t nread, const 
     return;
   }
 
-  char * scheme = worker->config->use_tls ? "https" : "http";
-  char * hostname = worker->config->hostname;
-  int port = worker->config->port;
+  client->connection = http_connection_init(client, &worker->config->http_log,
+      &worker->config->hpack_log, client->plugin_invoker, app_write_cb, app_close_cb);
 
-  client->connection = http_connection_init(client, &worker->config->http_log, &worker->config->hpack_log,
-                       scheme, hostname, port, client->plugin_invoker,
-                       app_write_cb, app_close_cb);
-
-  if (worker->config->use_tls) {
-    client->tls_ctx = tls_client_init(worker->tls_ctx, client, worker_write_to_network,
-                                      tls_cb_write_to_app);
-  }
 
   uv_tcp_init(&worker->loop, &client->tcp);
   client->tcp.data = client;
 
   if (uv_accept(pipe_s, (uv_stream_t *) &client->tcp) == 0) {
+
+    size_t index = (size_t) *buf->base;
+
+    worker_assign_client_details(client, index);
+
     log_append(worker->log, LOG_DEBUG, "Accepted fd %d\n", client->tcp.io_watcher.fd);
     uv_read_start((uv_stream_t *) &client->tcp, alloc_buffer, worker_read_from_network);
   } else {
@@ -288,8 +325,20 @@ static void worker_on_new_connection(uv_stream_t * pipe_s, ssize_t nread, const 
 bool worker_init(struct worker_t * worker, struct server_config_t * config)
 {
 
-  if (config->use_tls) {
+  bool use_tls = false;
+  struct listen_address_t * addr = config->address_list;
+  while (addr) {
+    if (addr->use_tls) {
+      use_tls = true;
+      break;
+    }
+    addr = addr->next;
+  }
+  if (use_tls) {
     tls_init();
+
+    worker->tls_ctx = tls_server_init(&config->tls_log, config->private_key_file, config->cert_file);
+    ASSERT_OR_RETURN_FALSE(worker->tls_ctx);
   }
 
   worker->terminate = false;
@@ -318,11 +367,6 @@ bool worker_init(struct worker_t * worker, struct server_config_t * config)
     last = current;
 
     plugin_config = plugin_config->next;
-  }
-
-  if (config->use_tls) {
-    worker->tls_ctx = tls_server_init(&config->tls_log, config->private_key_file, config->cert_file);
-    ASSERT_OR_RETURN_FALSE(worker->tls_ctx);
   }
 
   int uv_error = uv_loop_init(&worker->loop);

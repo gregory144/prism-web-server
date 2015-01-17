@@ -222,7 +222,7 @@ static bool h1_1_bad_request(h1_1_t * const h1_1)
   return h1_1_respond_with_error_code(h1_1, 400);
 }
 
-h1_1_t * h1_1_init(void * const data, log_context_t * log, const char * scheme, const char * hostname,
+h1_1_t * h1_1_init(void * const data, log_context_t * log, bool use_tls, const char * hostname,
                    const int port, struct plugin_invoker_t * plugin_invoker, const h1_1_write_cb writer,
                    const h1_1_write_error_cb error_writer, const h1_1_close_cb closer,
                    const h1_1_request_init_cb request_init, const h1_1_upgrade_cb upgrade_cb)
@@ -233,7 +233,7 @@ h1_1_t * h1_1_init(void * const data, log_context_t * log, const char * scheme, 
   h1_1->data = data;
   h1_1->log = log;
 
-  h1_1->scheme = scheme;
+  h1_1->use_tls = use_tls;
   h1_1->hostname = hostname;
   h1_1->port = port;
 
@@ -421,10 +421,10 @@ static int hp_headers_complete_cb(http_parser * http_parser)
   }
 
   // add in method, authority and scheme headers
-  char * scheme = strdup(h1_1->scheme);
+  char * scheme = h1_1->use_tls ? "https" : "http";
   header_list_unshift(h1_1->headers,
                       ":scheme", 7, false,
-                      scheme, strlen(scheme), true);
+                      scheme, strlen(scheme), false);
 
   const size_t max_int_length = 128;
   size_t authority_length = strlen(h1_1->hostname) + max_int_length + 1;

@@ -19,9 +19,16 @@ struct child_worker_t {
   uv_pipe_t pipe;
 };
 
+struct tcp_list_t {
+  uv_tcp_t uv_server;
+  struct tcp_list_t * next;
+};
+
 struct server_t {
 
   uv_loop_t loop;
+
+  struct tcp_list_t * tcp_list;
 
   log_context_t * log;
   log_context_t * data_log;

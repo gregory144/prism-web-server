@@ -10,14 +10,73 @@
 #include "plugin.h"
 #include "worker.h"
 
+static void append_address(struct server_config_t * config, struct listen_address_t * addr) {
+  addr->next = NULL;
+
+  struct listen_address_t * curr = config->address_list;
+  if (!curr) {
+    config->address_list = addr;
+  } else {
+    while (curr->next) {
+      curr = curr->next;
+    }
+    curr->next = addr;
+  }
+}
+
+static bool starts_with(char * s, char * pre)
+{
+  size_t lenpre = strlen(pre);
+  size_t lenstr = strlen(s);
+  return lenstr < lenpre ? false : strncmp(pre, s, lenpre) == 0;
+}
+
+
+static struct listen_address_t * parse_address(char * address)
+{
+  bool use_tls = false;
+  if (starts_with(address, "https://")) {
+    use_tls = true;
+  } else if (starts_with(address, "http://")) {
+    use_tls = false;
+  } else {
+    return NULL;
+  }
+  char * host = SERVER_HOSTNAME;
+  char * after_protocol = address + (use_tls ? strlen("https://") : strlen("http://"));
+  char * colon = strchr(after_protocol, ':');
+  long port = SERVER_PORT;
+  if (colon != NULL) {
+    size_t host_length = colon - after_protocol;
+    if (host_length > 0) {
+      host = malloc(host_length + 1);
+      memcpy(host, after_protocol, host_length);
+      host[host_length] = '\0';
+    }
+
+    port = strtol(colon + 1, NULL, 10);
+  } else {
+    host = strdup(after_protocol);
+  }
+  if (port < MIN_PORT || port > MAX_PORT) {
+    fprintf(stderr, "Port is out of range (%d to %d): %ld", MIN_PORT, MAX_PORT, port);
+    exit(EXIT_FAILURE);
+  }
+
+  struct listen_address_t * addr = malloc(sizeof(struct listen_address_t));
+  addr->use_tls = use_tls;
+  addr->hostname = host;
+  addr->port = port;
+
+  return addr;
+}
+
 void server_config_args_parse(struct server_config_t * config, int argc, char ** argv)
 {
   config->argc = argc;
   config->argv = argv;
 
-  config->use_tls = USE_TLS;
-  config->port = SERVER_PORT;
-  config->hostname = SERVER_HOSTNAME;
+  config->address_list = NULL;
   config->num_workers = NUM_WORKERS;
   config->private_key_file = PRIVATE_KEY_FILE_NAME;
   config->cert_file = CERTIFICATE_FILE_NAME;
@@ -33,22 +92,20 @@ void server_config_args_parse(struct server_config_t * config, int argc, char **
 
   opterr = 0;
 
-  while ((c = getopt(argc, argv, "p:n:e:k:c:w:l:iahv")) != -1) {
+  while ((c = getopt(argc, argv, "l:p:k:c:w:L:ahv")) != -1) {
+
     switch (c) {
-      case 'p': // port
-        config->port = strtol(optarg, NULL, 10);
-        if (config->port < MIN_PORT || config->port > MAX_PORT) {
-          fprintf(stderr, "Port is out of range (%d to %d): %ld", MIN_PORT, MAX_PORT, config->port);
+      case 'l': { // listen address
+        struct listen_address_t * addr = parse_address(optarg);
+        if (addr == NULL) {
+          fprintf(stderr, "Failed to parse address: %s\n", optarg);
           exit(EXIT_FAILURE);
         }
-
+        append_address(config, addr);
         break;
 
-      case 'n': // nodename (hostname)
-        config->hostname = optarg;
-        break;
-
-      case 'e': { // plugin file
+      }
+      case 'p': { // plugin file
         struct plugin_config_t * last = current_plugin;
         current_plugin = malloc(sizeof(struct plugin_config_t));
 
@@ -77,17 +134,13 @@ void server_config_args_parse(struct server_config_t * config, int argc, char **
         config->num_workers = strtol(optarg, NULL, 10);
         break;
 
-      case 'l': { // plugin file
+      case 'L': { // log level
         enum log_level_e level = log_level_from_string(optarg);
         if (level > 0) {
           config->default_log_level = level;
         }
         break;
       }
-
-      case 'i': // insecure
-        config->use_tls = false;
-        break;
 
       case 'a': // accept (start a worker process)
         config->start_worker = true;
@@ -102,7 +155,8 @@ void server_config_args_parse(struct server_config_t * config, int argc, char **
         break;
 
       case '?':
-        if (optopt == 'c' || optopt == 'k' || optopt == 'p' | optopt == 'n') {
+        if (optopt == 'l' || optopt == 'p' || optopt == 'k' || optopt == 'c' ||
+            optopt == 'w' || optopt == 'o' || optopt == 'L') {
           fprintf(stderr, "Option -%c requires an argument.\n", optopt);
         } else if (isprint(optopt)) {
           fprintf(stderr, "Unknown option `-%c'.\n", optopt);
@@ -115,4 +169,13 @@ void server_config_args_parse(struct server_config_t * config, int argc, char **
         abort();
     }
   }
+
+  if (config->address_list == NULL) {
+    struct listen_address_t * addr = malloc(sizeof(struct listen_address_t));
+    addr->use_tls = USE_TLS;
+    addr->hostname = SERVER_HOSTNAME;
+    addr->port = SERVER_PORT;
+    append_address(config, addr);
+  }
+
 }

@@ -104,14 +104,14 @@ static bool http_internal_upgrade_cb(void * data, char * settings_base64, header
 static void set_protocol_h1_1(http_connection_t * connection)
 {
   connection->protocol = H1_1;
-  connection->handler = h1_1_init(connection, connection->log, connection->scheme, connection->hostname,
+  connection->handler = h1_1_init(connection, connection->log, connection->use_tls, connection->hostname,
                                   connection->port, connection->plugin_invoker, http_internal_write_cb, http_internal_write_error_cb,
                                   http_internal_close_cb, http_internal_request_init_cb, http_internal_upgrade_cb);
 }
 
-http_connection_t * http_connection_init(void * const data, log_context_t * log, log_context_t * hpack_log,
-    const char * scheme, const char * hostname, const int port, struct plugin_invoker_t * plugin_invoker,
-    const write_cb writer, const close_cb closer)
+http_connection_t * http_connection_init(void * const data, log_context_t * log,
+    log_context_t * hpack_log, struct plugin_invoker_t * plugin_invoker, const write_cb writer,
+    const close_cb closer)
 {
   http_connection_t * connection = malloc(sizeof(http_connection_t));
   ASSERT_OR_RETURN_NULL(connection);
@@ -120,9 +120,9 @@ http_connection_t * http_connection_init(void * const data, log_context_t * log,
   connection->log = log;
   connection->hpack_log = hpack_log;
 
-  connection->scheme = scheme;
-  connection->hostname = hostname;
-  connection->port = port;
+  connection->use_tls = false;
+  connection->hostname = NULL;
+  connection->port = -1;
 
   connection->plugin_invoker = plugin_invoker;
   connection->writer = writer;
@@ -139,6 +139,14 @@ http_connection_t * http_connection_init(void * const data, log_context_t * log,
   connection->closed = false;
 
   return connection;
+}
+
+void http_connection_set_details(http_connection_t * const connection, const bool use_tls,
+    const char * hostname, const int port)
+{
+  connection->use_tls = use_tls;
+  connection->hostname = hostname;
+  connection->port = port;
 }
 
 void http_connection_set_protocol(http_connection_t * const connection, const char * selected_protocol)
