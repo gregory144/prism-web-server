@@ -23,6 +23,11 @@ struct server_client_t {
   uv_buf_t buf;
 };
 
+void server_close(struct server_t * server)
+{
+  uv_stop(&server->loop);
+}
+
 static void server_sigpipe_handler(uv_signal_t * sigpipe_handler, int signum)
 {
   struct server_t * server = sigpipe_handler->data;
@@ -34,18 +39,31 @@ static void server_sigint_handler(uv_signal_t * sigint_handler, int signum)
   struct server_t * server = sigint_handler->data;
   log_append(server->log, LOG_INFO, "Caught SIGINT: %d", signum);
 
-  if (!server->terminate) {
-    server->terminate = true;
-    server_stop(server);
+  server_stop(server);
+}
+
+static void process_handle_closed(uv_handle_t * req)
+{
+  struct child_worker_t * worker = req->data;
+  struct server_t * server = worker->server;
+
+  if (server->running_workers < 1) {
+    server_close(server);
   }
 }
 
 static void close_process_handle(uv_process_t * req, int64_t exit_status, int term_signal)
 {
-  struct server_t * server = req->data;
-  log_append(server->log, LOG_INFO, "Process exited with status %" PRId64 ", signal %d\n", exit_status, term_signal);
+  struct child_worker_t * worker = req->data;
+  struct server_t * server = worker->server;
 
-  uv_close((uv_handle_t *) req, NULL);
+  worker->stopped = true;
+  server->running_workers--;
+  log_append(server->log, LOG_INFO,
+      "Process exited with status %" PRId64 ", signal %d. %zu remaining workers\n",
+      exit_status, term_signal, server->running_workers);
+
+  uv_close((uv_handle_t *) req, process_handle_closed);
 }
 
 static void after_close(uv_handle_t * handle)
@@ -133,6 +151,8 @@ static bool setup_workers(struct server_t * server)
 
   while (num_workers--) {
     struct child_worker_t * worker = calloc(sizeof(struct child_worker_t), 1);
+    worker->server = server;
+    worker->stopped = false;
     server->workers[num_workers] = worker;
     uv_pipe_init(&server->loop, &worker->pipe, 1);
 
@@ -151,13 +171,14 @@ static bool setup_workers(struct server_t * server)
     worker->options.file = args[0];
     worker->options.args = args;
 
-    worker->req.data = server;
+    worker->req.data = worker;
 
     int uv_error = uv_spawn(&server->loop, &worker->req, &worker->options);
     if (uv_error < 0) {
       log_append(server->log, LOG_FATAL, "Failed to spawn process: %s", uv_err_name(uv_error));
       return false;
     }
+    server->running_workers++;
   }
   return true;
 }
@@ -192,7 +213,7 @@ bool server_run(struct server_t * server)
     struct sockaddr_in bind_addr;
     int r;
     if ((r = uv_ip4_addr(curr->hostname, curr->port, &bind_addr))) {
-      log_append(server->log, LOG_FATAL, "Handling IP Address %s://%s:%ld failed: %s",
+      log_append(server->log, LOG_FATAL, "Initializing bind on address %s://%s:%ld failed: %s",
           curr->use_tls ? "https" : "http", curr->hostname, curr->port, uv_err_name(r));
       return false;
     }
@@ -216,15 +237,21 @@ bool server_run(struct server_t * server)
 
 void server_stop(struct server_t * server)
 {
-  log_append(server->log, LOG_INFO, "Server shutting down...");
+  if (!server->stopping) {
+    server->stopping = true;
+    log_append(server->log, LOG_INFO, "Server shutting down...");
 
-  uv_stop(&server->loop);
-
-  if (server->workers) {
-    for (size_t i = 0; i < server->config->num_workers; i++) {
-      log_append(server->log, LOG_INFO, "Killing worker: %lu...", i);
-      struct child_worker_t * worker = server->workers[i];
-      uv_process_kill(&worker->req, SIGKILL);
+    if (server->running_workers > 0) {
+      for (size_t i = 0; i < server->config->num_workers; i++) {
+        struct child_worker_t * worker = server->workers[i];
+        if (!worker->stopped) {
+          worker->stopped = true;
+          log_append(server->log, LOG_INFO, "Killing process: %d...", worker->req.pid);
+          uv_process_kill(&worker->req, SIGKILL);
+        }
+      }
+    } else {
+      server_close(server);
     }
   }
 }
@@ -241,8 +268,9 @@ void server_init(struct server_t * server, struct server_config_t * config)
   server->config = config;
   server->workers = NULL;
 
-  server->terminate = false;
+  server->stopping = false;
   server->round_robin_counter = 0;
+  server->running_workers = 0;
 
   uv_signal_init(&server->loop, &server->sigpipe_handler);
   server->sigpipe_handler.data = server;

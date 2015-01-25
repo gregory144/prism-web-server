@@ -40,6 +40,7 @@ An interoperable HTTP2 server.
 * configuration
   * load plugins for a specific listen address only
 * graceful shutdown
+  * send custom signal to child processes to gracefully shutdown
 * better error handling for libuv calls
 * doxygen documentation
 * complete spec compliance

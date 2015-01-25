@@ -9,7 +9,6 @@
 #define USE_TLS true
 #define MIN_PORT 1
 #define MAX_PORT 0xFFFF
-#define NUM_WORKERS 4
 #define SERVER_HOSTNAME "0.0.0.0"
 #define SERVER_PORT 8443
 #define DEFAULT_LOG_LEVEL LOG_WARN

@@ -54,13 +54,19 @@ static struct listen_address_t * parse_address(char * address)
       host[host_length] = '\0';
     }
 
-    port = strtol(colon + 1, NULL, 10);
+    char * endptr = NULL;
+    port = strtol(colon + 1, &endptr, 10);
+    if (*endptr != '\0' || errno == ERANGE) {
+      fprintf(stderr, "Invalid port in address \"%s\": %s\n", address, colon + 1);
+      exit(EXIT_FAILURE);
+    }
+    if (port < MIN_PORT || port > MAX_PORT) {
+      fprintf(stderr, "Port is out of range (%d to %d) in address \"%s\": %ld\n",
+          MIN_PORT, MAX_PORT, address, port);
+      exit(EXIT_FAILURE);
+    }
   } else {
     host = strdup(after_protocol);
-  }
-  if (port < MIN_PORT || port > MAX_PORT) {
-    fprintf(stderr, "Port is out of range (%d to %d): %ld", MIN_PORT, MAX_PORT, port);
-    exit(EXIT_FAILURE);
   }
 
   struct listen_address_t * addr = malloc(sizeof(struct listen_address_t));
@@ -77,7 +83,8 @@ void server_config_args_parse(struct server_config_t * config, int argc, char **
   config->argv = argv;
 
   config->address_list = NULL;
-  config->num_workers = NUM_WORKERS;
+  bool num_workers_set = false;
+  config->num_workers = 0;
   config->private_key_file = PRIVATE_KEY_FILE_NAME;
   config->cert_file = CERTIFICATE_FILE_NAME;
   config->plugin_configs = NULL;
@@ -130,9 +137,16 @@ void server_config_args_parse(struct server_config_t * config, int argc, char **
         config->cert_file = optarg;
         break;
 
-      case 'w': // num workers
-        config->num_workers = strtol(optarg, NULL, 10);
+      case 'w': { // num workers
+        char * endptr = NULL;
+        config->num_workers = strtol(optarg, &endptr, 10);
+        if (*endptr != '\0' || errno == ERANGE) {
+          fprintf(stderr, "Invalid number of workers: %s\n", optarg);
+          exit(EXIT_FAILURE);
+        }
+        num_workers_set = true;
         break;
+      }
 
       case 'L': { // log level
         enum log_level_e level = log_level_from_string(optarg);
@@ -158,16 +172,32 @@ void server_config_args_parse(struct server_config_t * config, int argc, char **
         if (optopt == 'l' || optopt == 'p' || optopt == 'k' || optopt == 'c' ||
             optopt == 'w' || optopt == 'o' || optopt == 'L') {
           fprintf(stderr, "Option -%c requires an argument.\n", optopt);
+          exit(EXIT_FAILURE);
         } else if (isprint(optopt)) {
           fprintf(stderr, "Unknown option `-%c'.\n", optopt);
+          exit(EXIT_FAILURE);
         } else {
           fprintf(stderr, "Unknown option character `\\x%x'.\n", optopt);
+          exit(EXIT_FAILURE);
         }
         break;
 
       default:
         abort();
     }
+  }
+
+  if (!num_workers_set) {
+    // set default number of workers to the number of cpus
+    uv_cpu_info_t * cpu_infos;
+    int count;
+    int r = uv_cpu_info(&cpu_infos, &count);
+    if (r < 0) {
+      fprintf(stderr, "Unable to determine number of processors: %s\n", uv_strerror(r));
+      exit(EXIT_FAILURE);
+    }
+    config->num_workers = count;
+    uv_free_cpu_info(cpu_infos, count);
   }
 
   if (config->address_list == NULL) {

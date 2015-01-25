@@ -14,9 +14,11 @@
 #include "server_config.h"
 
 struct child_worker_t {
+  struct server_t * server;
   uv_process_t req;
   uv_process_options_t options;
   uv_pipe_t pipe;
+  bool stopped;
 };
 
 struct tcp_list_t {
@@ -36,11 +38,12 @@ struct server_t {
 
   struct server_config_t * config;
 
-  bool terminate;
+  bool stopping;
   uv_signal_t sigpipe_handler;
   uv_signal_t sigint_handler;
 
   struct child_worker_t ** workers;
+  size_t running_workers;
   size_t round_robin_counter;
 
 };

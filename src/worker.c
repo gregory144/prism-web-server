@@ -396,7 +396,6 @@ bool worker_init(struct worker_t * worker, struct server_config_t * config)
 
 int worker_run(struct worker_t * worker)
 {
-
   struct plugin_list_t * current = worker->plugins;
 
   while (current != NULL) {
@@ -407,7 +406,11 @@ int worker_run(struct worker_t * worker)
   uv_signal_start(&worker->sigpipe_handler, worker_sigpipe_handler, SIGPIPE);
   uv_signal_start(&worker->sigint_handler, worker_sigint_handler, SIGINT);
 
+  log_append(worker->log, LOG_INFO, "Worker running...");
+
   int ret = uv_run(&worker->loop, UV_RUN_DEFAULT);
+
+  log_append(worker->log, LOG_INFO, "Worker no longer running...");
 
   return ret;
 }
