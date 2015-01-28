@@ -1,6 +1,4 @@
 html/
 latex/
-Makefile
-Makefile.in
 Doxyfile
 doxyfile.stamp

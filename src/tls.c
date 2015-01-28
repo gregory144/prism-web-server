@@ -521,7 +521,7 @@ bool tls_set_protocol(tls_client_ctx_t * client_ctx)
       return true;
     }
   } else {
-#if HAVE_ALPN
+#ifdef HAVE_ALPN
     SSL_get0_alpn_selected(client_ctx->ssl, &proto, &proto_len);
 
     if (proto) {

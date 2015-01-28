@@ -1,10 +1,10 @@
+#include "config.h"
+
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-
-#include "../config.h"
 
 #include "util.h"
 #include "binary_buffer.h"

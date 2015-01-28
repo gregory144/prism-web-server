@@ -18,6 +18,10 @@
 
 #include "h2_test_cmd.h"
 
+#ifndef H2_TEST_FILES_DIR
+  #define H2_TEST_FILES_DIR "./tests"
+#endif
+
 #define MAX_TEST_FILES 1024
 
 static size_t num_test_files;
@@ -480,7 +484,7 @@ void assert_frames_equal(h2_frame_t * expected, h2_frame_t * actual)
 
 h2_test_cmd_list_t * read_cmd(char * file)
 {
-  printf("%-30s %s\n", "Starting test...", file);
+  printf("%-20s %s\n", "Starting test...", file);
   FILE * fp = fopen(file, "r");
   if (!fp) {
     abort();
@@ -495,9 +499,9 @@ h2_test_cmd_list_t * read_cmd(char * file)
 
 void test_sequence_file(const char * file_name)
 {
-  size_t file_length = strlen(file_name) + 32;
+  size_t file_length = strlen(file_name) + 2048;
   char in_file[file_length];
-  snprintf(in_file, file_length, "./tests/%s", file_name);
+  snprintf(in_file, file_length, "%s/%s", H2_TEST_FILES_DIR, file_name);
 
   uint8_t preface[] = {
     "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
@@ -605,8 +609,9 @@ void test_sequence_file(const char * file_name)
 
 void find_test_files()
 {
+  printf("Looking in %s for tests\n", H2_TEST_FILES_DIR);
   struct dirent * dir;
-  DIR * d = opendir("tests");
+  DIR * d = opendir(H2_TEST_FILES_DIR);
   if (d)
   {
     while ((dir = readdir(d)) != NULL)
@@ -619,6 +624,8 @@ void find_test_files()
     }
 
     closedir(d);
+  } else {
+    abort();
   }
 }
 
