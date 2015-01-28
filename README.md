@@ -16,18 +16,23 @@ An interoperable HTTP2 server.
 
 ## Build from git
 
-1. ./autogen.sh
-1. ./configure CC=clang
-1. ./make
-1. ./src/prism
+    mkdir build && cd build
+    CC=clang cmake -DCMAKE_BUILD_TYPE=Release ..
+    make
+    make test
 
+## Run
+
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout key.pem -out cert.pem
+    ./bin/prism -L INFO -p ./lib/libfiles_plugin.so
 
 ## Dependencies
 
 * libuv
 * pthreads
 * openssl libssl/libcrypto (1.0.2 for ALPN)
-* zlib
+* flex & bison
+* check unit test framework
 
 * joyent http parser [https://github.com/joyent/http-parser] (already in repo, see src/http/h1_1/http_parser.c)
 
