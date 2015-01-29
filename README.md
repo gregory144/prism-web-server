@@ -28,7 +28,11 @@ An interoperable HTTP2 server.
 
 ## Dependencies
 
-* libuv
+For Ubuntu:
+
+    apt-get install build-essential cmake libssl-dev flex bison doxygen
+
+* libuv (you'll have to build from source or find a package - there isn't one in the default repos - https://github.com/libuv/libuv)
 * pthreads
 * openssl libssl/libcrypto (1.0.2 for ALPN)
 * flex & bison

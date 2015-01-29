@@ -14,12 +14,8 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-# configure a header file to pass some of the CMake settings
-# to the source code
-configure_file (
-  "${PROJECT_SOURCE_DIR}/config.h.in"
-  "${CMAKE_BINARY_DIR}/config.h"
-  )
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GNU_SOURCE")
+add_definitions(-std=c99)
 
 enable_testing()
 
@@ -34,15 +30,24 @@ find_package(LibUV REQUIRED)
 include_directories(SYSTEM ${LIBUV_INCLUDE_DIRS})
 
 find_package(OpenSSL REQUIRED)
-include_directories(SYSTEM ${OPENSSL_ROOT_DIR/include})
-CHECK_FUNCTION_EXISTS(SSL_CTX_set_alpn_select_cb HAVE_ALPN)
+include_directories(SYSTEM ${OPENSSL_INCLUDE_DIR})
+list(APPEND CMAKE_REQUIRED_INCLUDES ${OPENSSL_INCLUDE_DIR})
+list(APPEND CMAKE_REQUIRED_LIBRARIES ${OPENSSL_LIBRARIES})
+CHECK_SYMBOL_EXISTS(SSL_CTX_set_alpn_select_cb openssl/ssl.h HAVE_ALPN)
+list(REMOVE_ITEM CMAKE_REQUIRED_LIBRARIES ${OPENSSL_LIBRARIES})
+list(REMOVE_ITEM CMAKE_REQUIRED_INCLUDES ${OPENSSL_INCLUDE_DIR})
 
 include_directories(${CMAKE_BINARY_DIR})
 include_directories(src)
 include_directories(src/util)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GNU_SOURCE")
-add_definitions(-std=c99)
+# configure a header file to pass some of the CMake settings
+# to the source code
+configure_file (
+  "${PROJECT_SOURCE_DIR}/config.h.in"
+  "${CMAKE_BINARY_DIR}/config.h"
+  )
+
 
 add_subdirectory(src)
 add_subdirectory(docs)
