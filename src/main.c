@@ -5,14 +5,22 @@
 #include <unistd.h>
 #include <ctype.h>
 
+#include <uv.h>
+
 #include "server_config.h"
 #include "server.h"
 #include "worker.h"
 
-
 void print_version()
 {
-  fprintf(stdout, "%s\n", PACKAGE_STRING);
+  fprintf(stdout, "%s %s\n", PACKAGE_STRING, BUILD_TIMESTAMP);
+  if (strcmp(GIT_BRANCH, "") != 0 && strcmp(GIT_COMMIT_HASH, "") != 0) {
+    fprintf(stdout, "Git: %s %s\n", GIT_BRANCH, GIT_COMMIT_HASH);
+  } else if (strcmp(GIT_BRANCH, "") == 0 && strcmp(GIT_COMMIT_HASH, "") != 0) {
+    fprintf(stdout, "Git: %s\n", GIT_COMMIT_HASH);
+  }
+  fprintf(stdout, "\tLibUV %s\n", uv_version_string());
+  fprintf(stdout, "\t%s (build: %s)\n", SSLeay_version(SSLEAY_VERSION), OPENSSL_BUILD_VERSION);
 }
 
 void print_help(char * cmd)

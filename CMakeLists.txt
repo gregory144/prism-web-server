@@ -41,13 +41,36 @@ include_directories(${CMAKE_BINARY_DIR})
 include_directories(src)
 include_directories(src/util)
 
+find_program(FOUND_GIT git)
+
+if (FOUND_GIT)
+
+  # Get the current working branch
+  execute_process(
+    COMMAND git rev-parse --abbrev-ref HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_BRANCH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+
+  # Get the latest abbreviated commit hash of the working branch
+  execute_process(
+    COMMAND git log -1 --format=%h
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_COMMIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+
+endif(FOUND_GIT)
+
+string(TIMESTAMP BUILD_TIMESTAMP UTC)
+
 # configure a header file to pass some of the CMake settings
 # to the source code
 configure_file (
   "${PROJECT_SOURCE_DIR}/config.h.in"
   "${CMAKE_BINARY_DIR}/config.h"
   )
-
 
 add_subdirectory(src)
 add_subdirectory(docs)
