@@ -10,7 +10,7 @@ hash_table_t * ht;
 
 void setup_ht_strings()
 {
-  ht = hash_table_init_with_string_keys(free);
+  ht = hash_table_init_with_string_keys(NULL, free);
 }
 
 void teardown_ht_strings()
@@ -89,7 +89,7 @@ END_TEST
 
 void setup_ht_ints()
 {
-  ht = hash_table_init_with_int_keys(free);
+  ht = hash_table_init_with_int_keys(NULL, free);
 }
 
 void teardown_ht_ints()

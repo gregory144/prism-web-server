@@ -42,48 +42,53 @@ static int int_cmp_key(const void * const key1, const void * const key2)
 }
 
 hash_table_t * hash_table_init_with_string_keys(
+  hash_table_t * ht,
   hash_table_free_func_t free_value
 )
 {
 
   return hash_table_init_with_string_keys_and_capacity(
-           DEFAULT_HASH_TABLE_INITIAL_CAPACITY, free_value);
+           ht, DEFAULT_HASH_TABLE_INITIAL_CAPACITY, free_value);
 
 }
 
 hash_table_t * hash_table_init_with_string_keys_and_capacity(
+  hash_table_t * ht,
   size_t initial_capacity,
   hash_table_free_func_t free_value
 )
 {
 
-  return hash_table_init_with_capacity(string_hash, string_cmp_key,
+  return hash_table_init_with_capacity(ht, string_hash, string_cmp_key,
                                        initial_capacity, free, free_value);
 
 }
 
 hash_table_t * hash_table_init_with_int_keys(
+  hash_table_t * ht,
   hash_table_free_func_t free_value
 )
 {
 
   return hash_table_init_with_int_keys_and_capacity(
-           DEFAULT_HASH_TABLE_INITIAL_CAPACITY, free_value);
+           ht, DEFAULT_HASH_TABLE_INITIAL_CAPACITY, free_value);
 
 }
 
 hash_table_t * hash_table_init_with_int_keys_and_capacity(
+  hash_table_t * ht,
   size_t initial_capacity,
   hash_table_free_func_t free_value
 )
 {
 
-  return hash_table_init_with_capacity(int_hash, int_cmp_key,
+  return hash_table_init_with_capacity(ht, int_hash, int_cmp_key,
                                        initial_capacity, free, free_value);
 
 }
 
 hash_table_t * hash_table_init(
+  hash_table_t * ht,
   hash_table_hash_func_t hash_func,
   hash_table_cmp_key_func_t cmp_key_func,
   hash_table_free_func_t free_key,
@@ -91,12 +96,13 @@ hash_table_t * hash_table_init(
 )
 {
 
-  return hash_table_init_with_capacity(hash_func, cmp_key_func,
+  return hash_table_init_with_capacity(ht, hash_func, cmp_key_func,
                                        DEFAULT_HASH_TABLE_INITIAL_CAPACITY, free_key, free_value);
 
 }
 
 hash_table_t * hash_table_init_with_capacity(
+  hash_table_t * ht,
   hash_table_hash_func_t hash_func,
   hash_table_cmp_key_func_t cmp_key_func,
   size_t initial_capacity,
@@ -104,24 +110,29 @@ hash_table_t * hash_table_init_with_capacity(
   hash_table_free_func_t free_value
 )
 {
+  bool free_on_err = false;
+  if (!ht) {
+    free_on_err = true;
+    ht = malloc(sizeof(hash_table_t));
+  }
+  ASSERT_OR_RETURN_NULL(ht);
 
-  hash_table_t * table = malloc(sizeof(hash_table_t));
-  ASSERT_OR_RETURN_NULL(table);
+  ht->buckets = calloc(initial_capacity, sizeof(hash_table_entry_t *));
 
-  table->buckets = calloc(initial_capacity, sizeof(hash_table_entry_t *));
-
-  if (!table->buckets) {
-    free(table);
+  if (!ht->buckets) {
+    if (free_on_err) {
+      free(ht);
+    }
     return NULL;
   }
 
-  table->hash_func = hash_func;
-  table->cmp_key_func = cmp_key_func;
-  table->size = 0;
-  table->capacity = initial_capacity;
-  table->free_key = free_key;
-  table->free_value = free_value;
-  return table;
+  ht->hash_func = hash_func;
+  ht->cmp_key_func = cmp_key_func;
+  ht->size = 0;
+  ht->capacity = initial_capacity;
+  ht->free_key = free_key;
+  ht->free_value = free_value;
+  return ht;
 }
 
 static size_t hash_key(const hash_table_t * const table, size_t capacity, const void * const key)

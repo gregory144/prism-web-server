@@ -219,7 +219,7 @@ h2_t * h2_init(void * const data, log_context_t * log, log_context_t * hpack_log
     return NULL;
   }
 
-  h2->streams = hash_table_init_with_int_keys(h2_stream_free);
+  h2->streams = hash_table_init_with_int_keys(NULL, h2_stream_free);
 
   if (!h2->streams) {
     h2_free(h2);
@@ -1468,7 +1468,7 @@ static bool h2_incoming_frame_priority(h2_t * const h2, h2_frame_priority_t * co
   h2_stream_t * stream = h2_stream_get(h2, frame->stream_id);
 
   if (!stream) {
-    h2_emit_error_and_close(h2, frame->stream_id, H2_ERROR_PROTOCOL_ERROR, "Unknown stream id: %u",
+    log_append(h2->log, LOG_DEBUG, "Unknown stream id for priority frame: %u",
                          frame->stream_id);
     return true;
   }

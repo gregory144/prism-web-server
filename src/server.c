@@ -56,9 +56,9 @@ static void signal_handler_closed(uv_handle_t * handle)
 
 static void worker_pipe_closed(uv_handle_t * handle)
 {
-  struct child_worker_t * child_worker = handle->data;
-  struct server_t * server = child_worker->server;
-  free(child_worker);
+  struct worker_process_t * worker_process = handle->data;
+  struct server_t * server = worker_process->server;
+  free(worker_process);
 
   server->active_workers--;
 
@@ -77,7 +77,7 @@ static void tcp_listener_closed(uv_handle_t * handle)
 
 static void process_handle_closed(uv_handle_t * req)
 {
-  struct child_worker_t * worker = req->data;
+  struct worker_process_t * worker = req->data;
   struct server_t * server = worker->server;
 
   uv_close((uv_handle_t *) &worker->pipe, worker_pipe_closed);
@@ -85,7 +85,7 @@ static void process_handle_closed(uv_handle_t * req)
 
 static void close_process_handle(uv_process_t * req, int64_t exit_status, int term_signal)
 {
-  struct child_worker_t * worker = req->data;
+  struct worker_process_t * worker = req->data;
   struct server_t * server = worker->server;
 
   worker->stopped = true;
@@ -144,7 +144,7 @@ static void server_on_new_connection(uv_stream_t * uv_stream, int status)
     buf->base = &index_encoded;
     buf->len = 1;
 
-    struct child_worker_t * worker = server->workers[server->round_robin_counter];
+    struct worker_process_t * worker = server->workers[server->round_robin_counter];
 
     log_append(server->log, LOG_DEBUG, "Server %d: Accepted fd %d\n", getpid(), client->io_watcher.fd);
 
@@ -177,10 +177,10 @@ static bool setup_workers(struct server_t * server)
 
   int num_workers = server->config->num_workers;
 
-  server->workers = malloc(sizeof(struct child_worker_t *) * num_workers);
+  server->workers = malloc(sizeof(struct worker_process_t *) * num_workers);
 
   while (num_workers--) {
-    struct child_worker_t * worker = calloc(sizeof(struct child_worker_t), 1);
+    struct worker_process_t * worker = calloc(sizeof(struct worker_process_t), 1);
     worker->server = server;
     worker->stopped = false;
     server->workers[num_workers] = worker;
@@ -286,7 +286,7 @@ void server_stop(struct server_t * server)
 
     if (server->active_workers > 0) {
       for (size_t i = 0; i < server->config->num_workers; i++) {
-        struct child_worker_t * worker = server->workers[i];
+        struct worker_process_t * worker = server->workers[i];
         if (!worker->stopped) {
           worker->stopped = true;
           log_append(server->log, LOG_DEBUG, "Killing process: %d...", worker->req.pid);

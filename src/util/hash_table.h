@@ -41,24 +41,29 @@ typedef struct {
 } hash_table_iter_t;
 
 hash_table_t * hash_table_init_with_string_keys(
+  hash_table_t * ht,
   hash_table_free_func_t free_value
 );
 
 hash_table_t * hash_table_init_with_string_keys_and_capacity(
+  hash_table_t * ht,
   size_t initial_capacity,
   hash_table_free_func_t free_value
 );
 
 hash_table_t * hash_table_init_with_int_keys(
+  hash_table_t * ht,
   hash_table_free_func_t free_value
 );
 
 hash_table_t * hash_table_init_with_int_keys_and_capacity(
+  hash_table_t * ht,
   size_t initial_capacity,
   hash_table_free_func_t free_value
 );
 
 hash_table_t * hash_table_init_with_capacity(
+  hash_table_t * ht,
   hash_table_hash_func_t hash_func,
   hash_table_cmp_key_func_t cmp_key_func,
   size_t initial_capacity,
@@ -67,6 +72,7 @@ hash_table_t * hash_table_init_with_capacity(
 );
 
 hash_table_t * hash_table_init(
+  hash_table_t * ht,
   hash_table_hash_func_t hash_func,
   hash_table_cmp_key_func_t cmp_key_func,
   hash_table_free_func_t free_key,

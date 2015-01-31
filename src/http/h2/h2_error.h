@@ -78,7 +78,13 @@ enum h2_error_code_e {
    * The underlying transport has properties that do not meet the minimum
    * requirements imposed by this document (see Section 9.2) or the endpoint.
    */
-  H2_ERROR_INADEQUATE_SECURITY
+  H2_ERROR_INADEQUATE_SECURITY,
+
+  /**
+   * The endpoint requires that HTTP/1.1 be used
+   * instead of HTTP/2.
+   */
+  HTTP_1_1_REQUIRED
 
 };
 

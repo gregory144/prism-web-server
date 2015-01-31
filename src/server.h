@@ -13,7 +13,7 @@
 #include "plugin.h"
 #include "server_config.h"
 
-struct child_worker_t {
+struct worker_process_t {
   struct server_t * server;
   uv_process_t req;
   uv_process_options_t options;
@@ -44,7 +44,7 @@ struct server_t {
   uv_signal_t sigint_handler;
   size_t active_signal_handlers;
 
-  struct child_worker_t ** workers;
+  struct worker_process_t ** workers;
   size_t active_workers;
   size_t round_robin_counter;
 
