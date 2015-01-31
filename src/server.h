@@ -31,6 +31,7 @@ struct server_t {
   uv_loop_t loop;
 
   struct tcp_list_t * tcp_list;
+  size_t active_listeners;
 
   log_context_t * log;
   log_context_t * data_log;
@@ -41,9 +42,10 @@ struct server_t {
   bool stopping;
   uv_signal_t sigpipe_handler;
   uv_signal_t sigint_handler;
+  size_t active_signal_handlers;
 
   struct child_worker_t ** workers;
-  size_t running_workers;
+  size_t active_workers;
   size_t round_robin_counter;
 
 };
@@ -53,5 +55,7 @@ void server_init(struct server_t *, struct server_config_t * config);
 bool server_run(struct server_t * server);
 
 void server_stop(struct server_t * server);
+
+void server_free(struct server_t * server);
 
 #endif

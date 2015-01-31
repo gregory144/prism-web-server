@@ -29,12 +29,41 @@ static void worker_sigpipe_handler(uv_signal_t * sigpipe_handler, int signum)
 static void worker_sigint_handler(uv_signal_t * sigint_handler, int signum)
 {
   struct worker_t * worker = sigint_handler->data;
-  log_append(worker->log, LOG_INFO, "Caught SIGINT: %d", signum);
+  log_append(worker->log, LOG_DEBUG, "Caught SIGINT: %d", signum);
+}
 
-  if (!worker->terminate) {
-    worker->terminate = true;
-    worker_stop(worker);
+static void worker_sigterm_handler(uv_signal_t * sigterm_handler, int signum)
+{
+  struct worker_t * worker = sigterm_handler->data;
+  log_append(worker->log, LOG_DEBUG, "Caught SIGTERM: %d", signum);
+
+  worker_stop(worker);
+}
+
+static void worker_stop_continue(struct worker_t * worker)
+{
+  if (!worker->active_queue && worker->active_signal_handlers < 1) {
+    log_append(worker->log, LOG_TRACE, "Closed worker handles...");
+    uv_stop(&worker->loop);
   }
+}
+
+static void signal_handler_closed(uv_handle_t * handle)
+{
+  struct worker_t * worker = handle->data;
+
+  worker->active_signal_handlers--;
+
+  worker_stop_continue(worker);
+}
+
+static void worker_queue_closed(uv_handle_t * handle)
+{
+  struct worker_t * worker = handle->data;
+
+  worker->active_queue = false;
+
+  worker_stop_continue(worker);
 }
 
 static void alloc_pipe_read_buffer(uv_handle_t * handle, size_t suggested_size, uv_buf_t * buf)
@@ -121,20 +150,19 @@ static void uv_cb_shutdown(uv_shutdown_t * shutdown_req, int status)
 
   if (status) {
     log_append(client->log, LOG_ERROR, "Shutdown error, client: %zu: %s", client->id, uv_strerror(status));
-  }
-
-  if (!client->closing) {
+    if (!uv_is_closing((uv_handle_t *) &client->tcp)){
+      uv_close((uv_handle_t *) &client->tcp, app_close_finished);
+    }
+  } else if (!client->closing) {
     client->closing = true;
     log_append(client->log, LOG_TRACE, "Closing client handle: %zu", client->id);
     uv_close((uv_handle_t *) &client->tcp, app_close_finished);
   }
-
-  free(shutdown_req);
 }
 
 static void worker_close(struct client_t * client)
 {
-  uv_shutdown_t * shutdown_req = malloc(sizeof(uv_shutdown_t));
+  uv_shutdown_t * shutdown_req = &client->worker->shutdown_req;
   shutdown_req->data = client;
   uv_shutdown(shutdown_req, (uv_stream_t *) &client->tcp, uv_cb_shutdown);
 }
@@ -204,7 +232,6 @@ static void worker_read_from_network(uv_stream_t * uv_client, ssize_t nread, con
       worker_notify_eof(client);
     }
     free(buf->base);
-
   } else if (client->tls_ctx) {
 
     tls_client_ctx_t * tls_client_ctx = client->tls_ctx;
@@ -227,29 +254,6 @@ static void worker_read_from_network(uv_stream_t * uv_client, ssize_t nread, con
 
 static void worker_assign_client_details(struct client_t * client, size_t index)
 {
-  /*struct sockaddr_storage sa;*/
-  /*int sa_size = sizeof(sa);*/
-  /*int r;*/
-  /*if ((r = uv_tcp_getsockname(&client->tcp, (struct sockaddr *) &sa, &sa_size))) {*/
-    /*log_append(client->log, LOG_FATAL, "Getting address failed: %s", uv_err_name(r));*/
-    /*abort();*/
-  /*} else {*/
-    /*char dest[256];*/
-    /*int port;*/
-    /*if (sa.ss_family == AF_INET) {*/
-      /*struct sockaddr_in * in = (struct sockaddr_in *) &sa;*/
-      /*uv_ip4_name(in, dest, sizeof(dest) - 1);*/
-      /*port = ntohs(in->sin_port);*/
-    /*} else if (sa.ss_family == AF_INET6) {*/
-      /*struct sockaddr_in6 * in6 = (struct sockaddr_in6 *) &sa;*/
-      /*uv_ip6_name(in6, dest, sizeof(dest) - 1);*/
-      /*port = ntohs(in6->sin6_port);*/
-    /*} else {*/
-      /*log_append(client->log, LOG_FATAL, "Converting address failed: %s", uv_err_name(r));*/
-      /*abort();*/
-    /*}*/
-
-  /*}*/
   log_append(client->log, LOG_TRACE, "Looking for address index: %lu", index);
   struct listen_address_t * curr = client->worker->config->address_list;
   for (size_t i = 0; i < index && curr != NULL; i++, curr = curr->next);
@@ -303,7 +307,6 @@ static void worker_on_new_connection(uv_stream_t * pipe_s, ssize_t nread, const 
   client->connection = http_connection_init(client, &worker->config->http_log,
       &worker->config->hpack_log, client->plugin_invoker, app_write_cb, app_close_cb);
 
-
   uv_tcp_init(&worker->loop, &client->tcp);
   client->tcp.data = client;
 
@@ -322,9 +325,8 @@ static void worker_on_new_connection(uv_stream_t * pipe_s, ssize_t nread, const 
   free(buf->base);
 }
 
-bool worker_init(struct worker_t * worker, struct server_config_t * config)
+bool worker_use_tls(struct server_config_t * config)
 {
-
   bool use_tls = false;
   struct listen_address_t * addr = config->address_list;
   while (addr) {
@@ -334,14 +336,19 @@ bool worker_init(struct worker_t * worker, struct server_config_t * config)
     }
     addr = addr->next;
   }
-  if (use_tls) {
+  return use_tls;
+}
+
+bool worker_init(struct worker_t * worker, struct server_config_t * config)
+{
+  if (worker_use_tls(config)) {
     tls_init();
 
     worker->tls_ctx = tls_server_init(&config->tls_log, config->private_key_file, config->cert_file);
     ASSERT_OR_RETURN_FALSE(worker->tls_ctx);
   }
 
-  worker->terminate = false;
+  worker->stopping = false;
   worker->config = config;
   worker->plugins = NULL;
 
@@ -375,21 +382,31 @@ bool worker_init(struct worker_t * worker, struct server_config_t * config)
   }
   worker->loop.data = worker;
 
+  worker->active_signal_handlers = 0;
   uv_signal_init(&worker->loop, &worker->sigpipe_handler);
   worker->sigpipe_handler.data = worker;
+  worker->active_signal_handlers++;
+
   uv_signal_init(&worker->loop, &worker->sigint_handler);
   worker->sigint_handler.data = worker;
+  worker->active_signal_handlers++;
+
+  uv_signal_init(&worker->loop, &worker->sigterm_handler);
+  worker->sigterm_handler.data = worker;
+  worker->active_signal_handlers++;
 
   uv_pipe_init(&worker->loop, &worker->queue, 1);
   uv_pipe_open(&worker->queue, 0);
   worker->queue.data = worker;
   uv_read_start((uv_stream_t *) &worker->queue, alloc_pipe_read_buffer, worker_on_new_connection);
+  worker->active_queue = true;
 
   worker->assigned_reads = 0;
 
   worker->log = &config->worker_log;
   worker->data_log = &config->data_log;
   worker->wire_log = &config->wire_log;
+
 
   return true;
 }
@@ -405,12 +422,13 @@ int worker_run(struct worker_t * worker)
 
   uv_signal_start(&worker->sigpipe_handler, worker_sigpipe_handler, SIGPIPE);
   uv_signal_start(&worker->sigint_handler, worker_sigint_handler, SIGINT);
+  uv_signal_start(&worker->sigterm_handler, worker_sigterm_handler, SIGTERM);
 
   log_append(worker->log, LOG_INFO, "Worker running...");
 
   int ret = uv_run(&worker->loop, UV_RUN_DEFAULT);
 
-  log_append(worker->log, LOG_INFO, "Worker no longer running...");
+  log_append(worker->log, LOG_TRACE, "Worker no longer running...");
 
   return ret;
 }
@@ -421,10 +439,36 @@ void worker_stop(struct worker_t * worker)
 
   struct plugin_list_t * current = worker->plugins;
 
+  uv_signal_stop(&worker->sigpipe_handler);
+  uv_signal_stop(&worker->sigint_handler);
+  uv_signal_stop(&worker->sigterm_handler);
+  uv_close((uv_handle_t *) &worker->sigpipe_handler, signal_handler_closed);
+  uv_close((uv_handle_t *) &worker->sigint_handler, signal_handler_closed);
+  uv_close((uv_handle_t *) &worker->sigterm_handler, signal_handler_closed);
+
+  uv_read_stop((uv_stream_t *) &worker->queue);
+  uv_close((uv_handle_t *) &worker->queue, worker_queue_closed);
+
   while (current) {
     plugin_stop(current->plugin);
     current = current->next;
   }
-
-  uv_stop(&worker->loop);
 }
+
+void worker_free(struct worker_t * worker)
+{
+  struct plugin_list_t * current = worker->plugins;
+  while (current) {
+    plugin_free(current->plugin);
+    struct plugin_list_t * prev = current;
+    current = current->next;
+    free(prev);
+  }
+
+  if (worker_use_tls(worker->config)) {
+    tls_server_free(worker->tls_ctx);
+  }
+
+  uv_loop_close(&worker->loop);
+}
+

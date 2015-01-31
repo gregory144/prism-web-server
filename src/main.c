@@ -48,8 +48,12 @@ static bool run_as_server(struct server_config_t * config)
     // kill child processes if they were started
     server_stop(&server);
 
+    server_free(&server);
+
     return false;
   }
+
+  server_free(&server);
 
   return true;
 }
@@ -58,10 +62,13 @@ static bool run_as_worker(struct server_config_t * config)
 {
   struct worker_t worker;
   if (!worker_init(&worker, config)) {
+    worker_free(&worker);
     return false;
   }
 
   worker_run(&worker);
+
+  worker_free(&worker);
 
   return true;
 }

@@ -21,12 +21,12 @@
 
 static void debug_plugin_start(struct plugin_t * plugin)
 {
-  log_append(plugin->log, LOG_INFO, "Debug plugin started");
+  log_append(plugin->log, LOG_DEBUG, "Debug plugin started");
 }
 
 static void debug_plugin_stop(struct plugin_t * plugin)
 {
-  log_append(plugin->log, LOG_INFO, "Debug plugin stopped");
+  log_append(plugin->log, LOG_DEBUG, "Debug plugin stopped");
 }
 
 static bool debug_plugin_request_handler(struct plugin_t * plugin, struct client_t * client, http_request_t * request,

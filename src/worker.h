@@ -28,15 +28,19 @@ struct worker_t {
   log_context_t * data_log;
   log_context_t * wire_log;
 
-  bool terminate;
+  bool stopping;
+  uv_shutdown_t shutdown_req;
   size_t assigned_reads;
 
   uv_loop_t loop;
 
   uv_pipe_t queue;
+  bool active_queue;
 
   uv_signal_t sigpipe_handler;
   uv_signal_t sigint_handler;
+  uv_signal_t sigterm_handler;
+  size_t active_signal_handlers;
 
   struct plugin_list_t * plugins;
 
@@ -70,5 +74,7 @@ bool worker_init(struct worker_t * worker, struct server_config_t * config);
 int worker_run(struct worker_t * worker);
 
 void worker_stop(struct worker_t * worker);
+
+void worker_free(struct worker_t * worker);
 
 #endif
