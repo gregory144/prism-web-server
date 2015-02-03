@@ -223,7 +223,8 @@ static bool h1_1_bad_request(h1_1_t * const h1_1)
 }
 
 h1_1_t * h1_1_init(void * const data, log_context_t * log, bool use_tls, const char * hostname,
-                   const int port, struct plugin_invoker_t * plugin_invoker, const h1_1_write_cb writer,
+                   const int port, const char * h2c_protocol_version_string,
+                   struct plugin_invoker_t * plugin_invoker, const h1_1_write_cb writer,
                    const h1_1_write_error_cb error_writer, const h1_1_close_cb closer,
                    const h1_1_request_init_cb request_init, const h1_1_upgrade_cb upgrade_cb)
 {
@@ -246,6 +247,7 @@ h1_1_t * h1_1_init(void * const data, log_context_t * log, bool use_tls, const c
 
   h1_1->closed = false;
 
+  h1_1->h2c_protocol_version_string = h2c_protocol_version_string;
   h1_1->upgrade_to_h2 = false;
   h1_1->is_1_1 = true;
   h1_1->keep_alive = false;
@@ -450,7 +452,7 @@ static int hp_headers_complete_cb(http_parser * http_parser)
       char * protocol = upgrade_header->field.value;
       log_append(h1_1->log, LOG_DEBUG, "Upgrading to %s", protocol);
 
-      if (strncmp("h2c-14", protocol, 6) == 0) {
+      if (strcmp(h1_1->h2c_protocol_version_string, protocol) == 0) {
         h1_1->upgrade_to_h2 = true;
         // don't try to handle the response yet - it'll get passed on to the h2 handler
         return 0;

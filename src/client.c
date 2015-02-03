@@ -39,6 +39,9 @@ bool client_init(struct client_t * client, struct worker_t * worker)
 
   client->worker = worker;
 
+  log_append(client->log, LOG_DEBUG, "Initialized client %zu (%ld/%ld left)",
+      client->id, open_clients, total_clients);
+
   return true;
 }
 

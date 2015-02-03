@@ -29,7 +29,6 @@ struct worker_t {
   log_context_t * wire_log;
 
   bool stopping;
-  uv_shutdown_t shutdown_req;
   size_t assigned_reads;
 
   uv_loop_t loop;

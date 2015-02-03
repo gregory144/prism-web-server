@@ -21,325 +21,41 @@ SSL_CTX * global_ssl_ctx;
 static const char * const DEFAULT_CIPHERS =
   "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128:AES256:AES:DES-CBC3-SHA:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK";
 
-static hash_table_t BLACKLISTED_CIPHERS;
-static const size_t BLACKLISTED_CIPHERS_LENGTH = 276;
-static const char * BLACKLISTED_CIPHERS_LIST[] = {
-  "TLS_NULL_WITH_NULL_NULL",
-  "TLS_RSA_WITH_NULL_MD5",
-  "TLS_RSA_WITH_NULL_SHA",
-  "TLS_RSA_EXPORT_WITH_RC4_40_MD5",
-  "TLS_RSA_WITH_RC4_128_MD5",
-  "TLS_RSA_WITH_RC4_128_SHA",
-  "TLS_RSA_EXPORT_WITH_RC2_CBC_40_MD5",
-  "TLS_RSA_WITH_IDEA_CBC_SHA",
-  "TLS_RSA_EXPORT_WITH_DES40_CBC_SHA",
-  "TLS_RSA_WITH_DES_CBC_SHA",
-  "TLS_RSA_WITH_3DES_EDE_CBC_SHA",
-  "TLS_DH_DSS_EXPORT_WITH_DES40_CBC_SHA",
-  "TLS_DH_DSS_WITH_DES_CBC_SHA",
-  "TLS_DH_DSS_WITH_3DES_EDE_CBC_SHA",
-  "TLS_DH_RSA_EXPORT_WITH_DES40_CBC_SHA",
-  "TLS_DH_RSA_WITH_DES_CBC_SHA",
-  "TLS_DH_RSA_WITH_3DES_EDE_CBC_SHA",
-  "TLS_DHE_DSS_EXPORT_WITH_DES40_CBC_SHA",
-  "TLS_DHE_DSS_WITH_DES_CBC_SHA",
-  "TLS_DHE_DSS_WITH_3DES_EDE_CBC_SHA",
-  "TLS_DHE_RSA_EXPORT_WITH_DES40_CBC_SHA",
-  "TLS_DHE_RSA_WITH_DES_CBC_SHA",
-  "TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA",
-  "TLS_DH_anon_EXPORT_WITH_RC4_40_MD5",
-  "TLS_DH_anon_WITH_RC4_128_MD5",
-  "TLS_DH_anon_EXPORT_WITH_DES40_CBC_SHA",
-  "TLS_DH_anon_WITH_DES_CBC_SHA",
-  "TLS_DH_anon_WITH_3DES_EDE_CBC_SHA",
-  "TLS_KRB5_WITH_DES_CBC_SHA",
-  "TLS_KRB5_WITH_3DES_EDE_CBC_SHA",
-  "TLS_KRB5_WITH_RC4_128_SHA",
-  "TLS_KRB5_WITH_IDEA_CBC_SHA",
-  "TLS_KRB5_WITH_DES_CBC_MD5",
-  "TLS_KRB5_WITH_3DES_EDE_CBC_MD5",
-  "TLS_KRB5_WITH_RC4_128_MD5",
-  "TLS_KRB5_WITH_IDEA_CBC_MD5",
-  "TLS_KRB5_EXPORT_WITH_DES_CBC_40_SHA",
-  "TLS_KRB5_EXPORT_WITH_RC2_CBC_40_SHA",
-  "TLS_KRB5_EXPORT_WITH_RC4_40_SHA",
-  "TLS_KRB5_EXPORT_WITH_DES_CBC_40_MD5",
-  "TLS_KRB5_EXPORT_WITH_RC2_CBC_40_MD5",
-  "TLS_KRB5_EXPORT_WITH_RC4_40_MD5",
-  "TLS_PSK_WITH_NULL_SHA",
-  "TLS_DHE_PSK_WITH_NULL_SHA",
-  "TLS_RSA_PSK_WITH_NULL_SHA",
-  "TLS_RSA_WITH_AES_128_CBC_SHA",
-  "TLS_DH_DSS_WITH_AES_128_CBC_SHA",
-  "TLS_DH_RSA_WITH_AES_128_CBC_SHA",
-  "TLS_DHE_DSS_WITH_AES_128_CBC_SHA",
-  "TLS_DHE_RSA_WITH_AES_128_CBC_SHA",
-  "TLS_DH_anon_WITH_AES_128_CBC_SHA",
-  "TLS_RSA_WITH_AES_256_CBC_SHA",
-  "TLS_DH_DSS_WITH_AES_256_CBC_SHA",
-  "TLS_DH_RSA_WITH_AES_256_CBC_SHA",
-  "TLS_DHE_DSS_WITH_AES_256_CBC_SHA",
-  "TLS_DHE_RSA_WITH_AES_256_CBC_SHA",
-  "TLS_DH_anon_WITH_AES_256_CBC_SHA",
-  "TLS_RSA_WITH_NULL_SHA256",
-  "TLS_RSA_WITH_AES_128_CBC_SHA256",
-  "TLS_RSA_WITH_AES_256_CBC_SHA256",
-  "TLS_DH_DSS_WITH_AES_128_CBC_SHA256",
-  "TLS_DH_RSA_WITH_AES_128_CBC_SHA256",
-  "TLS_DHE_DSS_WITH_AES_128_CBC_SHA256",
-  "TLS_RSA_WITH_CAMELLIA_128_CBC_SHA",
-  "TLS_DH_DSS_WITH_CAMELLIA_128_CBC_SHA",
-  "TLS_DH_RSA_WITH_CAMELLIA_128_CBC_SHA",
-  "TLS_DHE_DSS_WITH_CAMELLIA_128_CBC_SHA",
-  "TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA",
-  "TLS_DH_anon_WITH_CAMELLIA_128_CBC_SHA",
-  "TLS_DHE_RSA_WITH_AES_128_CBC_SHA256",
-  "TLS_DH_DSS_WITH_AES_256_CBC_SHA256",
-  "TLS_DH_RSA_WITH_AES_256_CBC_SHA256",
-  "TLS_DHE_DSS_WITH_AES_256_CBC_SHA256",
-  "TLS_DHE_RSA_WITH_AES_256_CBC_SHA256",
-  "TLS_DH_anon_WITH_AES_128_CBC_SHA256",
-  "TLS_DH_anon_WITH_AES_256_CBC_SHA256",
-  "TLS_RSA_WITH_CAMELLIA_256_CBC_SHA",
-  "TLS_DH_DSS_WITH_CAMELLIA_256_CBC_SHA",
-  "TLS_DH_RSA_WITH_CAMELLIA_256_CBC_SHA",
-  "TLS_DHE_DSS_WITH_CAMELLIA_256_CBC_SHA",
-  "TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA",
-  "TLS_DH_anon_WITH_CAMELLIA_256_CBC_SHA",
-  "TLS_PSK_WITH_RC4_128_SHA",
-  "TLS_PSK_WITH_3DES_EDE_CBC_SHA",
-  "TLS_PSK_WITH_AES_128_CBC_SHA",
-  "TLS_PSK_WITH_AES_256_CBC_SHA",
-  "TLS_DHE_PSK_WITH_RC4_128_SHA",
-  "TLS_DHE_PSK_WITH_3DES_EDE_CBC_SHA",
-  "TLS_DHE_PSK_WITH_AES_128_CBC_SHA",
-  "TLS_DHE_PSK_WITH_AES_256_CBC_SHA",
-  "TLS_RSA_PSK_WITH_RC4_128_SHA",
-  "TLS_RSA_PSK_WITH_3DES_EDE_CBC_SHA",
-  "TLS_RSA_PSK_WITH_AES_128_CBC_SHA",
-  "TLS_RSA_PSK_WITH_AES_256_CBC_SHA",
-  "TLS_RSA_WITH_SEED_CBC_SHA",
-  "TLS_DH_DSS_WITH_SEED_CBC_SHA",
-  "TLS_DH_RSA_WITH_SEED_CBC_SHA",
-  "TLS_DHE_DSS_WITH_SEED_CBC_SHA",
-  "TLS_DHE_RSA_WITH_SEED_CBC_SHA",
-  "TLS_DH_anon_WITH_SEED_CBC_SHA",
-  "TLS_RSA_WITH_AES_128_GCM_SHA256",
-  "TLS_RSA_WITH_AES_256_GCM_SHA384",
-  "TLS_DH_RSA_WITH_AES_128_GCM_SHA256",
-  "TLS_DH_RSA_WITH_AES_256_GCM_SHA384",
-  "TLS_DH_DSS_WITH_AES_128_GCM_SHA256",
-  "TLS_DH_DSS_WITH_AES_256_GCM_SHA384",
-  "TLS_DH_anon_WITH_AES_128_GCM_SHA256",
-  "TLS_DH_anon_WITH_AES_256_GCM_SHA384",
-  "TLS_PSK_WITH_AES_128_GCM_SHA256",
-  "TLS_PSK_WITH_AES_256_GCM_SHA384",
-  "TLS_RSA_PSK_WITH_AES_128_GCM_SHA256",
-  "TLS_RSA_PSK_WITH_AES_256_GCM_SHA384",
-  "TLS_PSK_WITH_AES_128_CBC_SHA256",
-  "TLS_PSK_WITH_AES_256_CBC_SHA384",
-  "TLS_PSK_WITH_NULL_SHA256",
-  "TLS_PSK_WITH_NULL_SHA384",
-  "TLS_DHE_PSK_WITH_AES_128_CBC_SHA256",
-  "TLS_DHE_PSK_WITH_AES_256_CBC_SHA384",
-  "TLS_DHE_PSK_WITH_NULL_SHA256",
-  "TLS_DHE_PSK_WITH_NULL_SHA384",
-  "TLS_RSA_PSK_WITH_AES_128_CBC_SHA256",
-  "TLS_RSA_PSK_WITH_AES_256_CBC_SHA384",
-  "TLS_RSA_PSK_WITH_NULL_SHA256",
-  "TLS_RSA_PSK_WITH_NULL_SHA384",
-  "TLS_RSA_WITH_CAMELLIA_128_CBC_SHA256",
-  "TLS_DH_DSS_WITH_CAMELLIA_128_CBC_SHA256",
-  "TLS_DH_RSA_WITH_CAMELLIA_128_CBC_SHA256",
-  "TLS_DHE_DSS_WITH_CAMELLIA_128_CBC_SHA256",
-  "TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA256",
-  "TLS_DH_anon_WITH_CAMELLIA_128_CBC_SHA256",
-  "TLS_RSA_WITH_CAMELLIA_256_CBC_SHA256",
-  "TLS_DH_DSS_WITH_CAMELLIA_256_CBC_SHA256",
-  "TLS_DH_RSA_WITH_CAMELLIA_256_CBC_SHA256",
-  "TLS_DHE_DSS_WITH_CAMELLIA_256_CBC_SHA256",
-  "TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256",
-  "TLS_DH_anon_WITH_CAMELLIA_256_CBC_SHA256",
-  "TLS_EMPTY_RENEGOTIATION_INFO_SCSV",
-  "TLS_ECDH_ECDSA_WITH_NULL_SHA",
-  "TLS_ECDH_ECDSA_WITH_RC4_128_SHA",
-  "TLS_ECDH_ECDSA_WITH_3DES_EDE_CBC_SHA",
-  "TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA",
-  "TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA",
-  "TLS_ECDHE_ECDSA_WITH_NULL_SHA",
-  "TLS_ECDHE_ECDSA_WITH_RC4_128_SHA",
-  "TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA",
-  "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA",
-  "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA",
-  "TLS_ECDH_RSA_WITH_NULL_SHA",
-  "TLS_ECDH_RSA_WITH_RC4_128_SHA",
-  "TLS_ECDH_RSA_WITH_3DES_EDE_CBC_SHA",
-  "TLS_ECDH_RSA_WITH_AES_128_CBC_SHA",
-  "TLS_ECDH_RSA_WITH_AES_256_CBC_SHA",
-  "TLS_ECDHE_RSA_WITH_NULL_SHA",
-  "TLS_ECDHE_RSA_WITH_RC4_128_SHA",
-  "TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA",
-  "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA",
-  "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA",
-  "TLS_ECDH_anon_WITH_NULL_SHA",
-  "TLS_ECDH_anon_WITH_RC4_128_SHA",
-  "TLS_ECDH_anon_WITH_3DES_EDE_CBC_SHA",
-  "TLS_ECDH_anon_WITH_AES_128_CBC_SHA",
-  "TLS_ECDH_anon_WITH_AES_256_CBC_SHA",
-  "TLS_SRP_SHA_WITH_3DES_EDE_CBC_SHA",
-  "TLS_SRP_SHA_RSA_WITH_3DES_EDE_CBC_SHA",
-  "TLS_SRP_SHA_DSS_WITH_3DES_EDE_CBC_SHA",
-  "TLS_SRP_SHA_WITH_AES_128_CBC_SHA",
-  "TLS_SRP_SHA_RSA_WITH_AES_128_CBC_SHA",
-  "TLS_SRP_SHA_DSS_WITH_AES_128_CBC_SHA",
-  "TLS_SRP_SHA_WITH_AES_256_CBC_SHA",
-  "TLS_SRP_SHA_RSA_WITH_AES_256_CBC_SHA",
-  "TLS_SRP_SHA_DSS_WITH_AES_256_CBC_SHA",
-  "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256",
-  "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384",
-  "TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA256",
-  "TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA384",
-  "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256",
-  "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384",
-  "TLS_ECDH_RSA_WITH_AES_128_CBC_SHA256",
-  "TLS_ECDH_RSA_WITH_AES_256_CBC_SHA384",
-  "TLS_ECDH_ECDSA_WITH_AES_128_GCM_SHA256",
-  "TLS_ECDH_ECDSA_WITH_AES_256_GCM_SHA384",
-  "TLS_ECDH_RSA_WITH_AES_128_GCM_SHA256",
-  "TLS_ECDH_RSA_WITH_AES_256_GCM_SHA384",
-  "TLS_ECDHE_PSK_WITH_RC4_128_SHA",
-  "TLS_ECDHE_PSK_WITH_3DES_EDE_CBC_SHA",
-  "TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA",
-  "TLS_ECDHE_PSK_WITH_AES_256_CBC_SHA",
-  "TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256",
-  "TLS_ECDHE_PSK_WITH_AES_256_CBC_SHA384",
-  "TLS_ECDHE_PSK_WITH_NULL_SHA",
-  "TLS_ECDHE_PSK_WITH_NULL_SHA256",
-  "TLS_ECDHE_PSK_WITH_NULL_SHA384",
-  "TLS_RSA_WITH_ARIA_128_CBC_SHA256",
-  "TLS_RSA_WITH_ARIA_256_CBC_SHA384",
-  "TLS_DH_DSS_WITH_ARIA_128_CBC_SHA256",
-  "TLS_DH_DSS_WITH_ARIA_256_CBC_SHA384",
-  "TLS_DH_RSA_WITH_ARIA_128_CBC_SHA256",
-  "TLS_DH_RSA_WITH_ARIA_256_CBC_SHA384",
-  "TLS_DHE_DSS_WITH_ARIA_128_CBC_SHA256",
-  "TLS_DHE_DSS_WITH_ARIA_256_CBC_SHA384",
-  "TLS_DHE_RSA_WITH_ARIA_128_CBC_SHA256",
-  "TLS_DHE_RSA_WITH_ARIA_256_CBC_SHA384",
-  "TLS_DH_anon_WITH_ARIA_128_CBC_SHA256",
-  "TLS_DH_anon_WITH_ARIA_256_CBC_SHA384",
-  "TLS_ECDHE_ECDSA_WITH_ARIA_128_CBC_SHA256",
-  "TLS_ECDHE_ECDSA_WITH_ARIA_256_CBC_SHA384",
-  "TLS_ECDH_ECDSA_WITH_ARIA_128_CBC_SHA256",
-  "TLS_ECDH_ECDSA_WITH_ARIA_256_CBC_SHA384",
-  "TLS_ECDHE_RSA_WITH_ARIA_128_CBC_SHA256",
-  "TLS_ECDHE_RSA_WITH_ARIA_256_CBC_SHA384",
-  "TLS_ECDH_RSA_WITH_ARIA_128_CBC_SHA256",
-  "TLS_ECDH_RSA_WITH_ARIA_256_CBC_SHA384",
-  "TLS_RSA_WITH_ARIA_128_GCM_SHA256",
-  "TLS_RSA_WITH_ARIA_256_GCM_SHA384",
-  "TLS_DH_RSA_WITH_ARIA_128_GCM_SHA256",
-  "TLS_DH_RSA_WITH_ARIA_256_GCM_SHA384",
-  "TLS_DH_DSS_WITH_ARIA_128_GCM_SHA256",
-  "TLS_DH_DSS_WITH_ARIA_256_GCM_SHA384",
-  "TLS_DH_anon_WITH_ARIA_128_GCM_SHA256",
-  "TLS_DH_anon_WITH_ARIA_256_GCM_SHA384",
-  "TLS_ECDH_ECDSA_WITH_ARIA_128_GCM_SHA256",
-  "TLS_ECDH_ECDSA_WITH_ARIA_256_GCM_SHA384",
-  "TLS_ECDH_RSA_WITH_ARIA_128_GCM_SHA256",
-  "TLS_ECDH_RSA_WITH_ARIA_256_GCM_SHA384",
-  "TLS_PSK_WITH_ARIA_128_CBC_SHA256",
-  "TLS_PSK_WITH_ARIA_256_CBC_SHA384",
-  "TLS_DHE_PSK_WITH_ARIA_128_CBC_SHA256",
-  "TLS_DHE_PSK_WITH_ARIA_256_CBC_SHA384",
-  "TLS_RSA_PSK_WITH_ARIA_128_CBC_SHA256",
-  "TLS_RSA_PSK_WITH_ARIA_256_CBC_SHA384",
-  "TLS_PSK_WITH_ARIA_128_GCM_SHA256",
-  "TLS_PSK_WITH_ARIA_256_GCM_SHA384",
-  "TLS_RSA_PSK_WITH_ARIA_128_GCM_SHA256",
-  "TLS_RSA_PSK_WITH_ARIA_256_GCM_SHA384",
-  "TLS_ECDHE_PSK_WITH_ARIA_128_CBC_SHA256",
-  "TLS_ECDHE_PSK_WITH_ARIA_256_CBC_SHA384",
-  "TLS_ECDHE_ECDSA_WITH_CAMELLIA_128_CBC_SHA256",
-  "TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_CBC_SHA384",
-  "TLS_ECDH_ECDSA_WITH_CAMELLIA_128_CBC_SHA256",
-  "TLS_ECDH_ECDSA_WITH_CAMELLIA_256_CBC_SHA384",
-  "TLS_ECDHE_RSA_WITH_CAMELLIA_128_CBC_SHA256",
-  "TLS_ECDHE_RSA_WITH_CAMELLIA_256_CBC_SHA384",
-  "TLS_ECDH_RSA_WITH_CAMELLIA_128_CBC_SHA256",
-  "TLS_ECDH_RSA_WITH_CAMELLIA_256_CBC_SHA384",
-  "TLS_RSA_WITH_CAMELLIA_128_GCM_SHA256",
-  "TLS_RSA_WITH_CAMELLIA_256_GCM_SHA384",
-  "TLS_DH_RSA_WITH_CAMELLIA_128_GCM_SHA256",
-  "TLS_DH_RSA_WITH_CAMELLIA_256_GCM_SHA384",
-  "TLS_DH_DSS_WITH_CAMELLIA_128_GCM_SHA256",
-  "TLS_DH_DSS_WITH_CAMELLIA_256_GCM_SHA384",
-  "TLS_DH_anon_WITH_CAMELLIA_128_GCM_SHA256",
-  "TLS_DH_anon_WITH_CAMELLIA_256_GCM_SHA384",
-  "TLS_ECDH_ECDSA_WITH_CAMELLIA_128_GCM_SHA256",
-  "TLS_ECDH_ECDSA_WITH_CAMELLIA_256_GCM_SHA384",
-  "TLS_ECDH_RSA_WITH_CAMELLIA_128_GCM_SHA256",
-  "TLS_ECDH_RSA_WITH_CAMELLIA_256_GCM_SHA384",
-  "TLS_PSK_WITH_CAMELLIA_128_GCM_SHA256",
-  "TLS_PSK_WITH_CAMELLIA_256_GCM_SHA384",
-  "TLS_RSA_PSK_WITH_CAMELLIA_128_GCM_SHA256",
-  "TLS_RSA_PSK_WITH_CAMELLIA_256_GCM_SHA384",
-  "TLS_PSK_WITH_CAMELLIA_128_CBC_SHA256",
-  "TLS_PSK_WITH_CAMELLIA_256_CBC_SHA384",
-  "TLS_DHE_PSK_WITH_CAMELLIA_128_CBC_SHA256",
-  "TLS_DHE_PSK_WITH_CAMELLIA_256_CBC_SHA384",
-  "TLS_RSA_PSK_WITH_CAMELLIA_128_CBC_SHA256",
-  "TLS_RSA_PSK_WITH_CAMELLIA_256_CBC_SHA384",
-  "TLS_ECDHE_PSK_WITH_CAMELLIA_128_CBC_SHA256",
-  "TLS_ECDHE_PSK_WITH_CAMELLIA_256_CBC_SHA384",
-  "TLS_RSA_WITH_AES_128_CCM",
-  "TLS_RSA_WITH_AES_256_CCM",
-  "TLS_RSA_WITH_AES_128_CCM_8",
-  "TLS_RSA_WITH_AES_256_CCM_8",
-  "TLS_PSK_WITH_AES_128_CCM",
-  "TLS_PSK_WITH_AES_256_CCM",
-  "TLS_PSK_WITH_AES_128_CCM_8",
-  "TLS_PSK_WITH_AES_256_CCM_8",
-};
-
-#define HTTP2_VERSION_LENGTH 5
-#define HTTP1_1_VERSION_LENGTH 8
-
-static const char * http2_protocol_version = "h2-14";
-static const int http2_protocol_version_length = HTTP2_VERSION_LENGTH;
-static const char * http1_1_protocol_version = "http/1.1";
-static const int http1_1_protocol_version_length = HTTP1_1_VERSION_LENGTH;
+static const char * http2_protocol_version_string;
+static int http2_protocol_version_string_length;
+static const char * http1_1_protocol_version_string;
+static int http1_1_protocol_version_string_length;
 
 // list of suported protocols
-// TLS 'wire' format: length prefixed, non-empty 8-bit characters
-static const unsigned char supported_protocols[] = {
-  HTTP2_VERSION_LENGTH, 'h', '2', '-', '1', '4',
-  HTTP1_1_VERSION_LENGTH, 'h', 't', 't', 'p', '/', '1', '.', '1'
-};
-const unsigned char supported_protocols_length = HTTP2_VERSION_LENGTH + HTTP1_1_VERSION_LENGTH + 2;
+static unsigned char * supported_protocols;
+unsigned char supported_protocols_length;
 
 static int ssl_ctx_app_data_index;
 
-static const bool SENTINEL = true;
-static void hash_free_noop(void * ptr)
+static void tls_prepare_supported_protocols(const char * h2_string, const char * h1_1_string)
 {
-  UNUSED(ptr);
+  http2_protocol_version_string = h2_string;
+  http2_protocol_version_string_length = strlen(h2_string);
+  http1_1_protocol_version_string = h1_1_string;
+  http1_1_protocol_version_string_length = strlen(h1_1_string);
+
+  supported_protocols_length = http2_protocol_version_string_length +
+    http1_1_protocol_version_string_length + 2;
+
+  // TLS 'wire' format: length prefixed, non-empty 8-bit characters
+  supported_protocols = malloc(supported_protocols_length);
+  char * i = supported_protocols;
+
+  i[0] = http2_protocol_version_string_length;
+  i++;
+  memcpy(i, http2_protocol_version_string, http2_protocol_version_string_length);
+  i += http2_protocol_version_string_length;
+  i[0] = http1_1_protocol_version_string_length;
+  i++;
+  memcpy(i, http1_1_protocol_version_string, http1_1_protocol_version_string_length);
 }
 
-static void tls_prepare_cipher_blacklist()
-{
-  if (!hash_table_init_with_string_keys_and_capacity(&BLACKLISTED_CIPHERS,
-        BLACKLISTED_CIPHERS_LENGTH, hash_free_noop)) {
-    abort();
-  }
-
-  size_t i;
-  for (i = 0; i < BLACKLISTED_CIPHERS_LENGTH; i++) {
-    hash_table_put(&BLACKLISTED_CIPHERS, (char *) BLACKLISTED_CIPHERS_LIST[i], (int *) &SENTINEL);
-  }
-}
-
-bool tls_init()
+bool tls_init(const char * h2_protocol_version_string)
 {
   SSL_library_init();
   SSL_load_error_strings();
@@ -349,7 +65,7 @@ bool tls_init()
 
   ssl_ctx_app_data_index = SSL_get_ex_new_index(0, NULL, NULL, NULL, NULL);
 
-  tls_prepare_cipher_blacklist();
+  tls_prepare_supported_protocols(h2_protocol_version_string, "http/1.1");
 
   return true;
 }
@@ -792,17 +508,13 @@ static bool tls_update(tls_client_ctx_t * client_ctx)
 
 bool tls_set_version(tls_client_ctx_t * client_ctx)
 {
-  log_append(client_ctx->log, LOG_DEBUG, "SSL version: %s", SSL_get_version(client_ctx->ssl));
-  log_append(client_ctx->log, LOG_DEBUG, "SSL cipher: %s, %d", SSL_get_cipher_name(client_ctx->ssl),
-             SSL_get_cipher_bits(client_ctx->ssl, NULL));
-
   client_ctx->selected_tls_version = SSL_get_version(client_ctx->ssl);
   client_ctx->selected_cipher = SSL_get_cipher_name(client_ctx->ssl);
   client_ctx->cipher_key_size_in_bits = SSL_get_cipher_bits(client_ctx->ssl, NULL);
 
-  if (hash_table_get(&BLACKLISTED_CIPHERS, client_ctx->selected_cipher)) {
-    return false;
-  }
+  log_append(client_ctx->log, LOG_DEBUG, "SSL version: %s", client_ctx->selected_tls_version);
+  log_append(client_ctx->log, LOG_DEBUG, "SSL cipher: %s, %d", client_ctx->selected_cipher,
+             client_ctx->cipher_key_size_in_bits);
 
   return true;
 }
@@ -816,15 +528,19 @@ bool tls_set_protocol(tls_client_ctx_t * client_ctx)
 
   if (proto) {
 
-    if (proto_len == http2_protocol_version_length && memcmp(http2_protocol_version, proto, proto_len) == 0) {
-      log_append(client_ctx->log, LOG_DEBUG, "Using protocol (through NPN): %s", http2_protocol_version);
-      client_ctx->selected_protocol = http2_protocol_version;
+    if (proto_len == http2_protocol_version_string_length &&
+        memcmp(http2_protocol_version_string, proto, proto_len) == 0) {
+      log_append(client_ctx->log, LOG_DEBUG, "Using protocol (through NPN): %s",
+          http2_protocol_version_string);
+      client_ctx->selected_protocol = http2_protocol_version_string;
       return true;
     }
 
-    if (proto_len == http1_1_protocol_version_length && memcmp(http1_1_protocol_version, proto, proto_len) == 0) {
-      log_append(client_ctx->log, LOG_DEBUG, "Using protocol (through NPN): %s", http1_1_protocol_version);
-      client_ctx->selected_protocol = http1_1_protocol_version;
+    if (proto_len == http1_1_protocol_version_string_length &&
+        memcmp(http1_1_protocol_version_string, proto, proto_len) == 0) {
+      log_append(client_ctx->log, LOG_DEBUG, "Using protocol (through NPN): %s",
+          http1_1_protocol_version_string);
+      client_ctx->selected_protocol = http1_1_protocol_version_string;
       return true;
     }
   } else {
@@ -833,15 +549,19 @@ bool tls_set_protocol(tls_client_ctx_t * client_ctx)
 
     if (proto) {
 
-      if (proto_len == http2_protocol_version_length && memcmp(http2_protocol_version, proto, proto_len) == 0) {
-        log_append(client_ctx->log, LOG_DEBUG, "Using protocol (through ALPN): %s", http2_protocol_version);
-        client_ctx->selected_protocol = http2_protocol_version;
+      if (proto_len == http2_protocol_version_string_length &&
+          memcmp(http2_protocol_version_string, proto, proto_len) == 0) {
+        log_append(client_ctx->log, LOG_DEBUG, "Using protocol (through ALPN): %s",
+            http2_protocol_version_string);
+        client_ctx->selected_protocol = http2_protocol_version_string;
         return true;
       }
 
-      if (proto_len == http1_1_protocol_version_length && memcmp(http1_1_protocol_version, proto, proto_len) == 0) {
-        log_append(client_ctx->log, LOG_DEBUG, "Using protocol (through ALPN): %s", http1_1_protocol_version);
-        client_ctx->selected_protocol = http1_1_protocol_version;
+      if (proto_len == http1_1_protocol_version_string_length &&
+          memcmp(http1_1_protocol_version_string, proto, proto_len) == 0) {
+        log_append(client_ctx->log, LOG_DEBUG, "Using protocol (through ALPN): %s",
+            http1_1_protocol_version_string);
+        client_ctx->selected_protocol = http1_1_protocol_version_string;
         return true;
       }
     }
@@ -964,7 +684,6 @@ bool tls_encrypt_data_and_pass_to_network(tls_client_ctx_t * client_ctx, uint8_t
   } while (written < length);
 
   return tls_update(client_ctx);
-
 }
 
 bool tls_client_free(tls_client_ctx_t * client_ctx)

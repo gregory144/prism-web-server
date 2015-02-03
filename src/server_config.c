@@ -92,6 +92,8 @@ void server_config_args_parse(struct server_config_t * config, int argc, char **
   config->start_worker = false;
   config->print_help = false;
   config->print_version = false;
+  config->h2_protocol_version_string = "h2-14";
+  config->h2c_protocol_version_string = "h2c-14";
 
   struct plugin_config_t * current_plugin = NULL;
 

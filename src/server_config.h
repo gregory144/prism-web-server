@@ -40,6 +40,9 @@ struct server_config_t {
   int argc;
   char ** argv;
 
+  const char * h2_protocol_version_string;
+  const char * h2c_protocol_version_string;
+
   struct listen_address_t * address_list;
 
   bool start_worker;

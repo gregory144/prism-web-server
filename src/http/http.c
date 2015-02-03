@@ -61,18 +61,28 @@ static void set_protocol_h2(http_connection_t * connection)
 {
   connection->protocol = H2;
   connection->handler = h2_init(connection, connection->log, connection->hpack_log, connection->tls_version,
-                                connection->cipher,
-                                connection->cipher_key_size_in_bits,
-                                connection->plugin_invoker, http_internal_write_cb, http_internal_close_cb,
-                                http_internal_request_init_cb);
+                                connection->cipher, connection->cipher_key_size_in_bits,
+                                connection->plugin_invoker, http_internal_write_cb,
+                                http_internal_close_cb, http_internal_request_init_cb);
 }
 
 static bool send_upgrade_response(http_connection_t * connection)
 {
-  char * resp = "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: h2c-14\r\n\r\n";
-  size_t resp_length = strlen(resp);
+  size_t resp_capacity = 128;
+  char resp[resp_capacity];
+  int r = snprintf(resp, resp_capacity,
+      "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: %s\r\n\r\n",
+      connection->h2c_protocol_version_string);
+  if (r < 0) {
+    log_append(connection->log, LOG_DEBUG, "Error generating upgrade response: %d", r);
+    return false;
+  } else if (r > resp_capacity) {
+    log_append(connection->log, LOG_DEBUG, "Not enough buffer to gernerate upgrade request: %d", r);
+    return false;
+  }
+  size_t resp_length = r;
 
-  return connection->writer(connection->data, (uint8_t *) resp, resp_length);
+  return connection->writer(connection->data, resp, resp_length);
 }
 
 static bool http_internal_upgrade_cb(void * data, char * settings_base64, header_list_t * headers, uint8_t * buffer,
@@ -105,13 +115,16 @@ static void set_protocol_h1_1(http_connection_t * connection)
 {
   connection->protocol = H1_1;
   connection->handler = h1_1_init(connection, connection->log, connection->use_tls, connection->hostname,
-                                  connection->port, connection->plugin_invoker, http_internal_write_cb, http_internal_write_error_cb,
-                                  http_internal_close_cb, http_internal_request_init_cb, http_internal_upgrade_cb);
+                                  connection->port, connection->h2c_protocol_version_string,
+                                  connection->plugin_invoker, http_internal_write_cb,
+                                  http_internal_write_error_cb, http_internal_close_cb,
+                                  http_internal_request_init_cb, http_internal_upgrade_cb);
 }
 
 http_connection_t * http_connection_init(void * const data, log_context_t * log,
-    log_context_t * hpack_log, struct plugin_invoker_t * plugin_invoker, const write_cb writer,
-    const close_cb closer)
+    log_context_t * hpack_log, const char * h2_protocol_version_string,
+    const char * h2c_protocol_version_string, struct plugin_invoker_t * plugin_invoker,
+    const write_cb writer, const close_cb closer)
 {
   http_connection_t * connection = malloc(sizeof(http_connection_t));
   ASSERT_OR_RETURN_NULL(connection);
@@ -120,6 +133,8 @@ http_connection_t * http_connection_init(void * const data, log_context_t * log,
   connection->log = log;
   connection->hpack_log = hpack_log;
 
+  connection->h2_protocol_version_string = h2_protocol_version_string;
+  connection->h2c_protocol_version_string = h2c_protocol_version_string;
   connection->use_tls = false;
   connection->hostname = NULL;
   connection->port = -1;
@@ -154,7 +169,7 @@ void http_connection_set_protocol(http_connection_t * const connection, const ch
   log_append(connection->log, LOG_DEBUG, "Selecting protocol: %s", selected_protocol);
 
   if (selected_protocol) {
-    if (strcmp(selected_protocol, "h2-14") == 0) {
+    if (strcmp(selected_protocol, connection->h2_protocol_version_string) == 0) {
       log_append(connection->log, LOG_DEBUG, "Selected 2.0");
       set_protocol_h2(connection);
     } else if (strcmp(selected_protocol, "http/1.1") == 0) {

@@ -13,12 +13,10 @@
 #include "util/log.h"
 #include "util/util.h"
 #include "http/http.h"
+#include "http/h2/h2.h"
 
 #include "worker.h"
 #include "client.h"
-
-#define MAX_CLIENTS 0x4000
-#define LISTEN_BACKLOG 1024
 
 static void worker_sigpipe_handler(uv_signal_t * sigpipe_handler, int signum)
 {
@@ -108,7 +106,11 @@ static bool worker_write_to_network(void * data, uint8_t * buffer, size_t length
   uv_write_t * req = (uv_write_t *) malloc(sizeof(uv_write_t));
   uv_buf_t wrbuf = uv_buf_init((char *) buffer, length);
   req->data = client;
-  uv_write(req, (uv_stream_t *) &client->tcp, &wrbuf, 1, app_write_finished);
+  int r = uv_write(req, (uv_stream_t *) &client->tcp, &wrbuf, 1, app_write_finished);
+  if (r < 0) {
+    log_append(client->worker->log, LOG_ERROR, "Write client #%zu (%zu octets) failed: %s",
+        client->id, length, uv_err_name(r));
+  }
 
   return true;
 }
@@ -138,8 +140,8 @@ static void app_close_finished(uv_handle_t * handle)
 {
   struct client_t * client = handle->data;
 
-  log_append(client->log, LOG_DEBUG,
-      "Closing connection from uv callback: %zu", client->id);
+  log_append(client->log, LOG_TRACE,
+      "Finishing closing connection: %zu", client->id);
 
   client_free(client);
 }
@@ -150,7 +152,7 @@ static void uv_cb_shutdown(uv_shutdown_t * shutdown_req, int status)
 
   if (status) {
     log_append(client->log, LOG_ERROR, "Shutdown error, client: %zu: %s", client->id, uv_strerror(status));
-    if (!uv_is_closing((uv_handle_t *) &client->tcp)){
+    if (!uv_is_closing((uv_handle_t *) &client->tcp)) {
       uv_close((uv_handle_t *) &client->tcp, app_close_finished);
     }
   } else if (!client->closing) {
@@ -162,9 +164,16 @@ static void uv_cb_shutdown(uv_shutdown_t * shutdown_req, int status)
 
 static void worker_close(struct client_t * client)
 {
-  uv_shutdown_t * shutdown_req = &client->worker->shutdown_req;
+  uv_read_stop((uv_stream_t *) &client->tcp);
+  log_append(client->log, LOG_TRACE, "Shuting down client: %zu", client->id);
+
+  uv_shutdown_t * shutdown_req = &client->shutdown_req;
   shutdown_req->data = client;
-  uv_shutdown(shutdown_req, (uv_stream_t *) &client->tcp, uv_cb_shutdown);
+  int status = uv_shutdown(shutdown_req, (uv_stream_t *) &client->tcp, uv_cb_shutdown);
+  if (status < 0) {
+    log_append(client->log, LOG_ERROR, "Shutdown failed to initialize, client: %zu: %s",
+        client->id, uv_strerror(status));
+  }
 }
 
 static void app_close_cb(void * data)
@@ -305,7 +314,9 @@ static void worker_on_new_connection(uv_stream_t * pipe_s, ssize_t nread, const 
   }
 
   client->connection = http_connection_init(client, &worker->config->http_log,
-      &worker->config->hpack_log, client->plugin_invoker, app_write_cb, app_close_cb);
+      &worker->config->hpack_log, worker->config->h2_protocol_version_string,
+      worker->config->h2c_protocol_version_string, client->plugin_invoker,
+      app_write_cb, app_close_cb);
 
   uv_tcp_init(&worker->loop, &client->tcp);
   client->tcp.data = client;
@@ -319,7 +330,7 @@ static void worker_on_new_connection(uv_stream_t * pipe_s, ssize_t nread, const 
     log_append(worker->log, LOG_DEBUG, "Accepted fd %d\n", client->tcp.io_watcher.fd);
     uv_read_start((uv_stream_t *) &client->tcp, alloc_buffer, worker_read_from_network);
   } else {
-    uv_close((uv_handle_t *) &client->tcp, NULL);
+    uv_close((uv_handle_t *) &client->tcp, app_close_finished);
   }
 
   free(buf->base);
@@ -341,8 +352,10 @@ bool worker_use_tls(struct server_config_t * config)
 
 bool worker_init(struct worker_t * worker, struct server_config_t * config)
 {
+  h2_static_init();
+
   if (worker_use_tls(config)) {
-    tls_init();
+    tls_init(config->h2_protocol_version_string);
 
     worker->tls_ctx = tls_server_init(&config->tls_log, config->private_key_file, config->cert_file);
     ASSERT_OR_RETURN_FALSE(worker->tls_ctx);

@@ -218,6 +218,13 @@ enum h2_detect_result_e {
 };
 
 /**
+ * Must be called before calling any other h2_* functions.
+ *
+ * Does necessary preparation.
+ */
+void h2_static_init(void);
+
+/**
  * returns:
  * H2_DETECT_FAILED = the connection does not look like valid http/2 data
  * H2_DETECT_SUCCESS = the connection looks like valid http/2 data
