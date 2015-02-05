@@ -787,8 +787,6 @@ static bool h2_send_headers(h2_t * const h2, const h2_stream_t * const stream,
 static bool h2_send_push_promise(h2_t * const h2, const h2_stream_t * const pushed_stream,
                                  const header_list_t * const headers, const uint32_t associated_stream_id)
 {
-  // TODO split large headers into multiple frames
-
   binary_buffer_t encoded;
 
   if (!hpack_encode(h2->encoding_context, headers, &encoded)) {

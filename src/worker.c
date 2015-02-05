@@ -273,6 +273,8 @@ static void worker_assign_client_details(struct client_t * client, size_t index)
   if (curr->use_tls) {
     client->tls_ctx = tls_client_init(client->worker->tls_ctx, client, worker_write_to_network,
                                       tls_cb_write_to_app);
+  } else {
+    client->tls_ctx = NULL;
   }
 
   http_connection_set_details(client->connection, curr->use_tls, curr->hostname, curr->port);
@@ -354,13 +356,6 @@ bool worker_init(struct worker_t * worker, struct server_config_t * config)
 {
   h2_static_init();
 
-  if (worker_use_tls(config)) {
-    tls_init(config->h2_protocol_version_string);
-
-    worker->tls_ctx = tls_server_init(&config->tls_log, config->private_key_file, config->cert_file);
-    ASSERT_OR_RETURN_FALSE(worker->tls_ctx);
-  }
-
   worker->stopping = false;
   worker->config = config;
   worker->plugins = NULL;
@@ -420,6 +415,14 @@ bool worker_init(struct worker_t * worker, struct server_config_t * config)
   worker->data_log = &config->data_log;
   worker->wire_log = &config->wire_log;
 
+  if (worker_use_tls(config)) {
+    tls_init(config->h2_protocol_version_string);
+
+    worker->tls_ctx = tls_server_init(&config->tls_log, config->private_key_file, config->cert_file);
+    ASSERT_OR_RETURN_FALSE(worker->tls_ctx);
+  } else {
+    worker->tls_ctx = NULL;
+  }
 
   return true;
 }
@@ -478,7 +481,7 @@ void worker_free(struct worker_t * worker)
     free(prev);
   }
 
-  if (worker_use_tls(worker->config)) {
+  if (worker->tls_ctx && worker_use_tls(worker->config)) {
     tls_server_free(worker->tls_ctx);
   }
 

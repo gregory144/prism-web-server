@@ -221,7 +221,7 @@ static int alpn_callback(SSL * ssl, const unsigned char ** out, unsigned char * 
 
 // openssl thread support enabled
 
-static uv_mutex_t * lock_cs;
+static uv_mutex_t * lock_cs = NULL;
 
 static void tls_locking_cb(int mode, int type, char * file, int line)
 {
@@ -254,6 +254,9 @@ static void tls_thread_setup(void)
 
 static void tls_thread_cleanup(void)
 {
+  if (!lock_cs) {
+    return;
+  }
   CRYPTO_set_locking_callback(NULL);
 
   for (int i = 0; i < CRYPTO_num_locks(); i++) {
@@ -352,11 +355,12 @@ tls_server_ctx_t * tls_server_init(log_context_t * log, char * key_file, char * 
 
 bool tls_server_free(tls_server_ctx_t * server_ctx)
 {
-
   tls_thread_cleanup();
 
-  SSL_CTX_free(server_ctx->ssl_ctx);
-  free(server_ctx);
+  if (server_ctx->ssl_ctx) {
+    SSL_CTX_free(server_ctx->ssl_ctx);
+    free(server_ctx);
+  }
 
   return true;
 }
