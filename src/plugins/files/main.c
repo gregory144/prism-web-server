@@ -22,39 +22,39 @@
 
 #define READ_BUF_SIZE 0x100000 // 2^20
 
-typedef struct accept_param_s {
-  struct accept_param_s * next;
+struct accept_param_t {
+  struct accept_param_t * next;
 
   char * key;
 
   char * value;
 
-} accept_param_t;
+};
 
-typedef struct {
+struct content_type_t {
 
   char * type;
 
   char * subtype;
 
-} content_type_t;
+};
 
-typedef struct accept_type_s {
+struct accept_type_t {
 
-  struct accept_type_s * next;
+  struct accept_type_t * next;
 
   char * type;
   char * subtype;
 
-  accept_param_t * media_params;
+  struct accept_param_t * media_params;
 
   double weight;
 
-  accept_param_t * ext_params;
+  struct accept_param_t * ext_params;
 
-} accept_type_t;
+};
 
-typedef struct {
+struct file_server_t {
 
   log_context_t * log;
 
@@ -64,16 +64,16 @@ typedef struct {
 
   multimap_t * type_map;
 
-  content_type_t * default_content_type;
+  struct content_type_t * default_content_type;
 
   char * cwd;
   size_t cwd_length;
 
-} file_server_t;
+};
 
-typedef struct {
+struct file_server_request_t {
 
-  file_server_t * file_server;
+  struct file_server_t * file_server;
 
   char * path;
 
@@ -81,15 +81,15 @@ typedef struct {
 
   uv_loop_t * loop;
 
+  uv_fs_t open_req;
+
   uv_fs_t stat_req;
 
-  uv_fs_t open_req;
+  uv_buf_t buf;
 
   uv_fs_t read_req;
 
   uv_fs_t close_req;
-
-  uv_buf_t buf;
 
   ssize_t content_length;
 
@@ -99,9 +99,10 @@ typedef struct {
 
 } file_server_request_t;
 
-static content_type_t * register_content_type(multimap_t * m, char * extension, char * type, char * subtype)
+static struct content_type_t * register_content_type(multimap_t * m,
+    char * extension, char * type, char * subtype)
 {
-  content_type_t * t = malloc(sizeof(content_type_t));
+  struct content_type_t * t = malloc(sizeof(struct content_type_t));
 
   t->type = type;
 
@@ -112,7 +113,7 @@ static content_type_t * register_content_type(multimap_t * m, char * extension, 
   return t;
 }
 
-static void files_plugin_init_type_map(file_server_t * fs)
+static void files_plugin_init_type_map(struct file_server_t * fs)
 {
   fs->type_map = multimap_init_with_string_keys();
 
@@ -129,14 +130,15 @@ static void files_plugin_init_type_map(file_server_t * fs)
   register_content_type(fs->type_map, "css", "text", "css");
   register_content_type(fs->type_map, "ttf", "application", "x-font-ttf");
 
-  content_type_t * default_ct = register_content_type(fs->type_map, "bin", "application", "octet-stream");
+  struct content_type_t * default_ct =
+    register_content_type(fs->type_map, "bin", "application", "octet-stream");
 
   fs->default_content_type = default_ct;
 }
 
 static void files_plugin_start(struct plugin_t * plugin)
 {
-  file_server_t * file_server = plugin->data;
+  struct file_server_t * file_server = plugin->data;
 
   size_t cwd_capacity = 256;
   char * cwd = malloc(cwd_capacity);
@@ -171,7 +173,7 @@ static void files_plugin_stop(struct plugin_t * plugin)
 {
   log_append(plugin->log, LOG_INFO, "Files plugin stopped");
 
-  file_server_t * file_server = plugin->data;
+  struct file_server_t * file_server = plugin->data;
 
   multimap_free(file_server->type_map, noop, free);
 
@@ -179,7 +181,7 @@ static void files_plugin_stop(struct plugin_t * plugin)
   free(file_server);
 }
 
-static void file_server_request_free(file_server_request_t * fs_request)
+static void file_server_request_free(struct file_server_request_t * fs_request)
 {
   if (fs_request->buf.base) {
     free(fs_request->buf.base);
@@ -194,11 +196,11 @@ static void file_server_request_free(file_server_request_t * fs_request)
 
 static void file_server_uv_close_cb(uv_fs_t * req)
 {
-  file_server_request_t * fs_request = req->data;
+  struct file_server_request_t * fs_request = req->data;
   file_server_request_free(fs_request);
 }
 
-static void file_server_finish_request(file_server_request_t * fs_request)
+static void file_server_finish_request(struct file_server_request_t * fs_request)
 {
   if (fs_request->fd >= 0) {
     uv_fs_close(fs_request->loop, &fs_request->close_req, fs_request->fd, file_server_uv_close_cb);
@@ -207,11 +209,11 @@ static void file_server_finish_request(file_server_request_t * fs_request)
   }
 }
 
-static void file_server_read_file(file_server_request_t * fs_request, ssize_t offset);
+static void file_server_read_file(struct file_server_request_t * fs_request, ssize_t offset);
 
 static void file_server_uv_read_cb(uv_fs_t * req)
 {
-  file_server_request_t * fs_request = req->data;
+  struct file_server_request_t * fs_request = req->data;
   ssize_t nread = req->result;
   uv_fs_req_cleanup(req);
 
@@ -238,7 +240,7 @@ static void file_server_uv_read_cb(uv_fs_t * req)
   }
 }
 
-static void file_server_read_file(file_server_request_t * fs_request, ssize_t offset)
+static void file_server_read_file(struct file_server_request_t * fs_request, ssize_t offset)
 {
   if (uv_fs_read(fs_request->loop, &fs_request->read_req, fs_request->fd, &fs_request->buf, 1, offset,
                  file_server_uv_read_cb)) {
@@ -277,7 +279,7 @@ static char * copy_range(char * begin, char * end)
   return r;
 }
 
-static accept_type_t * parse_accept_type(char * begin, char * end)
+static struct accept_type_t * parse_accept_type(char * begin, char * end)
 {
   char * type = NULL;
   char * subtype = NULL;
@@ -298,20 +300,21 @@ static accept_type_t * parse_accept_type(char * begin, char * end)
   char * end_subtype = strpbrk(current, ";, ");
   subtype = copy_range(begin_subtype, end_subtype ? end_subtype : end);
 
-  accept_type_t * t = malloc(sizeof(accept_type_t));
+  struct accept_type_t * t = malloc(sizeof(struct accept_type_t));
   t->type = type;
   t->subtype = subtype;
   return t;
 }
 
-static content_type_t * content_type_for_path(file_server_t * fs, char * path, char * accept_header)
+static struct content_type_t * content_type_for_path(
+    struct file_server_t * fs, char * path, char * accept_header)
 {
   multimap_t * type_map = fs->type_map;
   char * extension = file_extension(path);
 
   log_append(fs->log, LOG_DEBUG, "Got extension: %s", extension);
 
-  accept_type_t * head = NULL;
+  struct accept_type_t * head = NULL;
 
   if (accept_header) {
     size_t offset = 0;
@@ -324,7 +327,7 @@ static content_type_t * content_type_for_path(file_server_t * fs, char * path, c
         end = accept_header + length;
       }
 
-      accept_type_t * new_type = parse_accept_type(accept_header + offset, end);
+      struct accept_type_t * new_type = parse_accept_type(accept_header + offset, end);
 
       if (!new_type) {
         break;
@@ -338,14 +341,14 @@ static content_type_t * content_type_for_path(file_server_t * fs, char * path, c
     } while (offset < length);
   }
 
-  content_type_t * match = NULL;
+  struct content_type_t * match = NULL;
 
   if (extension) {
     multimap_values_t * types_for_extension = multimap_get(type_map, extension);
 
     if (types_for_extension && head) {
       // find the first matching content type
-      accept_type_t * current_accept_type = head;
+      struct accept_type_t * current_accept_type = head;
 
       while (!match && current_accept_type) {
 
@@ -357,7 +360,7 @@ static content_type_t * content_type_for_path(file_server_t * fs, char * path, c
         multimap_values_t * content_types = types_for_extension;
 
         while (content_types) {
-          content_type_t * current_content_type = content_types->value;
+          struct content_type_t * current_content_type = content_types->value;
 
           if (strcmp(current_content_type->type, current_accept_type->type) == 0) {
             if (strcmp(current_accept_type->subtype, "*") == 0 ||
@@ -378,8 +381,8 @@ static content_type_t * content_type_for_path(file_server_t * fs, char * path, c
     }
   } else {
     // no extension?
-    content_type_t * content_type = fs->default_content_type;
-    accept_type_t * current_accept_type = head;
+    struct content_type_t * content_type = fs->default_content_type;
+    struct accept_type_t * current_accept_type = head;
 
     while (!match && current_accept_type) {
 
@@ -402,10 +405,10 @@ static content_type_t * content_type_for_path(file_server_t * fs, char * path, c
   }
 
   // go through and free
-  accept_type_t * current = head;
+  struct accept_type_t * current = head;
 
   while (current) {
-    accept_type_t * next = current->next;
+    struct accept_type_t * next = current->next;
     free(current->type);
     free(current->subtype);
     free(current);
@@ -418,9 +421,9 @@ static content_type_t * content_type_for_path(file_server_t * fs, char * path, c
 
 static void file_server_uv_stat_cb(uv_fs_t * req)
 {
-  file_server_request_t * fs_request = req->data;
+  struct file_server_request_t * fs_request = req->data;
   http_response_t * response = fs_request->response;
-  file_server_t * fs = fs_request->file_server;
+  struct file_server_t * fs = fs_request->file_server;
 
   if (req->result != 0) {
     log_append(fs->log, LOG_ERROR, "Could not stat file: %d: %s", req->result, fs_request->path);
@@ -441,7 +444,7 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
 
     char * accept_header = http_request_header_get(fs_request->response->request, "accept");
     log_append(fs->log, LOG_DEBUG, "Accept header: %s", accept_header);
-    content_type_t * content_type = content_type_for_path(fs, path, accept_header);
+    struct content_type_t * content_type = content_type_for_path(fs, path, accept_header);
 
     if (content_type) {
       char content_type_s[strlen(content_type->type) + strlen(content_type->subtype) + 2];
@@ -488,8 +491,8 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
 
 static void file_server_uv_open_cb(uv_fs_t * req)
 {
-  file_server_request_t * fs_request = req->data;
-  file_server_t * fs = fs_request->file_server;
+  struct file_server_request_t * fs_request = req->data;
+  struct file_server_t * fs = fs_request->file_server;
 
   if (req->result != -1) {
 
@@ -512,8 +515,8 @@ static void file_server_uv_open_cb(uv_fs_t * req)
 static void files_plugin_request_handler(struct plugin_t * plugin, struct client_t * client, http_request_t * request,
     http_response_t * response)
 {
-  file_server_t * file_server = plugin->data;
-  file_server_request_t * fs_request = malloc(sizeof(file_server_request_t));
+  struct file_server_t * file_server = plugin->data;
+  struct file_server_request_t * fs_request = malloc(sizeof(file_server_request_t));
   fs_request->response = response;
   struct worker_t * worker = client->worker;
   fs_request->loop = &worker->loop;
@@ -629,7 +632,7 @@ void plugin_initialize(struct plugin_t * plugin, struct worker_t * worker)
   plugin->handlers->stop = files_plugin_stop;
   plugin->handlers->handle = files_plugin_handler;
 
-  file_server_t * file_server = malloc(sizeof(file_server_t));
+  struct file_server_t * file_server = malloc(sizeof(struct file_server_t));
   file_server->log = &worker->config->plugin_log;
 
   plugin->data = file_server;
