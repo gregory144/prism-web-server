@@ -74,3 +74,5 @@ For Ubuntu:
 * better hpack encoding algorithm - use indexing
 * stream priority
 * improve gzip compression to use deflateBound to predict size of output
+* files - cache file, if the file changes (libuv watch it), update the cache
+* use sendfile - plugin calls library to prepare for sendfile with callback, library tells plugin much much it can write to the socket
