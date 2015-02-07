@@ -329,9 +329,11 @@ static void files_plugin_stop(struct plugin_t * plugin)
 static void file_server_finish_request(struct file_server_request_t * fs_request)
 {
   struct open_file_t * open_file = fs_request->open_file;
-  open_file->pending_request_count--;
-  if (open_file && open_file->opened) {
-    file_server_try_close_file(open_file);
+  if (fs_request->open_file) {
+    open_file->pending_request_count--;
+    if (open_file && open_file->opened) {
+      file_server_try_close_file(open_file);
+    }
   }
   file_server_request_free(fs_request);
 }
