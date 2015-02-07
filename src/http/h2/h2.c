@@ -539,6 +539,7 @@ h2_t * h2_init(void * const data, log_context_t * log, log_context_t * hpack_log
 void h2_free(h2_t * const h2)
 {
   hash_table_free(h2->streams);
+  free(h2->streams);
   hpack_context_free(h2->encoding_context);
   hpack_context_free(h2->decoding_context);
 

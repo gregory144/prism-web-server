@@ -22,6 +22,50 @@
 
 #define READ_BUF_SIZE 0x100000 // 2^20
 
+struct pending_fs_request_t {
+
+  struct pending_fs_request_t * next;
+
+  struct file_server_request_t * request;
+
+};
+
+struct open_file_t {
+
+  char * path;
+
+  // the number of pending requests that are
+  // using this file
+  size_t pending_request_count;
+
+  // the last time this file's pending_request_count
+  // was set to 0
+  uint64_t finished_time;
+
+  bool opened;
+  uv_fs_t open_req;
+
+  bool closing;
+
+  uv_file fd;
+
+  /**
+   * The list of file_server_requests waiting
+   * for the file to be opened
+   */
+  struct pending_fs_request_t * list;
+
+  bool file_closed;
+  uv_fs_t close_req;
+
+  uv_timer_t timer;
+  bool timer_started;
+  bool timer_closed;
+
+  struct file_server_t * fs;
+
+};
+
 struct accept_param_t {
   struct accept_param_t * next;
 
@@ -69,27 +113,26 @@ struct file_server_t {
   char * cwd;
   size_t cwd_length;
 
+  hash_table_t open_files;
+  size_t open_files_count;
+
+  bool closing;
+
 };
 
 struct file_server_request_t {
 
   struct file_server_t * file_server;
 
-  char * path;
-
-  uv_file fd;
+  struct open_file_t * open_file;
 
   uv_loop_t * loop;
-
-  uv_fs_t open_req;
 
   uv_fs_t stat_req;
 
   uv_buf_t buf;
 
   uv_fs_t read_req;
-
-  uv_fs_t close_req;
 
   ssize_t content_length;
 
@@ -136,6 +179,100 @@ static void files_plugin_init_type_map(struct file_server_t * fs)
   fs->default_content_type = default_ct;
 }
 
+static void file_server_free(struct file_server_t * file_server)
+{
+  if (file_server->closing && file_server->open_files_count == 0) {
+    free(file_server->cwd);
+    free(file_server);
+  }
+}
+
+static void file_server_request_free(struct file_server_request_t * fs_request)
+{
+  if (fs_request->buf.base) {
+    free(fs_request->buf.base);
+  }
+
+  free(fs_request);
+}
+
+static void open_file_free(struct open_file_t * open_file)
+{
+  free(open_file);
+}
+
+static void file_server_open_file_close_finished(struct open_file_t * open_file)
+{
+  if (open_file->file_closed && open_file->timer_closed) {
+    struct file_server_t * fs = open_file->fs;
+    fs->open_files_count--;
+
+    open_file_free(open_file);
+    file_server_free(fs);
+  }
+}
+
+static void file_server_open_file_closed(uv_fs_t * req)
+{
+  uv_fs_req_cleanup(req);
+
+  struct open_file_t * open_file = req->data;
+  open_file->file_closed = true;
+  file_server_open_file_close_finished(open_file);
+}
+
+static void file_server_open_file_timer_closed(uv_handle_t * handle)
+{
+  struct open_file_t * open_file = handle->data;
+  open_file->timer_closed = true;
+  file_server_open_file_close_finished(open_file);
+}
+
+static void open_file_removed_from_hash(void * of)
+{
+  //path has been free'd at this point
+  struct open_file_t * open_file = of;
+
+  if (open_file->closing) {
+    return;
+  }
+
+  log_append(open_file->fs->log, LOG_DEBUG, "Closing file: %d", open_file->fd);
+  open_file->closing = true;
+
+  uv_fs_close(&open_file->fs->worker->loop, &open_file->close_req, open_file->fd,
+      file_server_open_file_closed);
+
+  uv_timer_stop(&open_file->timer);
+  uv_close((uv_handle_t *) &open_file->timer, file_server_open_file_timer_closed);
+}
+
+static void file_server_close_file_timer_cb(uv_timer_t * timer)
+{
+  struct open_file_t * open_file = timer->data;
+
+  uint64_t now = uv_now(timer->loop);
+  if (open_file->pending_request_count == 0 && open_file->finished_time < now - 2000) {
+    uv_timer_stop(timer);
+    log_append(open_file->fs->log, LOG_DEBUG, "Closing file: %s", open_file->path);
+    hash_table_remove(&open_file->fs->open_files, open_file->path);
+  }
+}
+
+static void file_server_try_close_file(struct open_file_t * open_file)
+{
+  if (open_file->pending_request_count == 0) {
+    open_file->finished_time = uv_now(&open_file->fs->worker->loop);
+    if (!open_file->timer_started) {
+      uv_timer_t * timer = &open_file->timer;
+      uv_timer_init(&open_file->fs->worker->loop, timer);
+      timer->data = open_file;
+      open_file->timer_started = true;
+      uv_timer_start(timer, file_server_close_file_timer_cb, 2000, 2000);
+    }
+  }
+}
+
 static void files_plugin_start(struct plugin_t * plugin)
 {
   struct file_server_t * file_server = plugin->data;
@@ -161,6 +298,9 @@ static void files_plugin_start(struct plugin_t * plugin)
   file_server->cwd = cwd;
   file_server->cwd_length = cwd_length;
 
+  hash_table_init_with_string_keys(&file_server->open_files, open_file_removed_from_hash);
+  file_server->open_files_count = 0;
+
   log_append(plugin->log, LOG_INFO, "Files plugin started");
 }
 
@@ -174,39 +314,26 @@ static void files_plugin_stop(struct plugin_t * plugin)
   log_append(plugin->log, LOG_INFO, "Files plugin stopped");
 
   struct file_server_t * file_server = plugin->data;
+  file_server->closing = true;
 
   multimap_free(file_server->type_map, noop, free);
 
-  free(file_server->cwd);
-  free(file_server);
-}
-
-static void file_server_request_free(struct file_server_request_t * fs_request)
-{
-  if (fs_request->buf.base) {
-    free(fs_request->buf.base);
+  if (hash_table_size(&file_server->open_files) > 0) {
+    hash_table_free(&file_server->open_files);
+  } else {
+    hash_table_free(&file_server->open_files);
+    file_server_free(file_server);
   }
-
-  if (fs_request->path) {
-    free(fs_request->path);
-  }
-
-  free(fs_request);
-}
-
-static void file_server_uv_close_cb(uv_fs_t * req)
-{
-  struct file_server_request_t * fs_request = req->data;
-  file_server_request_free(fs_request);
 }
 
 static void file_server_finish_request(struct file_server_request_t * fs_request)
 {
-  if (fs_request->fd >= 0) {
-    uv_fs_close(fs_request->loop, &fs_request->close_req, fs_request->fd, file_server_uv_close_cb);
-  } else {
-    file_server_request_free(fs_request);
+  struct open_file_t * open_file = fs_request->open_file;
+  open_file->pending_request_count--;
+  if (open_file && open_file->opened) {
+    file_server_try_close_file(open_file);
   }
+  file_server_request_free(fs_request);
 }
 
 static void file_server_read_file(struct file_server_request_t * fs_request, ssize_t offset);
@@ -242,8 +369,10 @@ static void file_server_uv_read_cb(uv_fs_t * req)
 
 static void file_server_read_file(struct file_server_request_t * fs_request, ssize_t offset)
 {
-  if (uv_fs_read(fs_request->loop, &fs_request->read_req, fs_request->fd, &fs_request->buf, 1, offset,
-                 file_server_uv_read_cb)) {
+  log_append(fs_request->file_server->log, LOG_DEBUG, "Reading file: %s from offset: %zd",
+      fs_request->open_file->path, offset);
+  if (uv_fs_read(fs_request->loop, &fs_request->read_req, fs_request->open_file->fd,
+        &fs_request->buf, 1, offset, file_server_uv_read_cb)) {
     http_response_write_error(fs_request->response, 500);
     file_server_finish_request(fs_request);
   }
@@ -426,19 +555,21 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
   struct file_server_t * fs = fs_request->file_server;
 
   if (req->result != 0) {
-    log_append(fs->log, LOG_ERROR, "Could not stat file: %d: %s", req->result, fs_request->path);
+    log_append(fs->log, LOG_ERROR, "Could not stat file: %s: %s", fs_request->open_file->path,
+        uv_err_name(req->result));
     http_response_write_error(response, 500);
     file_server_finish_request(fs_request);
   } else if (!S_ISREG(req->statbuf.st_mode)) {
-    log_append(fs->log, LOG_ERROR, "Not a regular file: %d, %s", req->result, fs_request->path);
-    abort();
+    log_append(fs->log, LOG_ERROR, "Not a regular file: %s: %s", fs_request->open_file->path,
+        uv_err_name(req->result));
     http_response_write_error(response, 404);
     file_server_finish_request(fs_request);
+    abort();
   } else {
     fs_request->content_length = req->statbuf.st_size;
     fs_request->bytes_read = 0;
 
-    char * path = fs_request->path;
+    char * path = fs_request->open_file->path;
 
     http_response_status_set(response, 200);
 
@@ -483,10 +614,19 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
     buf->len = fs_request->content_length > READ_BUF_SIZE ? READ_BUF_SIZE : fs_request->content_length;
     buf->base = malloc(buf->len);
 
-    file_server_read_file(fs_request, -1);
+    file_server_read_file(fs_request, 0);
   }
 
   uv_fs_req_cleanup(req);
+}
+
+static void file_server_use_opened_file(struct file_server_request_t * fs_request)
+{
+  if (uv_fs_fstat(fs_request->loop, &fs_request->stat_req,
+        fs_request->open_file->fd, file_server_uv_stat_cb)) {
+    http_response_write_error(fs_request->response, 500);
+    file_server_finish_request(fs_request);
+  }
 }
 
 static void file_server_uv_open_cb(uv_fs_t * req)
@@ -495,16 +635,31 @@ static void file_server_uv_open_cb(uv_fs_t * req)
   struct file_server_t * fs = fs_request->file_server;
 
   if (req->result != -1) {
+    fs_request->open_file->fd = req->result;
+    fs_request->open_file->opened = true;
 
-    fs_request->fd = req->result;
+    bool handled = false;
+    struct pending_fs_request_t * curr = fs_request->open_file->list;
+    while (curr) {
+      struct file_server_request_t * pending_req = curr->request;
+      if (pending_req == fs_request) {
+        handled = true;
+      }
+      file_server_use_opened_file(pending_req);
 
-    if (uv_fs_fstat(fs_request->loop, &fs_request->stat_req, fs_request->fd, file_server_uv_stat_cb)) {
-      http_response_write_error(fs_request->response, 500);
-      file_server_finish_request(fs_request);
+      struct pending_fs_request_t * prev = curr;
+      curr = curr->next;
+      free(prev);
     }
 
+    if (!handled) {
+      file_server_use_opened_file(fs_request);
+    }
+
+    fs_request->open_file->list = NULL;
+
   } else {
-    log_append(fs->log, LOG_ERROR, "Could not open file: %s", fs_request->path);
+    log_append(fs->log, LOG_ERROR, "Could not open file: %s", fs_request->open_file->path);
     http_response_write_error(fs_request->response, 404);
     file_server_finish_request(fs_request);
   }
@@ -512,8 +667,8 @@ static void file_server_uv_open_cb(uv_fs_t * req)
   uv_fs_req_cleanup(req);
 }
 
-static void files_plugin_request_handler(struct plugin_t * plugin, struct client_t * client, http_request_t * request,
-    http_response_t * response)
+static void files_plugin_request_handler(struct plugin_t * plugin, struct client_t * client,
+    http_request_t * request, http_response_t * response)
 {
   struct file_server_t * file_server = plugin->data;
   struct file_server_request_t * fs_request = malloc(sizeof(file_server_request_t));
@@ -522,11 +677,8 @@ static void files_plugin_request_handler(struct plugin_t * plugin, struct client
   fs_request->loop = &worker->loop;
   fs_request->file_server = file_server;
   fs_request->stat_req.data = fs_request;
-  fs_request->open_req.data = fs_request;
   fs_request->read_req.data = fs_request;
-  fs_request->close_req.data = fs_request;
-  fs_request->path = NULL;
-  fs_request->fd = -1;
+  fs_request->open_file = NULL;
   fs_request->buf.base = NULL;
   fs_request->buf.len = 0;
 
@@ -565,7 +717,6 @@ static void files_plugin_request_handler(struct plugin_t * plugin, struct client
   }
 
   log_append(file_server->log, LOG_DEBUG, "Requested file: %s", path);
-  fs_request->path = path;
 
   size_t path_length = strlen(path);
 
@@ -575,10 +726,55 @@ static void files_plugin_request_handler(struct plugin_t * plugin, struct client
                file_server->cwd_length);
     http_response_write_error(response, 404);
     file_server_finish_request(fs_request);
+    free(path);
     return;
   }
 
-  uv_fs_open(fs_request->loop, &fs_request->open_req, fs_request->path, O_RDONLY, 0644, file_server_uv_open_cb);
+  struct open_file_t * open_file = hash_table_get(&fs_request->file_server->open_files, path);
+  if (open_file && !open_file->closing) {
+    fs_request->open_file = open_file;
+    open_file->pending_request_count++;
+
+    if (open_file->fd >= 0) {
+      file_server_use_opened_file(fs_request);
+    } else {
+      struct pending_fs_request_t * pending_fs_req = malloc(sizeof(struct pending_fs_request_t));
+      pending_fs_req->request = fs_request;
+      pending_fs_req->next = open_file->list;
+      open_file->list = pending_fs_req;
+    }
+
+    free(path);
+
+  } else {
+    struct open_file_t * open_file = malloc(sizeof(struct open_file_t));
+    open_file->path = path;
+    open_file->open_req.data = fs_request;
+    open_file->opened = false;
+    open_file->closing = false;
+    open_file->close_req.data = open_file;
+    open_file->file_closed = false;
+    open_file->fd = -1;
+    open_file->pending_request_count = 1;
+    open_file->timer_started = false;
+    open_file->timer_closed = false;
+    open_file->list = NULL;
+    open_file->fs = file_server;
+
+    fs_request->open_file = open_file;
+
+    if (!hash_table_put(&file_server->open_files, path, open_file)) {
+      log_append(file_server->log, LOG_ERROR, "Unable to store opened file: %s", path);
+      free(open_file);
+      free(path);
+      http_response_write_error(fs_request->response, 500);
+      file_server_finish_request(fs_request);
+    } else {
+      file_server->open_files_count++;
+      uv_fs_open(fs_request->loop, &open_file->open_req, path,
+          O_RDONLY, 0644, file_server_uv_open_cb);
+    }
+  }
 }
 
 static void files_plugin_data_handler(struct plugin_t * plugin, struct client_t * client, http_request_t * request,
@@ -634,6 +830,7 @@ void plugin_initialize(struct plugin_t * plugin, struct worker_t * worker)
 
   struct file_server_t * file_server = malloc(sizeof(struct file_server_t));
   file_server->log = &worker->config->plugin_log;
+  file_server->closing = false;
 
   plugin->data = file_server;
 

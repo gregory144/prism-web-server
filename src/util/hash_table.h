@@ -85,7 +85,7 @@ void * hash_table_get(hash_table_t * table, const void * const key);
 
 bool hash_table_put(hash_table_t * table, void * key, void * value);
 
-void * hash_table_remove(hash_table_t * table, void * key);
+bool hash_table_remove(hash_table_t * table, void * key);
 
 void hash_table_iterator_init(hash_table_iter_t * iter, hash_table_t * table);
 

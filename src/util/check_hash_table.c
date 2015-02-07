@@ -16,6 +16,7 @@ void setup_ht_strings()
 void teardown_ht_strings()
 {
   hash_table_free(ht);
+  free(ht);
 }
 
 START_TEST(test_ht_strings_put_and_get)
@@ -77,8 +78,8 @@ START_TEST(test_ht_strings_put_and_remove)
   ck_assert_str_eq(value, "v1");
   ck_assert_uint_eq(1, hash_table_size(ht));
 
-  value = hash_table_remove(ht, "k1");
-  free(value);
+  bool ret = hash_table_remove(ht, "k1");
+  ck_assert(ret);
   ck_assert_uint_eq(0, hash_table_size(ht));
 
   value = hash_table_get(ht, "k1");
@@ -95,6 +96,7 @@ void setup_ht_ints()
 void teardown_ht_ints()
 {
   hash_table_free(ht);
+  free(ht);
 }
 
 START_TEST(test_ht_ints_put_and_get)

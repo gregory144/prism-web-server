@@ -247,7 +247,7 @@ bool hash_table_put(hash_table_t * table, void * key, void * value)
   return true;
 }
 
-void * hash_table_remove(hash_table_t * table, void * key)
+bool hash_table_remove(hash_table_t * table, void * key)
 {
   size_t hash_value = hash_key(table, table->capacity, key);
   hash_table_entry_t * current;
@@ -267,11 +267,13 @@ void * hash_table_remove(hash_table_t * table, void * key)
       table->free_value(current->value);
       free(current);
       table->size--;
-      return value;
+
+      return true;
     }
+    prev = current;
   }
 
-  return NULL;
+  return false;
 }
 
 void hash_table_iterator_init(hash_table_iter_t * iter, hash_table_t * table)
@@ -324,5 +326,4 @@ void hash_table_free(hash_table_t * table)
   }
 
   free(table->buckets);
-  free(table);
 }
