@@ -49,7 +49,7 @@ For Ubuntu:
 * configuration
   * load plugins for a specific listen address only
 * graceful shutdown
-  * send custom signal to child processes to gracefully shutdown
+  * second int signal should force shutdown
 * better error handling for libuv calls
 * doxygen documentation
 * complete spec compliance
