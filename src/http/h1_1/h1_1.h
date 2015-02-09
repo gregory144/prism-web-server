@@ -94,6 +94,8 @@ void h1_1_read(h1_1_t * const h1_1, uint8_t * const buffer, const size_t len);
 
 void h1_1_eof(h1_1_t * const h1_1);
 
+void h1_1_shutdown(h1_1_t * const h1_1);
+
 void h1_1_finished_writes(h1_1_t * const h1_1);
 
 bool h1_1_response_write(h1_1_t * h1_1, http_response_t * const response, uint8_t * data, const size_t data_length,

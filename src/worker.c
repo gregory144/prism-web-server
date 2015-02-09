@@ -40,9 +40,14 @@ static void worker_sigterm_handler(uv_signal_t * sigterm_handler, int signum)
 
 static void worker_stop_continue(struct worker_t * worker)
 {
-  if (!worker->active_queue && worker->active_signal_handlers < 1) {
+  if (!worker->active_queue && worker->active_signal_handlers < 1 && worker->open_clients == NULL) {
     log_append(worker->log, LOG_TRACE, "Closed worker handles...");
-    uv_stop(&worker->loop);
+
+    struct plugin_list_t * current = worker->plugins;
+    while (current) {
+      plugin_stop(current->plugin);
+      current = current->next;
+    }
   }
 }
 
@@ -139,6 +144,20 @@ static bool app_write_cb(void * data, uint8_t * buffer, size_t length)
 static void app_close_finished(uv_handle_t * handle)
 {
   struct client_t * client = handle->data;
+
+  struct worker_t * worker = client->worker;
+
+  if (client->prev) {
+    client->prev->next = client->next;
+    if (client->next) {
+      client->next->prev = client->prev;
+    }
+  } else {
+    worker->open_clients = client->next;
+    if (worker->open_clients) {
+      worker->open_clients->prev = NULL;
+    }
+  }
 
   log_append(client->log, LOG_TRACE,
       "Finishing closing connection: %zu", client->id);
@@ -315,6 +334,13 @@ static void worker_on_new_connection(uv_stream_t * pipe_s, ssize_t nread, const 
     return;
   }
 
+  client->prev = NULL;
+  if (worker->open_clients) {
+    worker->open_clients->prev = client;
+  }
+  client->next = worker->open_clients;
+  worker->open_clients = client;
+
   client->connection = http_connection_init(client, &worker->config->http_log,
       &worker->config->hpack_log, worker->config->h2_protocol_version_string,
       worker->config->h2c_protocol_version_string, client->plugin_invoker,
@@ -359,6 +385,7 @@ bool worker_init(struct worker_t * worker, struct server_config_t * config)
   worker->stopping = false;
   worker->config = config;
   worker->plugins = NULL;
+  worker->open_clients = NULL;
 
   struct plugin_config_t * plugin_config = config->plugin_configs;
   struct plugin_list_t * last = NULL;
@@ -452,8 +479,7 @@ int worker_run(struct worker_t * worker)
 void worker_stop(struct worker_t * worker)
 {
   log_append(worker->log, LOG_INFO, "Worker shutting down...");
-
-  struct plugin_list_t * current = worker->plugins;
+  worker->stopping = true;
 
   uv_signal_stop(&worker->sigpipe_handler);
   uv_signal_stop(&worker->sigint_handler);
@@ -465,10 +491,13 @@ void worker_stop(struct worker_t * worker)
   uv_read_stop((uv_stream_t *) &worker->queue);
   uv_close((uv_handle_t *) &worker->queue, worker_queue_closed);
 
-  while (current) {
-    plugin_stop(current->plugin);
-    current = current->next;
+  struct client_t * client = worker->open_clients;
+  while (client) {
+    http_connection_shutdown(client->connection);
+    client = client->next;
   }
+
+  worker_stop_continue(worker);
 }
 
 void worker_free(struct worker_t * worker)

@@ -81,6 +81,8 @@ void http_connection_read(http_connection_t * const connection, uint8_t * const 
 
 void http_connection_eof(http_connection_t * const connection);
 
+void http_connection_shutdown(http_connection_t * const connection);
+
 void http_finished_writes(http_connection_t * const connection);
 
 bool http_response_write(http_response_t * const response, uint8_t * data, const size_t data_length, bool last);

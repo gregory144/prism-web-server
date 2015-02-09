@@ -576,6 +576,11 @@ void h1_1_eof(h1_1_t * const h1_1)
   h1_1_close(h1_1);
 }
 
+void h1_1_shutdown(h1_1_t * const h1_1)
+{
+  h1_1_close(h1_1);
+}
+
 static void finish_response(h1_1_t * h1_1)
 {
   if (!h1_1->keep_alive) {

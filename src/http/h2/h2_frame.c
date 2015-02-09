@@ -1161,7 +1161,7 @@ h2_frame_t * h2_frame_parse(const h2_frame_parser_t * const parser, uint8_t * co
     *buffer_position += frame->length;
 
     if (success) {
-      success = success && parser->incoming_frame(parser->data, frame);
+      success = parser->incoming_frame(parser->data, frame);
       return frame;
     } else {
       free(frame);

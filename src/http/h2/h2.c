@@ -425,6 +425,35 @@ bool h2_stream_closed(h2_t * const h2, const uint32_t stream_id)
 
 }
 
+static void h2_close(h2_t * const h2)
+{
+  if (h2->closed) {
+    return;
+  }
+
+  if (h2->closing) {
+    // TODO loop through streams + close them
+    h2->closer(h2->data);
+    h2->closed = true;
+  }
+}
+
+static void h2_mark_closing(h2_t * const h2)
+{
+  log_append(h2->log, LOG_DEBUG, "Marked closing");
+  h2->shutting_down = true;
+  h2->closing = true;
+}
+
+static void h2_shutdown_if_finished(h2_t * const h2)
+{
+  log_append(h2->log, LOG_TRACE, "Can shut down? open streams: %zu", h2->incoming_concurrent_streams);
+  if (h2->shutting_down && h2->incoming_concurrent_streams == 0) {
+    h2_mark_closing(h2);
+    h2_close(h2);
+  }
+}
+
 static void h2_stream_mark_closing(h2_t * const h2, h2_stream_t * const stream)
 {
 
@@ -478,6 +507,7 @@ h2_t * h2_init(void * const data, log_context_t * log, log_context_t * hpack_log
   h2->incoming_push_enabled_pending = false;
   h2->incoming_push_enabled_pending_value = false;
 
+  h2->shutting_down = false;
   h2->closing = false;
   h2->closed = false;
 
@@ -552,27 +582,12 @@ void h2_free(h2_t * const h2)
   free(h2);
 }
 
-static void h2_mark_closing(h2_t * const h2)
-{
-  h2->closing = true;
-}
-
-static void h2_close(h2_t * const h2)
-{
-  if (h2->closed) {
-    return;
-  }
-
-  if (h2->closing) {
-    // TODO loop through streams + close them
-    h2->closer(h2->data);
-    h2->closed = true;
-  }
-}
-
 void h2_finished_writes(h2_t * const h2)
 {
-  log_append(h2->log, LOG_TRACE, "Finished write");
+  log_append(h2->log, LOG_TRACE, "Finished write, closing? %s, shutting down? %s",
+      h2->closing ? "yes" : "no",
+      h2->shutting_down ? "yes" : "no"
+  );
   h2_close(h2);
 }
 
@@ -623,7 +638,7 @@ static bool h2_send_goaway(const h2_t * const h2, enum h2_error_code_e error_cod
   uint8_t flags = 0; // no flags
 
   h2_frame_goaway_t * frame = (h2_frame_goaway_t *) h2_frame_init(FRAME_TYPE_GOAWAY, flags, 0);
-  frame->stream_id = h2->last_stream_id;
+  frame->stream_id = 0;
   frame->error_code = error_code;
   frame->last_stream_id = h2->last_stream_id;
   frame->debug_data = (uint8_t *) debug;
@@ -1509,12 +1524,11 @@ static bool h2_received_headers(h2_t * const h2, h2_stream_t * stream)
     return true;
   }
 
-  // TODO - check that the stream is in a valid state to be opened first
-  stream->state = STREAM_STATE_OPEN;
-  h2->incoming_concurrent_streams++;
+  if (!(h2->closing || h2->shutting_down)) {
+    // TODO - check that the stream is in a valid state to be opened first
+    stream->state = STREAM_STATE_OPEN;
+    h2->incoming_concurrent_streams++;
 
-  // TODO - check that the stream is not closed?
-  if (!h2->closing) {
     return h2_trigger_request(h2, stream);
   }
 
@@ -2058,7 +2072,7 @@ handle_buffer:
   // get the rest of the frame
   unprocessed_bytes = h2->buffer_length - h2->buffer_position;
 
-  if (!h2->closing && unprocessed_bytes > 0) {
+  if (!(h2->closing || h2->shutting_down) && unprocessed_bytes > 0) {
     log_append(h2->log, LOG_TRACE, "Unable to process last %zu bytes", unprocessed_bytes);
     // use memmove because it might overlap
     memmove(h2->buffer, h2->buffer + h2->buffer_position, unprocessed_bytes);
@@ -2071,12 +2085,29 @@ handle_buffer:
     h2->buffer_length = 0;
   }
 
+  h2_shutdown_if_finished(h2);
 }
 
 void h2_eof(h2_t * const h2)
 {
+  log_append(h2->log, LOG_TRACE, "Received EOF");
   h2_mark_closing(h2);
   h2_close(h2);
+}
+
+void h2_shutdown(h2_t * const h2)
+{
+  log_append(h2->log, LOG_TRACE, "Shutting down HTTP/2 connection");
+  h2->shutting_down = true;
+
+  if (!h2_send_goaway(h2, H2_ERROR_NO_ERROR, NULL)) {
+    log_append(h2->log, LOG_WARN, "Unable to send goaway frame");
+    h2_mark_closing(h2);
+    h2_close(h2);
+    return;
+  }
+
+  h2_shutdown_if_finished(h2);
 }
 
 bool h2_response_write(h2_stream_t * stream, http_response_t * const response, uint8_t * data, const size_t data_length,

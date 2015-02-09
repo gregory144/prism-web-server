@@ -45,6 +45,8 @@ struct worker_t {
 
   tls_server_ctx_t * tls_ctx;
 
+  struct client_t * open_clients;
+
 };
 
 /**

@@ -374,6 +374,27 @@ void http_connection_eof(http_connection_t * const connection)
   }
 }
 
+void http_connection_shutdown(http_connection_t * const connection)
+{
+  switch (connection->protocol) {
+    case NOT_SELECTED:
+      log_append(connection->log, LOG_TRACE, "Shutdown but protocol not selected");
+      http_connection_close(connection);
+      return;
+
+    case H2:
+      h2_shutdown((h2_t *) connection->handler);
+      break;
+
+    case H1_1:
+      h1_1_shutdown((h1_1_t *) connection->handler);
+      break;
+
+    default:
+      abort();
+  }
+}
+
 bool http_response_write(http_response_t * const response, uint8_t * data, const size_t data_length, bool last)
 {
   http_request_data_t * req_data = response->request->handler_data;

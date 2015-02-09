@@ -172,6 +172,7 @@ typedef struct h2_t {
   bool incoming_push_enabled_pending_value;
 
   // is the connection waiting to be gracefully closed?
+  bool shutting_down;
   bool closing;
   bool closed;
 
@@ -245,6 +246,8 @@ void h2_free(h2_t * const h2);
 void h2_read(h2_t * const h2, uint8_t * const buffer, const size_t len);
 
 void h2_eof(h2_t * const h2);
+
+void h2_shutdown(h2_t * const h2);
 
 void h2_finished_writes(h2_t * const h2);
 
