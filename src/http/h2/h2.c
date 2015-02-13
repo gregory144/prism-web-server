@@ -475,9 +475,10 @@ static bool h2_parse_error_cb(void * data, uint32_t stream_id, enum h2_error_cod
 
 static bool h2_incoming_frame(void * data, const h2_frame_t * const frame);
 
-h2_t * h2_init(void * const data, log_context_t * log, log_context_t * hpack_log, const char * tls_version,
-               const char * cipher, int cipher_key_size_in_bits, struct plugin_invoker_t * plugin_invoker,
-               const h2_write_cb writer, const h2_close_cb closer, const h2_request_init_cb request_init)
+h2_t * h2_init(void * const data, struct log_context_t * log, struct log_context_t * hpack_log,
+    const char * tls_version, const char * cipher, int cipher_key_size_in_bits,
+    struct plugin_invoker_t * plugin_invoker, const h2_write_cb writer, const h2_close_cb closer,
+    const h2_request_init_cb request_init)
 {
   h2_t * h2 = malloc(sizeof(h2_t));
   ASSERT_OR_RETURN_NULL(h2);

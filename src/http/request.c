@@ -160,7 +160,7 @@ static void parse_parameters(multimap_t * const params, char * query_string)
   }
 }
 
-http_request_t * http_request_init(void * handler_data, log_context_t * log, header_list_t * const header_list)
+http_request_t * http_request_init(void * handler_data, struct log_context_t * log, header_list_t * const header_list)
 {
   http_request_t * request = malloc(sizeof(http_request_t));
 

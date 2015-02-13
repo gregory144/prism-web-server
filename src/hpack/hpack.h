@@ -51,7 +51,7 @@ typedef struct {
 
 typedef struct {
 
-  log_context_t * log;
+  struct log_context_t * log;
 
   // maxiumum size in octets
   size_t max_size;
@@ -70,7 +70,7 @@ void hpack_decode_quantity(const uint8_t * const buf, const size_t length, const
 bool hpack_encode_quantity(binary_buffer_t * const buf, const uint8_t first_byte, const size_t bit_offset,
                            const size_t quantity);
 
-hpack_context_t * hpack_context_init(const size_t header_table_size, log_context_t * context);
+hpack_context_t * hpack_context_init(const size_t header_table_size, struct log_context_t * context);
 
 void hpack_context_free(hpack_context_t * const context);
 

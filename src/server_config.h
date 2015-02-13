@@ -46,6 +46,7 @@ struct server_config_t {
   struct listen_address_t * address_list;
 
   bool start_worker;
+  bool start_daemon;
   bool print_help;
   bool print_version;
 
@@ -58,14 +59,15 @@ struct server_config_t {
 
   enum log_level_e default_log_level;
 
-  log_context_t server_log;
-  log_context_t worker_log;
-  log_context_t wire_log;
-  log_context_t data_log;
-  log_context_t http_log;
-  log_context_t hpack_log;
-  log_context_t tls_log;
-  log_context_t plugin_log;
+  FILE * log_file;
+  struct log_context_t server_log;
+  struct log_context_t worker_log;
+  struct log_context_t wire_log;
+  struct log_context_t data_log;
+  struct log_context_t http_log;
+  struct log_context_t hpack_log;
+  struct log_context_t tls_log;
+  struct log_context_t plugin_log;
 
 };
 

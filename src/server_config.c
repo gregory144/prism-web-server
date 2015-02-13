@@ -90,10 +90,12 @@ void server_config_args_parse(struct server_config_t * config, int argc, char **
   config->plugin_configs = NULL;
   config->default_log_level = DEFAULT_LOG_LEVEL;
   config->start_worker = false;
+  config->start_daemon = false;
   config->print_help = false;
   config->print_version = false;
   config->h2_protocol_version_string = "h2-14";
   config->h2c_protocol_version_string = "h2c-14";
+  config->log_file = stdout;
 
   struct plugin_config_t * current_plugin = NULL;
 
@@ -101,7 +103,7 @@ void server_config_args_parse(struct server_config_t * config, int argc, char **
 
   opterr = 0;
 
-  while ((c = getopt(argc, argv, "l:p:k:c:w:L:ahv")) != -1) {
+  while ((c = getopt(argc, argv, "l:p:k:c:w:L:o:adhv")) != -1) {
 
     switch (c) {
       case 'l': { // listen address
@@ -158,8 +160,23 @@ void server_config_args_parse(struct server_config_t * config, int argc, char **
         break;
       }
 
+      case 'o': { // log file
+        FILE * fp = fopen(optarg, "a");
+        if (fp == NULL) {
+          fprintf(stderr, "Unable to log open file for appending: %s\n", optarg);
+          exit(EXIT_FAILURE);
+        }
+        setvbuf(fp, LOG_BUFFER, _IOLBF, LOG_BUFFER_LENGTH);
+        config->log_file = fp;
+        break;
+      }
+
       case 'a': // accept (start a worker process)
         config->start_worker = true;
+        break;
+
+      case 'd': // daemon (start a daemon process)
+        config->start_daemon = true;
         break;
 
       case 'h': // help

@@ -40,7 +40,7 @@ static void worker_sigterm_handler(uv_signal_t * sigterm_handler, int signum)
 
 static void worker_stop_continue(struct worker_t * worker)
 {
-  if (!worker->active_queue && worker->active_signal_handlers < 1 && worker->open_clients == NULL) {
+  if (!worker->active_queue && worker->active_handlers < 1 && worker->open_clients == NULL) {
     log_append(worker->log, LOG_TRACE, "Closed worker handles...");
 
     struct plugin_list_t * current = worker->plugins;
@@ -51,11 +51,11 @@ static void worker_stop_continue(struct worker_t * worker)
   }
 }
 
-static void signal_handler_closed(uv_handle_t * handle)
+static void handler_closed(uv_handle_t * handle)
 {
   struct worker_t * worker = handle->data;
 
-  worker->active_signal_handlers--;
+  worker->active_handlers--;
 
   worker_stop_continue(worker);
 }
@@ -417,18 +417,18 @@ bool worker_init(struct worker_t * worker, struct server_config_t * config)
   }
   worker->loop.data = worker;
 
-  worker->active_signal_handlers = 0;
+  worker->active_handlers = 0;
   uv_signal_init(&worker->loop, &worker->sigpipe_handler);
   worker->sigpipe_handler.data = worker;
-  worker->active_signal_handlers++;
+  worker->active_handlers++;
 
   uv_signal_init(&worker->loop, &worker->sigint_handler);
   worker->sigint_handler.data = worker;
-  worker->active_signal_handlers++;
+  worker->active_handlers++;
 
   uv_signal_init(&worker->loop, &worker->sigterm_handler);
   worker->sigterm_handler.data = worker;
-  worker->active_signal_handlers++;
+  worker->active_handlers++;
 
   uv_pipe_init(&worker->loop, &worker->queue, 1);
   uv_pipe_open(&worker->queue, 0);
@@ -484,9 +484,9 @@ void worker_stop(struct worker_t * worker)
   uv_signal_stop(&worker->sigpipe_handler);
   uv_signal_stop(&worker->sigint_handler);
   uv_signal_stop(&worker->sigterm_handler);
-  uv_close((uv_handle_t *) &worker->sigpipe_handler, signal_handler_closed);
-  uv_close((uv_handle_t *) &worker->sigint_handler, signal_handler_closed);
-  uv_close((uv_handle_t *) &worker->sigterm_handler, signal_handler_closed);
+  uv_close((uv_handle_t *) &worker->sigpipe_handler, handler_closed);
+  uv_close((uv_handle_t *) &worker->sigint_handler, handler_closed);
+  uv_close((uv_handle_t *) &worker->sigterm_handler, handler_closed);
 
   uv_read_stop((uv_stream_t *) &worker->queue);
   uv_close((uv_handle_t *) &worker->queue, worker_queue_closed);

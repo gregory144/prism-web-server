@@ -8,7 +8,7 @@
 #include "util.h"
 #include "http/http.h"
 
-struct plugin_t * plugin_init(struct plugin_t * plugin, log_context_t * log, char * plugin_file,
+struct plugin_t * plugin_init(struct plugin_t * plugin, struct log_context_t * log, char * plugin_file,
                        struct worker_t * worker)
 {
   bool free_plugin = false;

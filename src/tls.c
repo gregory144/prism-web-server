@@ -281,7 +281,7 @@ static void tls_thread_cleanup(void)
 
 #endif
 
-tls_server_ctx_t * tls_server_init(log_context_t * log, char * key_file, char * cert_file)
+tls_server_ctx_t * tls_server_init(struct log_context_t * log, char * key_file, char * cert_file)
 {
   SSL_CTX * ssl_ctx = SSL_CTX_new(SSLv23_server_method());
 

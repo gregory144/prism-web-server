@@ -4,6 +4,10 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#define LOG_BUFFER_LENGTH 4096
+static char log_storage[LOG_BUFFER_LENGTH];
+#define LOG_BUFFER (log_storage)
+
 enum log_level_e {
   LOG_OFF,
   LOG_TRACE,
@@ -14,23 +18,25 @@ enum log_level_e {
   LOG_FATAL
 };
 
-typedef struct {
+struct log_context_t {
   char * name;
   bool enabled;
   enum log_level_e min_level;
-  FILE * fp;
+  FILE * file;
   int pid;
-} log_context_t;
+};
 
-log_context_t * log_context_init(log_context_t * cxt, char * name, FILE * fp, int min_level, bool enabled);
 
-bool log_enabled(log_context_t * cxt);
+struct log_context_t * log_context_init(struct log_context_t * cxt, char * name,
+    FILE * file, int min_level, bool enabled);
 
-bool log_level_enabled(log_context_t * cxt, enum log_level_e level);
+bool log_enabled(struct log_context_t * cxt);
 
-void log_append(log_context_t * cxt, enum log_level_e level, char * format, ...);
+bool log_level_enabled(struct log_context_t * cxt, enum log_level_e level);
 
-void log_buffer(log_context_t * cxt, enum log_level_e level, uint8_t * buffer, size_t length);
+void log_append(struct log_context_t * cxt, enum log_level_e level, char * format, ...);
+
+void log_buffer(struct log_context_t * cxt, enum log_level_e level, uint8_t * buffer, size_t length);
 
 enum log_level_e log_level_from_string(char * s);
 

@@ -153,7 +153,7 @@ bool hpack_encode_quantity(binary_buffer_t * const buf, const uint8_t first_byte
   return true;
 }
 
-hpack_context_t * hpack_context_init(const size_t header_table_size, log_context_t * log)
+hpack_context_t * hpack_context_init(const size_t header_table_size, struct log_context_t * log)
 {
   hpack_context_t * context = malloc(sizeof(hpack_context_t));
   ASSERT_OR_RETURN_NULL(context);

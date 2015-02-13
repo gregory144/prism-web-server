@@ -19,9 +19,9 @@ struct client_t {
   struct client_t * prev;
   struct client_t * next;
 
-  log_context_t * log;
-  log_context_t * data_log;
-  log_context_t * wire_log;
+  struct log_context_t * log;
+  struct log_context_t * data_log;
+  struct log_context_t * wire_log;
 
   // do we need this?
   uv_tcp_t tcp;

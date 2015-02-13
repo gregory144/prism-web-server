@@ -24,9 +24,9 @@ struct worker_t {
 
   struct server_config_t * config;
 
-  log_context_t * log;
-  log_context_t * data_log;
-  log_context_t * wire_log;
+  struct log_context_t * log;
+  struct log_context_t * data_log;
+  struct log_context_t * wire_log;
 
   bool stopping;
   size_t assigned_reads;
@@ -39,7 +39,7 @@ struct worker_t {
   uv_signal_t sigpipe_handler;
   uv_signal_t sigint_handler;
   uv_signal_t sigterm_handler;
-  size_t active_signal_handlers;
+  size_t active_handlers;
 
   struct plugin_list_t * plugins;
 

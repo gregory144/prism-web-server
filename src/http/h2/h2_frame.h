@@ -226,7 +226,7 @@ typedef struct h2_frame_parser_s {
 
   void * data;
 
-  log_context_t * log;
+  struct log_context_t * log;
 
   struct plugin_invoker_t * plugin_invoker;
 

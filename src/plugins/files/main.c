@@ -100,7 +100,7 @@ struct accept_type_t {
 
 struct file_server_t {
 
-  log_context_t * log;
+  struct log_context_t * log;
 
   struct worker_t * worker;
 

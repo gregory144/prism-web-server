@@ -10,6 +10,7 @@
 #include "server_config.h"
 #include "server.h"
 #include "worker.h"
+#include "daemon.h"
 
 void print_version()
 {
@@ -33,6 +34,8 @@ void print_help(char * cmd)
   fprintf(stdout, "  -c FILE\t\tlocation of certificate file (PEM)\n");
   fprintf(stdout, "  -w NUM_WORKERS\tspecify the number of worker threads to handle requests\n");
   fprintf(stdout, "  -L LEVEL\t\tone of: (TRACE|DEBUG|INFO|WARN|ERROR|FATAL), default: WARN\n");
+  fprintf(stdout, "  -o FILE\t\tthe log file to append to\n");
+  fprintf(stdout, "  -d\t\t\tstart as a daemon\n");
   fprintf(stdout, "  -h\t\t\this help message\n");
   fprintf(stdout, "  -v\t\t\tversion information\n");
 
@@ -84,24 +87,32 @@ int main(int argc, char ** argv)
   } else if (config.print_version) {
     print_version();
     exit(EXIT_SUCCESS);
+  } else if (config.start_daemon) {
+    daemonize(&config);
+    exit(EXIT_SUCCESS);
   }
 
   enum log_level_e min_level = config.default_log_level;
+  FILE * log_file = config.log_file;
 
-  log_context_init(&config.server_log, "SERVER", stdout, min_level, true);
-  log_context_init(&config.worker_log, "WORKER", stdout, min_level, true);
-  log_context_init(&config.wire_log, "WIRE", stdout, min_level, true); // wire log must be configured separately
-  log_context_init(&config.data_log, "DATA", stdout, min_level, true);
-  log_context_init(&config.http_log, "HTTP", stdout, min_level, true);
-  log_context_init(&config.hpack_log, "HPACK", stdout, min_level, true);
-  log_context_init(&config.tls_log, "TLS", stdout, min_level, true);
-  log_context_init(&config.plugin_log, "PLUGIN", stdout, min_level, true);
+  log_context_init(&config.server_log, "SERVER", log_file, min_level, true);
+  log_context_init(&config.worker_log, "WORKER", log_file, min_level, true);
+  log_context_init(&config.wire_log, "WIRE", log_file, min_level, true); // wire log must be configured separately
+  log_context_init(&config.data_log, "DATA", log_file, min_level, true);
+  log_context_init(&config.http_log, "HTTP", log_file, min_level, true);
+  log_context_init(&config.hpack_log, "HPACK", log_file, min_level, true);
+  log_context_init(&config.tls_log, "TLS", log_file, min_level, true);
+  log_context_init(&config.plugin_log, "PLUGIN", log_file, min_level, true);
 
   bool success = false;
   if (config.start_worker) {
     success = run_as_worker(&config);
   } else {
     success = run_as_server(&config);
+  }
+
+  if (log_file != stdout) {
+    fclose(log_file);
   }
 
   exit(success ? EXIT_SUCCESS : EXIT_FAILURE);

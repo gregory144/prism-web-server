@@ -222,7 +222,7 @@ static bool h1_1_bad_request(h1_1_t * const h1_1)
   return h1_1_respond_with_error_code(h1_1, 400);
 }
 
-h1_1_t * h1_1_init(void * const data, log_context_t * log, bool use_tls, const char * hostname,
+h1_1_t * h1_1_init(void * const data, struct log_context_t * log, bool use_tls, const char * hostname,
                    const int port, const char * h2c_protocol_version_string,
                    struct plugin_invoker_t * plugin_invoker, const h1_1_write_cb writer,
                    const h1_1_write_error_cb error_writer, const h1_1_close_cb closer,

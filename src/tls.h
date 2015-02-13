@@ -29,7 +29,7 @@ typedef struct {
 
   SSL_CTX * ssl_ctx;
 
-  log_context_t * log;
+  struct log_context_t * log;
 
 } tls_server_ctx_t;
 
@@ -37,7 +37,7 @@ typedef struct {
 
   void * data;
 
-  log_context_t * log;
+  struct log_context_t * log;
 
   const char * selected_protocol;
   const char * selected_tls_version;
@@ -58,7 +58,7 @@ typedef struct {
 
 bool tls_init(const char * h2_protocol_version_string);
 
-tls_server_ctx_t * tls_server_init(log_context_t * log, char * key_file, char * cert_file);
+tls_server_ctx_t * tls_server_init(struct log_context_t * log, char * key_file, char * cert_file);
 
 bool tls_server_free(tls_server_ctx_t * server_ctx);
 

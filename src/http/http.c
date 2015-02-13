@@ -121,8 +121,8 @@ static void set_protocol_h1_1(http_connection_t * connection)
                                   http_internal_request_init_cb, http_internal_upgrade_cb);
 }
 
-http_connection_t * http_connection_init(void * const data, log_context_t * log,
-    log_context_t * hpack_log, const char * h2_protocol_version_string,
+http_connection_t * http_connection_init(void * const data, struct log_context_t * log,
+    struct log_context_t * hpack_log, const char * h2_protocol_version_string,
     const char * h2c_protocol_version_string, struct plugin_invoker_t * plugin_invoker,
     const write_cb writer, const close_cb closer)
 {

@@ -28,8 +28,8 @@ typedef struct {
 
   void * data;
 
-  log_context_t * log;
-  log_context_t * hpack_log;
+  struct log_context_t * log;
+  struct log_context_t * hpack_log;
 
   bool use_tls;
   const char * hostname;
@@ -62,8 +62,8 @@ typedef struct {
 
 } http_request_data_t;
 
-http_connection_t * http_connection_init(void * const data, log_context_t * log,
-    log_context_t * hpack_log, const char * h2_protocol_version_string,
+http_connection_t * http_connection_init(void * const data, struct log_context_t * log,
+    struct log_context_t * hpack_log, const char * h2_protocol_version_string,
     const char * h2c_protocol_version_string, struct plugin_invoker_t * plugin_invoker,
     const write_cb writer, const close_cb closer);
 

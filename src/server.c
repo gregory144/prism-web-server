@@ -35,9 +35,17 @@ static void server_sigint_handler(uv_signal_t * sigint_handler, int signum)
   server_stop(server);
 }
 
+static void server_sigterm_handler(uv_signal_t * sigterm_handler, int signum)
+{
+  struct server_t * server = sigterm_handler->data;
+  log_append(server->log, LOG_DEBUG, "Caught SIGTERM: %d", signum);
+
+  server_stop(server);
+}
+
 static void server_stop_continue(struct server_t * server)
 {
-  if (server->active_workers < 1 && server->active_listeners < 1 && server->active_signal_handlers < 1) {
+  if (server->active_workers < 1 && server->active_listeners < 1 && server->active_handlers < 1) {
     log_append(server->log, LOG_TRACE, "Closed server handles...");
     uv_stop(&server->loop);
   } else if (server->active_workers < 1) {
@@ -45,11 +53,11 @@ static void server_stop_continue(struct server_t * server)
   }
 }
 
-static void signal_handler_closed(uv_handle_t * handle)
+static void handler_closed(uv_handle_t * handle)
 {
   struct server_t * server = handle->data;
 
-  server->active_signal_handlers--;
+  server->active_handlers--;
 
   server_stop_continue(server);
 }
@@ -227,6 +235,7 @@ bool server_run(struct server_t * server)
 
   uv_signal_start(&server->sigpipe_handler, server_sigpipe_handler, SIGPIPE);
   uv_signal_start(&server->sigint_handler, server_sigint_handler, SIGINT);
+  uv_signal_start(&server->sigterm_handler, server_sigterm_handler, SIGTERM);
 
   size_t index = 0;
   struct listen_address_t * curr = server->config->address_list;
@@ -275,8 +284,10 @@ void server_stop(struct server_t * server)
 
     uv_signal_stop(&server->sigpipe_handler);
     uv_signal_stop(&server->sigint_handler);
-    uv_close((uv_handle_t *) &server->sigpipe_handler, signal_handler_closed);
-    uv_close((uv_handle_t *) &server->sigint_handler, signal_handler_closed);
+    uv_signal_stop(&server->sigterm_handler);
+    uv_close((uv_handle_t *) &server->sigpipe_handler, handler_closed);
+    uv_close((uv_handle_t *) &server->sigint_handler, handler_closed);
+    uv_close((uv_handle_t *) &server->sigterm_handler, handler_closed);
 
     struct tcp_list_t * tcp_list = server->tcp_list;
     while (tcp_list) {
@@ -313,15 +324,18 @@ void server_init(struct server_t * server, struct server_config_t * config)
 
   server->stopping = false;
   server->round_robin_counter = 0;
+  server->active_handlers = 0;
 
   uv_signal_init(&server->loop, &server->sigpipe_handler);
   server->sigpipe_handler.data = server;
   uv_signal_init(&server->loop, &server->sigint_handler);
   server->sigint_handler.data = server;
+  uv_signal_init(&server->loop, &server->sigterm_handler);
+  server->sigterm_handler.data = server;
+  server->active_handlers += 3;
 
   server->active_listeners = 0;
   server->active_workers = 0;
-  server->active_signal_handlers = 0;
 }
 
 void server_free(struct server_t * server)

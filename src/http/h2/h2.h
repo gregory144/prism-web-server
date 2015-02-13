@@ -132,7 +132,7 @@ typedef struct h2_t {
 
   void * data;
 
-  log_context_t * log;
+  struct log_context_t * log;
 
   h2_write_cb writer;
   h2_close_cb closer;
@@ -233,9 +233,10 @@ void h2_static_init(void);
  */
 enum h2_detect_result_e h2_detect_connection(uint8_t * buffer, size_t len);
 
-h2_t * h2_init(void * const data, log_context_t * log, log_context_t * hpack_log, const char * tls_version,
-               const char * cipher, int cipher_key_size_in_bits, struct plugin_invoker_t * plugin_invoker,
-               const h2_write_cb writer, const h2_close_cb closer, const h2_request_init_cb request_init);
+h2_t * h2_init(void * const data, struct log_context_t * log, struct log_context_t * hpack_log,
+    const char * tls_version, const char * cipher, int cipher_key_size_in_bits,
+    struct plugin_invoker_t * plugin_invoker, const h2_write_cb writer, const h2_close_cb closer,
+    const h2_request_init_cb request_init);
 
 bool h2_settings_apply(h2_t * const h2, char * base64);
 
