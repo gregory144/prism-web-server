@@ -70,6 +70,9 @@ static char * error_code_to_string(enum h2_error_code_e e)
 
     case H2_ERROR_INADEQUATE_SECURITY:
       return "INADEQUATE_SECURITY";
+
+    case H2_ERROR_HTTP_1_1_REQUIRED:
+      return "HTTP_1_1_REQUIRED";
   }
 
   return "UNKNOWN";
