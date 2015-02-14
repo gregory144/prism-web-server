@@ -37,6 +37,8 @@ CHECK_SYMBOL_EXISTS(SSL_CTX_set_alpn_select_cb openssl/ssl.h HAVE_ALPN)
 list(REMOVE_ITEM CMAKE_REQUIRED_LIBRARIES ${OPENSSL_LIBRARIES})
 list(REMOVE_ITEM CMAKE_REQUIRED_INCLUDES ${OPENSSL_INCLUDE_DIR})
 
+find_package(JeMalloc)
+
 include_directories(${CMAKE_BINARY_DIR})
 include_directories(src)
 include_directories(src/util)
