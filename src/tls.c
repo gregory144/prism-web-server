@@ -44,7 +44,7 @@ static void tls_prepare_supported_protocols(const char * h2_string, const char *
 
   // TLS 'wire' format: length prefixed, non-empty 8-bit characters
   supported_protocols = malloc(supported_protocols_length);
-  char * i = supported_protocols;
+  unsigned char * i = supported_protocols;
 
   i[0] = http2_protocol_version_string_length;
   i++;

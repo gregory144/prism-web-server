@@ -16,7 +16,6 @@
 #include "request.h"
 #include "response.h"
 
-#define MAX_CONNECTION_BUFFER_SIZE 0x1000000 // 2^24
 #define MAX_DETECT_LENGTH 4096
 
 static bool http_internal_write_cb(void * data, uint8_t * buf, size_t len)
@@ -82,7 +81,7 @@ static bool send_upgrade_response(http_connection_t * connection)
   }
   size_t resp_length = r;
 
-  return connection->writer(connection->data, resp, resp_length);
+  return connection->writer(connection->data, (uint8_t *) resp, resp_length);
 }
 
 static bool http_internal_upgrade_cb(void * data, char * settings_base64, header_list_t * headers, uint8_t * buffer,

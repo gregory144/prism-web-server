@@ -97,7 +97,7 @@ int main(int argc, char ** argv)
 
   log_context_init(&config.server_log, "SERVER", log_file, min_level, true);
   log_context_init(&config.worker_log, "WORKER", log_file, min_level, true);
-  log_context_init(&config.wire_log, "WIRE", log_file, min_level, true); // wire log must be configured separately
+  log_context_init(&config.wire_log, "WIRE", log_file, min_level, true);
   log_context_init(&config.data_log, "DATA", log_file, min_level, true);
   log_context_init(&config.http_log, "HTTP", log_file, min_level, true);
   log_context_init(&config.hpack_log, "HPACK", log_file, min_level, true);

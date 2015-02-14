@@ -20,6 +20,7 @@
 #include "multimap.h"
 #include "http/http.h"
 
+#define NUM_READ_BUFS 0x8
 #define READ_BUF_SIZE 0x100000 // 2^20
 
 struct pending_fs_request_t {
@@ -130,7 +131,8 @@ struct file_server_request_t {
 
   uv_fs_t stat_req;
 
-  uv_buf_t buf;
+  uv_buf_t buf[NUM_READ_BUFS];
+  size_t bufs_allocated;
 
   uv_fs_t read_req;
 
@@ -189,10 +191,6 @@ static void file_server_free(struct file_server_t * file_server)
 
 static void file_server_request_free(struct file_server_request_t * fs_request)
 {
-  if (fs_request->buf.base) {
-    free(fs_request->buf.base);
-  }
-
   free(fs_request);
 }
 
@@ -346,20 +344,27 @@ static void file_server_uv_read_cb(uv_fs_t * req)
   ssize_t nread = req->result;
   uv_fs_req_cleanup(req);
 
-  uv_buf_t * buf = &fs_request->buf;
   http_response_t * response = fs_request->response;
 
   if (nread == UV_EOF || nread <= 0) {
     http_response_write_data(response, NULL, 0, true);
     file_server_finish_request(fs_request);
   } else {
-    fs_request->bytes_read += nread;
-    bool finished = fs_request->bytes_read >= fs_request->content_length;
+    size_t bytes_left = nread;
+    size_t i = 0;
+    bool finished = false;
+    while (bytes_left > 0) {
+      uv_buf_t * buf = &fs_request->buf[i];
 
-    uint8_t * write_buf = malloc(nread);
-    memcpy(write_buf, buf->base, nread);
+      size_t chunk_size = bytes_left > READ_BUF_SIZE ? READ_BUF_SIZE : bytes_left;
+      fs_request->bytes_read += chunk_size;
+      finished = fs_request->bytes_read >= fs_request->content_length;
 
-    http_response_write_data(response, write_buf, nread, finished);
+      http_response_write_data(response, (uint8_t *) buf->base, chunk_size, finished);
+
+      bytes_left -= chunk_size;
+      i++;
+    }
 
     if (finished) {
       file_server_finish_request(fs_request);
@@ -369,12 +374,35 @@ static void file_server_uv_read_cb(uv_fs_t * req)
   }
 }
 
+static int integer_divide_ceiling(size_t x, size_t y)
+{
+  return 1 + ((x - 1) / y);
+}
+
+static void file_server_allocate(struct file_server_request_t * fs_request, ssize_t offset)
+{
+  size_t left_to_read = fs_request->content_length - offset;
+  size_t num_chunks = integer_divide_ceiling(left_to_read, READ_BUF_SIZE);
+  if (num_chunks > NUM_READ_BUFS) {
+    num_chunks = NUM_READ_BUFS;
+  }
+  for (size_t i = 0; i < num_chunks; i++) {
+    uv_buf_t * buf = &fs_request->buf[i];
+    buf->len = left_to_read > READ_BUF_SIZE ? READ_BUF_SIZE : left_to_read;
+    buf->base = malloc(buf->len);
+    left_to_read -= buf->len;
+  }
+
+  fs_request->bufs_allocated = num_chunks;
+}
+
 static void file_server_read_file(struct file_server_request_t * fs_request, ssize_t offset)
 {
   log_append(fs_request->file_server->log, LOG_DEBUG, "Reading file: %s from offset: %zd",
       fs_request->open_file->path, offset);
+  file_server_allocate(fs_request, offset);
   if (uv_fs_read(fs_request->loop, &fs_request->read_req, fs_request->open_file->fd,
-        &fs_request->buf, 1, offset, file_server_uv_read_cb)) {
+        fs_request->buf, fs_request->bufs_allocated, offset, file_server_uv_read_cb)) {
     http_response_write_error(fs_request->response, 500);
     file_server_finish_request(fs_request);
   }
@@ -612,10 +640,6 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
 
     http_response_write(response, NULL, 0, false);
 
-    uv_buf_t * buf = &fs_request->buf;
-    buf->len = fs_request->content_length > READ_BUF_SIZE ? READ_BUF_SIZE : fs_request->content_length;
-    buf->base = malloc(buf->len);
-
     file_server_read_file(fs_request, 0);
   }
 
@@ -681,15 +705,14 @@ static void files_plugin_request_handler(struct plugin_t * plugin, struct client
   fs_request->stat_req.data = fs_request;
   fs_request->read_req.data = fs_request;
   fs_request->open_file = NULL;
-  fs_request->buf.base = NULL;
-  fs_request->buf.len = 0;
+  fs_request->bufs_allocated = 0;
 
   request->data = fs_request;
 
   char * method = http_request_method(request);
 
   if (strcmp(method, "GET") != 0) {
-    log_append(file_server->log, LOG_ERROR, "No path provided");
+    log_append(file_server->log, LOG_ERROR, "Bad method");
     http_response_header_add(response, "allow", "GET");
     http_response_write_error(response, 405); // method not allowed
     file_server_finish_request(fs_request);
