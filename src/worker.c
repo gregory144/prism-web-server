@@ -440,7 +440,6 @@ bool worker_init(struct worker_t * worker, struct server_config_t * config)
 
   worker->log = &config->worker_log;
   worker->data_log = &config->data_log;
-  worker->wire_log = &config->wire_log;
 
   if (worker_use_tls(config)) {
     tls_init(config->h2_protocol_version_string);

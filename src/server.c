@@ -317,7 +317,6 @@ void server_init(struct server_t * server, struct server_config_t * config)
   server->tcp_list = NULL;
 
   server->log = &config->server_log;
-  server->wire_log = &config->wire_log;
   server->data_log = &config->data_log;
   server->config = config;
   server->workers = NULL;

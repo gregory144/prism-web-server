@@ -62,7 +62,6 @@ struct server_config_t {
   FILE * log_file;
   struct log_context_t server_log;
   struct log_context_t worker_log;
-  struct log_context_t wire_log;
   struct log_context_t data_log;
   struct log_context_t http_log;
   struct log_context_t hpack_log;

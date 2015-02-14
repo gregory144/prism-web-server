@@ -22,7 +22,6 @@ bool client_init(struct client_t * client, struct worker_t * worker)
   log_append(worker->log, LOG_DEBUG, "Initializing client %zu", client->id);
   client->log = worker->log;
   client->data_log = worker->data_log;
-  client->wire_log = worker->wire_log;
   client->selected_protocol = false;
   client->closing = false;
   client->closed = false;

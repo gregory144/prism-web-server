@@ -26,7 +26,6 @@ struct worker_t {
 
   struct log_context_t * log;
   struct log_context_t * data_log;
-  struct log_context_t * wire_log;
 
   bool stopping;
   size_t assigned_reads;
