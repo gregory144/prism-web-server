@@ -45,6 +45,7 @@ typedef struct {
   bool is_1_1; // vs 1.0
   bool upgrade_to_h2;
   const char * h2c_protocol_version_string;
+  size_t pending_writes;
 
   binary_buffer_t * write_buffer;
 

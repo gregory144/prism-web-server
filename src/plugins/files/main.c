@@ -347,6 +347,8 @@ static void file_server_uv_read_cb(uv_fs_t * req)
   http_response_t * response = fs_request->response;
 
   if (nread == UV_EOF || nread <= 0) {
+    log_append(fs_request->file_server->log, LOG_DEBUG, "Finished reading file: %s",
+        fs_request->open_file->path);
     http_response_write_data(response, NULL, 0, true);
     file_server_finish_request(fs_request);
   } else {
@@ -367,6 +369,8 @@ static void file_server_uv_read_cb(uv_fs_t * req)
     }
 
     if (finished) {
+      log_append(fs_request->file_server->log, LOG_DEBUG, "Finished reading file: %s",
+          fs_request->open_file->path);
       file_server_finish_request(fs_request);
     } else {
       file_server_read_file(fs_request, fs_request->bytes_read);
@@ -648,6 +652,7 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
 
 static void file_server_use_opened_file(struct file_server_request_t * fs_request)
 {
+  log_append(fs_request->file_server->log, LOG_DEBUG, "Opened file: %s", fs_request->open_file->path);
   if (uv_fs_fstat(fs_request->loop, &fs_request->stat_req,
         fs_request->open_file->fd, file_server_uv_stat_cb)) {
     http_response_write_error(fs_request->response, 500);
@@ -754,6 +759,8 @@ static void files_plugin_request_handler(struct plugin_t * plugin, struct client
     free(path);
     return;
   }
+
+  log_append(fs_request->file_server->log, LOG_DEBUG, "Opening file: %s", path);
 
   struct open_file_t * open_file = hash_table_get(&fs_request->file_server->open_files, path);
   if (open_file && !open_file->closing) {

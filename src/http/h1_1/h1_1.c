@@ -246,6 +246,7 @@ h1_1_t * h1_1_init(void * const data, struct log_context_t * log, bool use_tls, 
   h1_1->upgrade_cb = upgrade_cb;
 
   h1_1->closed = false;
+  h1_1->pending_writes = 0;
 
   h1_1->h2c_protocol_version_string = h2c_protocol_version_string;
   h1_1->upgrade_to_h2 = false;
@@ -308,7 +309,10 @@ static void h1_1_close(h1_1_t * const h1_1)
 void h1_1_finished_writes(h1_1_t * const h1_1)
 {
   log_append(h1_1->log, LOG_TRACE, "Finished write");
-  h1_1_close(h1_1);
+  h1_1->pending_writes--;
+  if (h1_1->pending_writes == 0) {
+    h1_1_close(h1_1);
+  }
 }
 
 static int hp_message_begin_cb(http_parser * http_parser)
@@ -646,6 +650,7 @@ bool h1_1_response_write_data(h1_1_t * h1_1, http_response_t * const response, u
                               bool last)
 {
   if (data) {
+    h1_1->pending_writes++;
     h1_1->writer(h1_1->data, data, data_length);
     free(data);
   }
