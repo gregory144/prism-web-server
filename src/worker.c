@@ -92,6 +92,8 @@ static void app_write_finished(uv_write_t * req, int status)
 
   if (status) {
     log_append(worker->log, LOG_ERROR, "Write error: %s", uv_err_name(status));
+  } else {
+    log_append(worker->log, LOG_TRACE, "Write finished: #%zu", client->id);
   }
 
   client->pending_writes--;

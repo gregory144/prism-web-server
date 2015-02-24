@@ -138,7 +138,7 @@ static const char * MONTH_NAMES[] = {
   return date_buf;
 }
 
-/*@null@*/ char * current_time_with_milliseconds(char * date_buf, size_t buf_len)
+/*@null@*/ char * current_time_with_nanoseconds(char * date_buf, size_t buf_len)
 {
   if (date_buf == NULL) {
     date_buf = malloc(sizeof(char) * buf_len);
@@ -147,16 +147,22 @@ static const char * MONTH_NAMES[] = {
 
   ASSERT_OR_RETURN_NULL(date_buf);
 
-  struct timeval tv;
   time_t nowtime;
   struct tm * nowtm;
   char tmbuf[64];
 
-  gettimeofday(&tv, NULL);
-  nowtime = tv.tv_sec;
+  struct timespec ts;
+  if (clock_gettime(CLOCK_REALTIME, &ts) != 0) {
+    // failed to get time
+    abort();
+  }
+
+  nowtime = ts.tv_sec;
   nowtm = localtime(&nowtime);
+
+
   int written = strftime(date_buf, sizeof tmbuf, "%Y-%m-%d %H:%M:%S", nowtm);
-  snprintf(date_buf + written, buf_len - written, ".%03d", (int) tv.tv_usec);
+  written += snprintf(date_buf + written, buf_len - written, ".%.9ld", ts.tv_nsec);
 
   return date_buf;
 }

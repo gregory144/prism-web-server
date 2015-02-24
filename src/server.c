@@ -154,7 +154,8 @@ static void server_on_new_connection(uv_stream_t * uv_stream, int status)
 
     struct worker_process_t * worker = server->workers[server->round_robin_counter];
 
-    log_append(server->log, LOG_DEBUG, "Server %d: Accepted fd %d\n", getpid(), client->io_watcher.fd);
+    log_append(server->log, LOG_DEBUG, "Server %d: Accepted file %d for worker %d\n",
+        getpid(), client->io_watcher.fd, worker->req.pid);
 
     uv_write2(write_req, (uv_stream_t *) &worker->pipe, buf, 1,
         (uv_stream_t *) client, on_write_complete);

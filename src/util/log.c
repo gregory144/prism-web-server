@@ -45,7 +45,7 @@ static void log_append_string(struct log_context_t * ctx, enum log_level_e level
 {
   size_t date_buf_length = TIME_WITH_MS_LEN + 1;
   char date_buf[date_buf_length];
-  char * time_str = current_time_with_milliseconds(date_buf, date_buf_length);
+  char * time_str = current_time_with_nanoseconds(date_buf, date_buf_length);
 
   if (fprintf(ctx->file, "%d\t%s\t%s\t[%s]\t%s\n", ctx->pid, ctx->name, LEVEL_STR[level], time_str, str) < 0) {
     abort();

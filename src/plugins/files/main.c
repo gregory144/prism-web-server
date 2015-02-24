@@ -475,7 +475,7 @@ static struct content_type_t * content_type_for_path(
   multimap_t * type_map = fs->type_map;
   char * extension = file_extension(path);
 
-  log_append(fs->log, LOG_DEBUG, "Got extension: %s", extension);
+  log_append(fs->log, LOG_TRACE, "Got extension: %s", extension);
 
   struct accept_type_t * head = NULL;
 
@@ -496,7 +496,7 @@ static struct content_type_t * content_type_for_path(
         break;
       }
 
-      log_append(fs->log, LOG_DEBUG, "Accept Type: %s/%s", new_type->type, new_type->subtype);
+      log_append(fs->log, LOG_TRACE, "Accept Type: %s/%s", new_type->type, new_type->subtype);
       new_type->next = head;
       head = new_type;
 
@@ -594,11 +594,9 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
     http_response_write_error(response, 500);
     file_server_finish_request(fs_request);
   } else if (!S_ISREG(req->statbuf.st_mode)) {
-    log_append(fs->log, LOG_ERROR, "Not a regular file: %s: %s", fs_request->open_file->path,
-        uv_err_name(req->result));
+    log_append(fs->log, LOG_ERROR, "Not a regular file: %s", fs_request->open_file->path);
     http_response_write_error(response, 404);
     file_server_finish_request(fs_request);
-    abort();
   } else {
     fs_request->content_length = req->statbuf.st_size;
     fs_request->bytes_read = 0;
@@ -608,7 +606,7 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
     http_response_status_set(response, 200);
 
     char * accept_header = http_request_header_get(fs_request->response->request, "accept");
-    log_append(fs->log, LOG_DEBUG, "Accept header: %s", accept_header);
+    log_append(fs->log, LOG_TRACE, "Accept header: %s", accept_header);
     struct content_type_t * content_type = content_type_for_path(fs, path, accept_header);
 
     if (content_type) {
@@ -618,8 +616,8 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
     }
 
     // content length header
-    char content_length_s[256];
-    snprintf(content_length_s, 255, "%zu", fs_request->content_length);
+    char content_length_s[64];
+    snprintf(content_length_s, 63, "%zu", fs_request->content_length);
     http_response_header_add(response, "content-length", content_length_s);
 
     // last modified header
