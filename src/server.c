@@ -137,6 +137,7 @@ static void server_on_new_connection(uv_stream_t * uv_stream, int status)
   server_client->server = server;
   uv_tcp_t * client = &server_client->client;
   uv_tcp_init(&server->loop, client);
+  uv_tcp_nodelay(client, true);
   client->data = server_client;
 
   if (uv_accept(uv_stream, (uv_stream_t *) client) == 0) {

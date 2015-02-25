@@ -349,6 +349,7 @@ static void worker_on_new_connection(uv_stream_t * pipe_s, ssize_t nread, const 
       app_write_cb, app_close_cb);
 
   uv_tcp_init(&worker->loop, &client->tcp);
+  uv_tcp_nodelay(&client->tcp, true);
   client->tcp.data = client;
 
   if (uv_accept(pipe_s, (uv_stream_t *) &client->tcp) == 0) {

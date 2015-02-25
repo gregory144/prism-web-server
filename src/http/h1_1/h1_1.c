@@ -637,9 +637,8 @@ bool h1_1_response_write(h1_1_t * h1_1, http_response_t * const response, uint8_
     free(data);
   }
 
-  h1_1->writer(h1_1->data, binary_buffer_start(h1_1->write_buffer), binary_buffer_size(h1_1->write_buffer));
-
   if (last) {
+    h1_1->writer(h1_1->data, binary_buffer_start(h1_1->write_buffer), binary_buffer_size(h1_1->write_buffer));
     finish_response(h1_1);
   }
 
@@ -651,12 +650,19 @@ bool h1_1_response_write_data(h1_1_t * h1_1, http_response_t * const response, u
 {
   if (data) {
     h1_1->pending_writes++;
-    h1_1->writer(h1_1->data, data, data_length);
+
+    size_t prev_size = binary_buffer_size(h1_1->write_buffer);
+    if (prev_size > 0) {
+      binary_buffer_write(h1_1->write_buffer, data, data_length);
+      h1_1->writer(h1_1->data, binary_buffer_start(h1_1->write_buffer), binary_buffer_size(h1_1->write_buffer));
+    } else {
+      h1_1->writer(h1_1->data, data, data_length);
+    }
+
     free(data);
   }
 
   UNUSED(response);
-  UNUSED(last);
 
   if (last) {
     finish_response(h1_1);
