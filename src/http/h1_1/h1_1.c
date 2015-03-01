@@ -655,6 +655,7 @@ bool h1_1_response_write_data(h1_1_t * h1_1, http_response_t * const response, u
     if (prev_size > 0) {
       binary_buffer_write(h1_1->write_buffer, data, data_length);
       h1_1->writer(h1_1->data, binary_buffer_start(h1_1->write_buffer), binary_buffer_size(h1_1->write_buffer));
+      binary_buffer_reset(h1_1->write_buffer, 0);
     } else {
       h1_1->writer(h1_1->data, data, data_length);
     }
