@@ -14,7 +14,7 @@
 #include "util/hash_table.h"
 #include "tls.h"
 
-#define TLS_BUF_LENGTH 0x4000
+#define TLS_BUF_LENGTH 0x100000 // 2^20
 
 SSL_CTX * global_ssl_ctx;
 
