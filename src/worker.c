@@ -400,6 +400,7 @@ bool worker_init(struct worker_t * worker, struct server_config_t * config)
     current->next = NULL;
 
     if (!current->plugin) {
+      free(current);
       return false;
     }
 

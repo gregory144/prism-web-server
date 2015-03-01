@@ -393,8 +393,12 @@ static void file_server_allocate(struct file_server_request_t * fs_request, ssiz
   for (size_t i = 0; i < num_chunks; i++) {
     uv_buf_t * buf = &fs_request->buf[i];
     buf->len = left_to_read > READ_BUF_SIZE ? READ_BUF_SIZE : left_to_read;
-    buf->base = malloc(buf->len);
-    left_to_read -= buf->len;
+    if (buf->len > 0) {
+      buf->base = malloc(buf->len);
+      left_to_read -= buf->len;
+    } else {
+      num_chunks--;
+    }
   }
 
   fs_request->bufs_allocated = num_chunks;
@@ -648,14 +652,16 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
   uv_fs_req_cleanup(req);
 }
 
-static void file_server_use_opened_file(struct file_server_request_t * fs_request)
+static bool file_server_use_opened_file(struct file_server_request_t * fs_request)
 {
   log_append(fs_request->file_server->log, LOG_DEBUG, "Opened file: %s", fs_request->open_file->path);
   if (uv_fs_fstat(fs_request->loop, &fs_request->stat_req,
         fs_request->open_file->fd, file_server_uv_stat_cb)) {
     http_response_write_error(fs_request->response, 500);
     file_server_finish_request(fs_request);
+    return false;
   }
+  return true;
 }
 
 static void file_server_uv_open_cb(uv_fs_t * req)
@@ -665,8 +671,10 @@ static void file_server_uv_open_cb(uv_fs_t * req)
 
   if (req->result != -1) {
     fs_request->open_file->fd = req->result;
+
     fs_request->open_file->opened = true;
 
+    bool valid = true;
     bool handled = false;
     struct pending_fs_request_t * curr = fs_request->open_file->list;
     while (curr) {
@@ -674,7 +682,7 @@ static void file_server_uv_open_cb(uv_fs_t * req)
       if (pending_req == fs_request) {
         handled = true;
       }
-      file_server_use_opened_file(pending_req);
+      valid &= file_server_use_opened_file(pending_req);
 
       struct pending_fs_request_t * prev = curr;
       curr = curr->next;
@@ -682,10 +690,12 @@ static void file_server_uv_open_cb(uv_fs_t * req)
     }
 
     if (!handled) {
-      file_server_use_opened_file(fs_request);
+      valid &= file_server_use_opened_file(fs_request);
     }
 
-    fs_request->open_file->list = NULL;
+    if (valid) { // make sure it hasn't already been free'd
+      fs_request->open_file->list = NULL;
+    }
 
   } else {
     log_append(fs->log, LOG_ERROR, "Could not open file: %s", fs_request->open_file->path);

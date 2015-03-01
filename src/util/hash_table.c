@@ -262,7 +262,6 @@ bool hash_table_remove(hash_table_t * table, void * key)
         table->buckets[hash_value] = current->next;
       }
 
-      void * value = current->value;
       table->free_key(current->key);
       table->free_value(current->value);
       free(current);

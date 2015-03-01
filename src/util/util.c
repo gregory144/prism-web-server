@@ -160,9 +160,8 @@ static const char * MONTH_NAMES[] = {
   nowtime = ts.tv_sec;
   nowtm = localtime(&nowtime);
 
-
   int written = strftime(date_buf, sizeof tmbuf, "%Y-%m-%d %H:%M:%S", nowtm);
-  written += snprintf(date_buf + written, buf_len - written, ".%.9ld", ts.tv_nsec);
+  snprintf(date_buf + written, buf_len - written, ".%.9ld", ts.tv_nsec);
 
   return date_buf;
 }

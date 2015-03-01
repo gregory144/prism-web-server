@@ -86,7 +86,6 @@ static void tcp_listener_closed(uv_handle_t * handle)
 static void process_handle_closed(uv_handle_t * req)
 {
   struct worker_process_t * worker = req->data;
-  struct server_t * server = worker->server;
 
   uv_close((uv_handle_t *) &worker->pipe, worker_pipe_closed);
 }

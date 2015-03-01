@@ -258,6 +258,9 @@ h1_1_t * h1_1_init(void * const data, struct log_context_t * log, bool use_tls, 
   h1_1->response = NULL;
   h1_1->headers = NULL;
 
+  h1_1->curr_header_value = NULL;
+  h1_1->curr_header_field = NULL;
+
   if (!h1_1->write_buffer) {
     h1_1_free(h1_1);
     return NULL;

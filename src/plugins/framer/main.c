@@ -239,7 +239,7 @@ static void framer_plugin_frame_push_promise(struct plugin_t * plugin, struct cl
   if (padded) {
     size_t padded_buf_len = 128;
     char padded_buf[padded_buf_len];
-    snprintf(padded_buf, buf_len, ", padding: %" PRIu32 " octets", ((uint32_t)frame->padding_length) + 1);
+    snprintf(padded_buf, padded_buf_len, ", padding: %" PRIu32 " octets", ((uint32_t)frame->padding_length) + 1);
     strncat(buf, padded_buf, buf_len);
   }
 

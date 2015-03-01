@@ -17,7 +17,11 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GNU_SOURCE")
 add_definitions(-std=c99)
 
+include(CTest)
 enable_testing()
+find_program(CTEST_MEMORYCHECK_COMMAND valgrind)
+set(CTEST_MEMORYCHECK_COMMAND_OPTIONS "--trace-children=yes --leak-check=full --track-origins=yes")
+set(CTEST_MEMORYCHECK_SUPPRESSIONS_FILE "${PROJECT_SOURCE_DIR}/valgrind.supp")
 
 include_directories(SYSTEM ${_INCLUDE_DIRS})
 
@@ -37,7 +41,8 @@ CHECK_SYMBOL_EXISTS(SSL_CTX_set_alpn_select_cb openssl/ssl.h HAVE_ALPN)
 list(REMOVE_ITEM CMAKE_REQUIRED_LIBRARIES ${OPENSSL_LIBRARIES})
 list(REMOVE_ITEM CMAKE_REQUIRED_INCLUDES ${OPENSSL_INCLUDE_DIR})
 
-find_package(JeMalloc)
+# using JeMalloc doesn't work with valgrind without extra configuration
+# find_package(JeMalloc)
 
 include_directories(${CMAKE_BINARY_DIR})
 include_directories(src)
