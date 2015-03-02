@@ -14,14 +14,11 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+set(MEMORYCHECK_COMMAND_OPTIONS "--tool=memcheck --trace-children=yes --leak-check=full --num-callers=50" CACHE STRING "")
+set(MEMORYCHECK_SUPPRESSIONS_FILE ${PROJECT_SOURCE_DIR}/valgrind.supp CACHE STRING "")
+
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GNU_SOURCE")
 add_definitions(-std=c99)
-
-include(CTest)
-enable_testing()
-find_program(CTEST_MEMORYCHECK_COMMAND valgrind)
-set(CTEST_MEMORYCHECK_COMMAND_OPTIONS "--trace-children=yes --leak-check=full --track-origins=yes")
-set(CTEST_MEMORYCHECK_SUPPRESSIONS_FILE "${PROJECT_SOURCE_DIR}/valgrind.supp")
 
 include_directories(SYSTEM ${_INCLUDE_DIRS})
 
@@ -71,6 +68,9 @@ if (FOUND_GIT)
 endif(FOUND_GIT)
 
 string(TIMESTAMP BUILD_TIMESTAMP UTC)
+
+include(CTest)
+find_program(CTEST_MEMORYCHECK_COMMAND valgrind)
 
 # configure a header file to pass some of the CMake settings
 # to the source code
