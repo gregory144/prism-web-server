@@ -33,6 +33,12 @@ With valgrind:
 
     CK_TIMEOUT_MULTIPLIER=10 ctest -D ExperimentalMemCheck --output-on-failure -VV
 
+## Run clang-analyzer
+
+    mkdir build && cd build
+    scan-build cmake -DCMAKE_BUILD_TYPE=Debug ..
+    scan-build make
+
 ## Dependencies
 
 For Ubuntu:
