@@ -18,9 +18,15 @@ START_TEST(test_decode_output_20_bytes)
   binary_buffer_t buf;
   binary_buffer_init(&buf, 0);
   base64url_decode(&buf, "YW55IGNhcm5hbCBwbGVhc3VyZS4");
+  // these are from the wikipedia page for base64url.
+  // I did not make them up.
   char * expected = "any carnal pleasure.";
   ck_assert_int_eq(strlen(expected), binary_buffer_size(&buf));
-  ck_assert_str_eq(expected, (char *) binary_buffer_start(&buf));
+  for (size_t i = 0; i < strlen(expected); i++) {
+    ck_assert_uint_eq(expected[i], binary_buffer_read_index(&buf, i));
+  }
+
+  binary_buffer_free(&buf);
 }
 END_TEST
 
@@ -31,7 +37,11 @@ START_TEST(test_decode_output_19_bytes)
   base64url_decode(&buf, "YW55IGNhcm5hbCBwbGVhc3VyZQ");
   char * expected = "any carnal pleasure";
   ck_assert_int_eq(strlen(expected), binary_buffer_size(&buf));
-  ck_assert_str_eq(expected, (char *) binary_buffer_start(&buf));
+  for (size_t i = 0; i < strlen(expected); i++) {
+    ck_assert_uint_eq(expected[i], binary_buffer_read_index(&buf, i));
+  }
+
+  binary_buffer_free(&buf);
 }
 END_TEST
 
@@ -42,7 +52,11 @@ START_TEST(test_decode_output_18_bytes)
   base64url_decode(&buf, "YW55IGNhcm5hbCBwbGVhc3Vy");
   char * expected = "any carnal pleasur";
   ck_assert_int_eq(strlen(expected), binary_buffer_size(&buf));
-  ck_assert_str_eq(expected, (char *) binary_buffer_start(&buf));
+  for (size_t i = 0; i < strlen(expected); i++) {
+    ck_assert_uint_eq(expected[i], binary_buffer_read_index(&buf, i));
+  }
+
+  binary_buffer_free(&buf);
 }
 END_TEST
 
@@ -53,7 +67,11 @@ START_TEST(test_decode_output_17_bytes)
   base64url_decode(&buf, "YW55IGNhcm5hbCBwbGVhc3U");
   char * expected = "any carnal pleasu";
   ck_assert_int_eq(strlen(expected), binary_buffer_size(&buf));
-  ck_assert_str_eq(expected, (char *) binary_buffer_start(&buf));
+  for (size_t i = 0; i < strlen(expected); i++) {
+    ck_assert_uint_eq(expected[i], binary_buffer_read_index(&buf, i));
+  }
+
+  binary_buffer_free(&buf);
 }
 END_TEST
 
@@ -64,7 +82,11 @@ START_TEST(test_decode_output_16_bytes)
   base64url_decode(&buf, "YW55IGNhcm5hbCBwbGVhcw");
   char * expected = "any carnal pleas";
   ck_assert_int_eq(strlen(expected), binary_buffer_size(&buf));
-  ck_assert_str_eq(expected, (char *) binary_buffer_start(&buf));
+  for (size_t i = 0; i < strlen(expected); i++) {
+    ck_assert_uint_eq(expected[i], binary_buffer_read_index(&buf, i));
+  }
+
+  binary_buffer_free(&buf);
 }
 END_TEST
 
@@ -97,6 +119,8 @@ START_TEST(test_decode_settings)
   char * expected = "\x00\x03\x00\x00\x00\x64\x00\x04\x00\x00\xFF\xFF";
   ck_assert_int_eq(12, binary_buffer_size(&buf));
   ck_assert_str_eq(expected, (char *) binary_buffer_start(&buf));
+
+  binary_buffer_free(&buf);
 }
 END_TEST
 

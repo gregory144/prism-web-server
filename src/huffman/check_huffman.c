@@ -37,7 +37,13 @@ START_TEST(test_huffman_decode_single_char)
   huffman_result_t result;
   ck_assert(huffman_decode(buf, 1, &result));
   ck_assert_int_eq(1, result.length);
-  ck_assert_str_eq("X", (char *)result.value);
+  char * expected = "X";
+  char * r = result.value;
+  for (size_t i = 0; i < result.length; i++) {
+    ck_assert_uint_eq(expected[i], r[i]);
+  }
+
+  free(r);
 }
 END_TEST
 
@@ -47,7 +53,13 @@ START_TEST(test_huffman_decode_single_char_with_eos)
   huffman_result_t result;
   ck_assert(huffman_decode(buf, 1, &result));
   ck_assert_int_eq(1, result.length);
-  ck_assert_str_eq("=", (char *)result.value);
+  char * expected = "=";
+  char * r = result.value;
+  for (size_t i = 0; i < result.length; i++) {
+    ck_assert_uint_eq(expected[i], r[i]);
+  }
+
+  free(r);
 }
 END_TEST
 
@@ -57,7 +69,13 @@ START_TEST(test_huffman_decode_two_chars)
   huffman_result_t result;
   ck_assert(huffman_decode(buf, 2, &result));
   ck_assert_int_eq(2, result.length);
-  ck_assert_str_eq("*,", (char *)result.value);
+  char * expected = "*,";
+  char * r = result.value;
+  for (size_t i = 0; i < result.length; i++) {
+    ck_assert_uint_eq(expected[i], r[i]);
+  }
+
+  free(r);
 }
 END_TEST
 
@@ -67,7 +85,13 @@ START_TEST(test_huffman_decode_two_chars_with_eos)
   huffman_result_t result;
   ck_assert(huffman_decode(buf, 2, &result));
   ck_assert_int_eq(2, result.length);
-  ck_assert_str_eq("NQ", (char *)result.value);
+  char * expected = "NQ";
+  char * r = result.value;
+  for (size_t i = 0; i < result.length; i++) {
+    ck_assert_uint_eq(expected[i], r[i]);
+  }
+
+  free(r);
 }
 END_TEST
 
@@ -79,6 +103,8 @@ START_TEST(test_huffman_encode_single_8bit_char)
   huffman_result_t result;
   ck_assert(huffman_encode(buf, 1, &result));
   check_encoded_val(encoded, 1, result.value, result.length);
+
+  free(result.value);
 }
 END_TEST
 
@@ -90,6 +116,8 @@ START_TEST(test_huffman_encode_single_5bit_char)
   huffman_result_t result;
   ck_assert(huffman_encode(buf, 1, &result));
   check_encoded_val(encoded, 1, result.value, result.length);
+
+  free(result.value);
 }
 END_TEST
 
@@ -101,6 +129,8 @@ START_TEST(test_huffman_encode_single_10bit_char)
   huffman_result_t result;
   ck_assert(huffman_encode(buf, 1, &result));
   check_encoded_val(encoded, 2, result.value, result.length);
+
+  free(result.value);
 }
 END_TEST
 
@@ -111,6 +141,8 @@ START_TEST(test_huffman_encode_12bit_out)
   huffman_result_t result;
   ck_assert(huffman_encode(buf, 2, &result));
   check_encoded_val(encoded, 2, result.value, result.length);
+
+  free(result.value);
 }
 END_TEST
 
@@ -137,6 +169,8 @@ START_TEST(test_huffman_encode_longer_string)
   huffman_result_t result;
   ck_assert(huffman_encode(buf, 12, &result));
   check_encoded_val(encoded, 10, result.value, result.length);
+
+  free(result.value);
 }
 END_TEST
 
@@ -182,6 +216,8 @@ START_TEST(test_huffman_encode_date)
   huffman_result_t result;
   ck_assert(huffman_encode(buf, strlen(buf), &result));
   check_encoded_val(encoded, 22, result.value, result.length);
+
+  free(result.value);
 }
 END_TEST
 

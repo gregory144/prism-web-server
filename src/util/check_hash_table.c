@@ -176,8 +176,13 @@ START_TEST(test_ht_ints_put_and_remove)
   hash_table_remove(ht, k1);
   ck_assert_uint_eq(0, hash_table_size(ht));
 
-  value = hash_table_get(ht, k1);
+  long * k2 = malloc(sizeof(long));
+  * k2 = 10;
+
+  value = hash_table_get(ht, k2);
   ck_assert(!value);
+
+  free(k2);
 
 }
 END_TEST

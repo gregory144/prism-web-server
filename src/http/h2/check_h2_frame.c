@@ -108,6 +108,7 @@ void teardown()
     free(last_frames[i]);
   }
   for (size_t i = 0; i < num_errors; i++) {
+    free(caught_errors[i]->error_string);
     free(caught_errors[i]);
   }
 }
@@ -146,6 +147,8 @@ START_TEST(test_h2_frame_emit_ping)
   ck_assert_uint_eq(OUT(14), 0xad);
   ck_assert_uint_eq(OUT(15), 0xbe);
   ck_assert_uint_eq(OUT(16), 0xef);
+
+  h2_frame_free((h2_frame_t *) frame);
 }
 END_TEST
 
@@ -183,6 +186,8 @@ START_TEST(test_h2_frame_emit_ping_ack)
   ck_assert_uint_eq(OUT(14), 0xad);
   ck_assert_uint_eq(OUT(15), 0xbe);
   ck_assert_uint_eq(OUT(16), 0xef);
+
+  h2_frame_free((h2_frame_t *) frame);
 }
 END_TEST
 
@@ -209,6 +214,8 @@ START_TEST(test_h2_frame_emit_data_empty)
   ck_assert_uint_eq(OUT(6), 0);
   ck_assert_uint_eq(OUT(7), 0);
   ck_assert_uint_eq(OUT(8), 1);
+
+  h2_frame_free((h2_frame_t *) frame);
 }
 END_TEST
 
@@ -241,6 +248,8 @@ START_TEST(test_h2_frame_emit_data_with_payload)
   ck_assert_uint_eq(OUT(10), 0xad);
   ck_assert_uint_eq(OUT(11), 0xbe);
   ck_assert_uint_eq(OUT(12), 0xef);
+
+  h2_frame_free((h2_frame_t *) frame);
 }
 END_TEST
 
@@ -270,6 +279,9 @@ START_TEST(test_h2_frame_emit_data_with_large_payload)
   for (size_t i = 0; i < DEFAULT_MAX_FRAME_SIZE; i++) {
     ck_assert_uint_eq(OUT(9 + i), 0);
   }
+
+  h2_frame_free((h2_frame_t *) frame);
+  free(d);
 }
 END_TEST
 
@@ -329,6 +341,10 @@ START_TEST(test_h2_frame_emit_data_twice)
   ck_assert_uint_eq(OUT(frame2_offset + 16), 8);
   ck_assert_uint_eq(OUT(frame2_offset + 17), 9);
   ck_assert_uint_eq(OUT(frame2_offset + 18), 10);
+
+  h2_frame_free((h2_frame_t *) frame);
+  h2_frame_free((h2_frame_t *) frame2);
+  free(d1);
 }
 END_TEST
 
@@ -368,6 +384,8 @@ START_TEST(test_h2_frame_emit_data_with_padding)
   ck_assert_uint_eq(OUT(16), 0);
   ck_assert_uint_eq(OUT(17), 0);
   ck_assert_uint_eq(OUT(18), 0);
+
+  h2_frame_free((h2_frame_t *) frame);
 }
 END_TEST
 
@@ -394,6 +412,8 @@ START_TEST(test_h2_frame_emit_headers_empty)
   ck_assert_uint_eq(OUT(6), 0);
   ck_assert_uint_eq(OUT(7), 0);
   ck_assert_uint_eq(OUT(8), 1);
+
+  h2_frame_free((h2_frame_t *) frame);
 }
 END_TEST
 
@@ -420,6 +440,8 @@ START_TEST(test_h2_frame_emit_headers_end_stream)
   ck_assert_uint_eq(OUT(6), 0);
   ck_assert_uint_eq(OUT(7), 0);
   ck_assert_uint_eq(OUT(8), 1);
+
+  h2_frame_free((h2_frame_t *) frame);
 }
 END_TEST
 
@@ -453,6 +475,8 @@ START_TEST(test_h2_frame_emit_headers_with_payload)
   ck_assert_uint_eq(OUT(10), 0xad);
   ck_assert_uint_eq(OUT(11), 0xbe);
   ck_assert_uint_eq(OUT(12), 0xef);
+
+  h2_frame_free((h2_frame_t *) frame);
 }
 END_TEST
 
@@ -494,6 +518,8 @@ START_TEST(test_h2_frame_emit_headers_with_padding)
   ck_assert_uint_eq(OUT(16), 0);
   ck_assert_uint_eq(OUT(17), 0);
   ck_assert_uint_eq(OUT(18), 0);
+
+  h2_frame_free((h2_frame_t *) frame);
 }
 END_TEST
 
@@ -523,6 +549,8 @@ START_TEST(test_h2_frame_emit_rst_stream)
   ck_assert_uint_eq(OUT(10), 0);
   ck_assert_uint_eq(OUT(11), 0);
   ck_assert_uint_eq(OUT(12), 2); //H2_ERROR_INTERNAL_ERROR
+
+  h2_frame_free((h2_frame_t *) frame);
 }
 END_TEST
 
@@ -555,6 +583,8 @@ START_TEST(test_h2_frame_emit_settings)
   ck_assert_uint_eq(OUT(12), 0);
   ck_assert_uint_eq(OUT(13), 0);
   ck_assert_uint_eq(OUT(14), 1);
+
+  h2_frame_free((h2_frame_t *) frame);
 }
 END_TEST
 
@@ -595,6 +625,8 @@ START_TEST(test_h2_frame_emit_settings_with_multiple_settings)
   ck_assert_uint_eq(OUT(18), 0);
   ck_assert_uint_eq(OUT(19), 0);
   ck_assert_uint_eq(OUT(20), 2);
+
+  h2_frame_free((h2_frame_t *) frame);
 }
 END_TEST
 
@@ -619,6 +651,8 @@ START_TEST(test_h2_frame_emit_settings_ack)
   ck_assert_uint_eq(OUT(6), 0);
   ck_assert_uint_eq(OUT(7), 0);
   ck_assert_uint_eq(OUT(8), 0);
+
+  h2_frame_free((h2_frame_t *) frame);
 }
 END_TEST
 
@@ -650,6 +684,8 @@ START_TEST(test_h2_frame_emit_push_promise_empty)
   ck_assert_uint_eq(OUT(10), 0);
   ck_assert_uint_eq(OUT(11), 0);
   ck_assert_uint_eq(OUT(12), 2);
+
+  h2_frame_free((h2_frame_t *) frame);
 }
 END_TEST
 
@@ -681,6 +717,8 @@ START_TEST(test_h2_frame_emit_push_promise_end_stream)
   ck_assert_uint_eq(OUT(10), 0);
   ck_assert_uint_eq(OUT(11), 0);
   ck_assert_uint_eq(OUT(12), 2);
+
+  h2_frame_free((h2_frame_t *) frame);
 }
 END_TEST
 
@@ -719,6 +757,8 @@ START_TEST(test_h2_frame_emit_push_promise_with_payload)
   ck_assert_uint_eq(OUT(14), 0xad);
   ck_assert_uint_eq(OUT(15), 0xbe);
   ck_assert_uint_eq(OUT(16), 0xef);
+
+  h2_frame_free((h2_frame_t *) frame);
 }
 END_TEST
 
@@ -755,6 +795,8 @@ START_TEST(test_h2_frame_emit_goaway)
   ck_assert_uint_eq(OUT(14), 0);
   ck_assert_uint_eq(OUT(15), 0);
   ck_assert_uint_eq(OUT(16), 0); //H2_ERROR_NO_ERROR
+
+  h2_frame_free((h2_frame_t *) frame);
 }
 END_TEST
 
@@ -792,6 +834,8 @@ START_TEST(test_h2_frame_emit_goaway_with_debug_data)
   ck_assert_uint_eq(OUT(14), 0);
   ck_assert_uint_eq(OUT(15), 0);
   ck_assert_uint_eq(OUT(16), 2); // H2_ERROR_INTERNAL_ERROR
+
+  h2_frame_free((h2_frame_t *) frame);
 }
 END_TEST
 
@@ -821,6 +865,8 @@ START_TEST(test_h2_frame_emit_window_update_for_connection)
   ck_assert_uint_eq(OUT(10), 0);
   ck_assert_uint_eq(OUT(11), 0x40);
   ck_assert_uint_eq(OUT(12), 0);
+
+  h2_frame_free((h2_frame_t *) frame);
 }
 END_TEST
 
@@ -850,6 +896,8 @@ START_TEST(test_h2_frame_emit_window_update_for_stream)
   ck_assert_uint_eq(OUT(10), 0);
   ck_assert_uint_eq(OUT(11), 0x40);
   ck_assert_uint_eq(OUT(12), 0);
+
+  h2_frame_free((h2_frame_t *) frame);
 }
 END_TEST
 
@@ -883,6 +931,8 @@ START_TEST(test_h2_frame_emit_continuation)
   ck_assert_uint_eq(OUT(10), 0xad);
   ck_assert_uint_eq(OUT(11), 0xbe);
   ck_assert_uint_eq(OUT(12), 0xef);
+
+  h2_frame_free((h2_frame_t *) frame);
 }
 END_TEST
 
@@ -904,6 +954,8 @@ START_TEST(test_h2_frame_parse_invalid_frame_type)
   caught_error_t * ce = caught_errors[0];
   ck_assert_uint_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
   ck_assert_str_eq(ce->error_string, "Invalid frame type: 0xff");
+
+  h2_frame_free(ret);
 }
 END_TEST
 

@@ -8,6 +8,11 @@
 
 multimap_t * map;
 
+void noop(void * v)
+{
+  UNUSED(v);
+}
+
 void setup_mm_strings()
 {
   map = multimap_init_with_string_keys();
@@ -124,10 +129,14 @@ START_TEST(test_mm_ints_put_and_get_multiple)
 {
   long * k1 = malloc(sizeof(long));
   * k1 = 10;
+  long * k2 = malloc(sizeof(long));
+  * k2 = 10;
+  long * k3 = malloc(sizeof(long));
+  * k3 = 10;
 
   ck_assert(multimap_put(map, k1, strdup("v1")));
-  ck_assert(multimap_put(map, k1, strdup("v2")));
-  ck_assert(multimap_put(map, k1, strdup("v3")));
+  ck_assert(multimap_put(map, k2, strdup("v2")));
+  ck_assert(multimap_put(map, k3, strdup("v3")));
   multimap_values_t * values = multimap_get(map, k1);
   ck_assert(!!values->next);
   ck_assert(!!values->next->next);
@@ -179,11 +188,13 @@ START_TEST(test_mm_ints_put_and_remove)
   ck_assert(!values->next);
   ck_assert_uint_eq(1, multimap_size(map));
 
-  multimap_remove(map, k1, free, free);
+  multimap_remove(map, k1, noop, free);
   ck_assert_uint_eq(0, multimap_size(map));
 
   values = multimap_get(map, k1);
   ck_assert(!values);
+
+  free(k1);
 
 }
 END_TEST
@@ -198,12 +209,13 @@ START_TEST(test_mm_ints_put_and_remove_multiple)
   multimap_values_t * values = multimap_get(map, k1);
   ck_assert(!!values);
 
-  multimap_remove(map, k1, free, free);
+  multimap_remove(map, k1, noop, free);
   ck_assert_uint_eq(0, multimap_size(map));
 
   values = multimap_get(map, k1);
   ck_assert(!values);
 
+  free(k1);
 }
 END_TEST
 

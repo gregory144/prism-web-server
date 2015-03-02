@@ -19,12 +19,19 @@ An interoperable HTTP2 server.
     mkdir build && cd build
     CC=clang cmake -DCMAKE_BUILD_TYPE=Release ..
     make
-    make test
 
 ## Run
 
     openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout key.pem -out cert.pem
     ./bin/prism -L INFO -p ./lib/libfiles_plugin.so
+
+## Run Tests
+
+    make test
+
+With valgrind:
+
+    CK_TIMEOUT_MULTIPLIER=10 ctest -D ExperimentalMemCheck --output-on-failure -VV
 
 ## Dependencies
 

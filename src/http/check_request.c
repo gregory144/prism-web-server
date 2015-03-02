@@ -19,6 +19,7 @@ void teardown()
     char* encoded = encoded_s; \
     char* decoded = url_decode(encoded, strlen(encoded)); \
     ck_assert_str_eq(decoded, decoded_s); \
+    free(decoded); \
   } END_TEST
 
 DECODE_TEST(test_request_decode_url_empty, "", "")

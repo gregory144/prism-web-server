@@ -105,20 +105,26 @@ void bubble_up(priority_queue_t * pq)
 void * priority_queue_pop(priority_queue_t * pq)
 {
   priority_queue_entry_t * entry = NULL;
+  void * value = NULL;
 
   if (pq->size > 0) {
+    bool valid = false;
     do {
       priority_queue_ref_t ref = pq->refs[0];
       entry = ref.entry;
+      value = entry->value;
+      valid = entry->valid;
       pq->size--;
 
       if (pq->size > 0) {
         bubble_down(pq);
       }
-    } while (pq->size > 0 && !entry->valid);
+
+      free(entry);
+    } while (pq->size > 0 && !valid);
   }
 
-  return entry ? entry->value : NULL;
+  return value;
 }
 
 priority_queue_entry_t * priority_queue_push(priority_queue_t * pq, size_t priority, void * value)
