@@ -14,3 +14,6 @@ before_install:
 
 script: ./cmake-build.sh
 
+env:
+  global:
+    - LD_LIBRARY_PATH=/usr/local/lib
