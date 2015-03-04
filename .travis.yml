@@ -3,17 +3,16 @@ language: c
 compiler:
   - clang
   - gcc
-rvm:
-  - "2.2.1"
 os:
   - linux
 
 before_install:
+  - rvm install ruby-2.2.0p0
+  - rvm use ruby-2.2.0p0
   - sudo apt-get update -qq
   - sudo apt-get install -y build-essential cmake libssl-dev flex bison doxygen check
   - ./install-libuv.sh
   - ./install-bison.sh
-  - rvm use 2.2.1
 
 script: ./cmake-build.sh
 
