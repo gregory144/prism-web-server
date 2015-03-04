@@ -15,7 +15,6 @@ before_install:
   - ./install-scripts/install-libuv.sh
   - ./install-scripts/install-bison.sh
   - ./install-scripts/install-cmake.sh
-  - ./install-scripts/install-nghttp2.sh
 
 script: ./install-scripts/cmake-build.sh
 
