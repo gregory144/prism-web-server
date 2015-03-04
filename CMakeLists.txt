@@ -38,6 +38,10 @@ CHECK_SYMBOL_EXISTS(SSL_CTX_set_alpn_select_cb openssl/ssl.h HAVE_ALPN)
 list(REMOVE_ITEM CMAKE_REQUIRED_LIBRARIES ${OPENSSL_LIBRARIES})
 list(REMOVE_ITEM CMAKE_REQUIRED_INCLUDES ${OPENSSL_INCLUDE_DIR})
 
+# for end to end tests
+find_package(Ruby)
+find_program(FOUND_NGHTTP nghttp)
+
 # using JeMalloc doesn't work with valgrind without extra configuration
 # find_package(JeMalloc)
 
@@ -80,5 +84,6 @@ configure_file (
   )
 
 add_subdirectory(src)
+add_subdirectory(test)
 add_subdirectory(docs)
 
