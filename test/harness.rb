@@ -1,7 +1,7 @@
 require 'test/unit'
 
 require 'server'
-require 'nghttp' if ENV['HAVE_NGHTTP']
+require 'nghttp' unless ENV['FOUND_NGHTTP'].empty?
 require 'ruby_http'
 
 Test::Unit.at_start do
