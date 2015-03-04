@@ -14,3 +14,11 @@
 #define BUILD_TIMESTAMP "@BUILD_TIMESTAMP@"
 
 #define OPENSSL_BUILD_VERSION "@OPENSSL_VERSION@"
+
+#cmakedefine HAVE_UINT_ASSERTS 1
+
+#ifndef HAVE_UINT_ASSERTS
+
+#define ck_assert_uint_eq ck_assert_int_eq
+
+#endif

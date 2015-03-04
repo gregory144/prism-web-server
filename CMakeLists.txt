@@ -3,7 +3,6 @@ project(prism C)
 
 # Point CMake at any custom modules we may ship
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
-include(CheckFunctionExists)
 include(CheckSymbolExists)
 
 set(PROJECT_NAME prism)
@@ -25,7 +24,8 @@ include_directories(SYSTEM ${_INCLUDE_DIRS})
 
 find_package(Check REQUIRED)
 include_directories(${CHECK_INCLUDE_DIRS})
-set(TEST_LIBS m pthread ${CHECK_LIBRARIES})
+set(TEST_LIBS m pthread rt ${CHECK_LIBRARIES})
+check_symbol_exists(ck_assert_uint_eq check.h HAVE_UINT_ASSERTS)
 
 find_package(Threads REQUIRED)
 find_package(LibUV REQUIRED)
@@ -35,7 +35,7 @@ find_package(OpenSSL REQUIRED)
 include_directories(SYSTEM ${OPENSSL_INCLUDE_DIR})
 list(APPEND CMAKE_REQUIRED_INCLUDES ${OPENSSL_INCLUDE_DIR})
 list(APPEND CMAKE_REQUIRED_LIBRARIES ${OPENSSL_LIBRARIES})
-CHECK_SYMBOL_EXISTS(SSL_CTX_set_alpn_select_cb openssl/ssl.h HAVE_ALPN)
+check_symbol_exists(SSL_CTX_set_alpn_select_cb openssl/ssl.h HAVE_ALPN)
 list(REMOVE_ITEM CMAKE_REQUIRED_LIBRARIES ${OPENSSL_LIBRARIES})
 list(REMOVE_ITEM CMAKE_REQUIRED_INCLUDES ${OPENSSL_INCLUDE_DIR})
 
