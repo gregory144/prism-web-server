@@ -7,7 +7,7 @@ os:
   - linux
 
 before_install:
-  - sudo apt-get update && sudo apt-get install -y build-essential cmake libssl-dev flex bison doxygen
+  - sudo apt-get update && sudo apt-get install -y build-essential cmake libssl-dev flex bison doxygen check
 
 script: mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make
 

@@ -43,7 +43,7 @@ With valgrind:
 
 For Ubuntu:
 
-    apt-get install build-essential cmake libssl-dev flex bison doxygen
+    apt-get install build-essential cmake libssl-dev flex bison doxygen check
 
 * libuv (you'll have to build from source or find a package - there isn't one in the default repos - https://github.com/libuv/libuv)
 * pthreads
