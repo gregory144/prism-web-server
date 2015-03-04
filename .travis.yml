@@ -11,9 +11,11 @@ before_install:
   - rvm use ruby-2.2
   - sudo apt-get update -qq
   - sudo apt-get install -y build-essential cmake libssl-dev flex bison doxygen check
+  - sudo apt-get install -y make binutils autoconf automake autotools-dev libtool pkg-config zlib1g-dev libcunit1-dev libssl-dev libxml2-dev libev-dev libevent-dev libjansson-dev libjemalloc-dev cython python3.4-dev # for nghttp
   - ./install-scripts/install-libuv.sh
   - ./install-scripts/install-bison.sh
   - ./install-scripts/install-cmake.sh
+  - ./install-scripts/install-nghttp2.sh
 
 script: ./install-scripts/cmake-build.sh
 
