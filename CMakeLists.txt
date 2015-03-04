@@ -72,7 +72,11 @@ if (FOUND_GIT)
 
 endif(FOUND_GIT)
 
-string(TIMESTAMP BUILD_TIMESTAMP UTC)
+# this only works in cmake 2.8.11 and above
+#string(TIMESTAMP BUILD_TIMESTAMP UTC)
+# so use the primitive version
+execute_process(COMMAND date --iso-8601=seconds -u OUTPUT_VARIABLE BUILD_TIMESTAMP_RAW)
+string(STRIP ${BUILD_TIMESTAMP_RAW} BUILD_TIMESTAMP)
 
 include(CTest)
 find_program(CTEST_MEMORYCHECK_COMMAND valgrind)
