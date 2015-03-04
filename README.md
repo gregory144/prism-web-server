@@ -14,6 +14,9 @@ DATA TRACE [2014-11-04 10:52:34.437] 0d0a 534d 0d0a 0d0a                       .
 
 An interoperable HTTP2 server.
 
+
+[![Build Status](https://travis-ci.org/gregory144/prism-web-server.png)](https://travis-ci.org/gregory144/prism-web-server)
+
 ## Build from git
 
     mkdir build && cd build
