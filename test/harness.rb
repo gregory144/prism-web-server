@@ -1,7 +1,6 @@
 require 'test/unit'
 
 require 'server'
-puts "env: #{ENV['FOUND_NGHTTP']}"
 v = ENV['FOUND_NGHTTP']
 require 'nghttp' if !v.nil? && v != "" && v !~ /-NOTFOUND$/
 require 'ruby_http'
