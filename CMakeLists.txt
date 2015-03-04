@@ -4,6 +4,7 @@ project(prism C)
 # Point CMake at any custom modules we may ship
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 include(CheckFunctionExists)
+include(CheckSymbolExists)
 
 set(PROJECT_NAME prism)
 set(PROJECT_VERSION_MAJOR 0)
