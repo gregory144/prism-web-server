@@ -2,7 +2,7 @@
 set -ex
 
 mkdir build && cd build
-../cmake/bin/cmake -DCMAKE_BUILD_TYPE=Release ..
+$CMAKE_BIN/cmake -DCMAKE_BUILD_TYPE=Release ..
 make
-../cmake/bin/ctest --output-on-failure -VV
+$CMAKE_BIN/ctest --output-on-failure -VV
 
