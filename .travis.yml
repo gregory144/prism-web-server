@@ -7,8 +7,8 @@ os:
   - linux
 
 before_install:
-  - rvm install ruby-2.2.0p0
-  - rvm use ruby-2.2.0p0
+  - rvm install ruby-2.2
+  - rvm use ruby-2.2
   - sudo apt-get update -qq
   - sudo apt-get install -y build-essential cmake libssl-dev flex bison doxygen check
   - ./install-libuv.sh
