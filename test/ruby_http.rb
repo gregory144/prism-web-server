@@ -18,9 +18,11 @@ class TestRubyHttp < Test::Unit::TestCase
 
   def test_https_1_1_get
     uri = URI("#{$server.https_uri}/index.html")
-    response = open(uri, ssl_verify_mode: OpenSSL::SSL::VERIFY_NONE)
-    body = response.readlines.join("")
-    assert_equal "Hello Ruby", body.strip
+    100.times do
+      response = open(uri, ssl_verify_mode: OpenSSL::SSL::VERIFY_NONE)
+      body = response.readlines.join("")
+      assert_equal "Hello Ruby", body.strip
+    end
   end
 
 end
