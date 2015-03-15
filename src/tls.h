@@ -58,7 +58,7 @@ typedef struct {
 
 bool tls_init(const char * h2_protocol_version_string);
 
-tls_server_ctx_t * tls_server_init(struct log_context_t * log, char * key_file, char * cert_file);
+tls_server_ctx_t * tls_server_init(struct log_context_t * log, const char * key_file, const char * cert_file);
 
 bool tls_server_free(tls_server_ctx_t * server_ctx);
 

@@ -1,0 +1,32 @@
+{
+  "h2_protocol_version_string": "h2",
+  "h2c_protocol_version_string": "h2c",
+
+  "private_key_path": "key.pem",
+  "certificate_path": "cert.pem",
+
+  "log_path": "-",
+  "log_level": "TRACE",
+
+  "plugins": [
+    {
+      "path": "./build/lib/libfiles_plugin.so"
+    },
+    {
+      "path": "./build/lib/libframer_plugin.so"
+    }
+  ],
+
+  "listen": [
+    {
+      "secure": true,
+      "port": 8443,
+      "ip_address": "0.0.0.0"
+    },
+    {
+      "secure": false,
+      "port": 8080,
+      "ip_address": "0.0.0.0"
+    }
+  ]
+}

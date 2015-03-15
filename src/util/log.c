@@ -103,7 +103,7 @@ void log_buffer(struct log_context_t * ctx, enum log_level_e level, uint8_t * bu
 }
 
 
-enum log_level_e log_level_from_string(char * s)
+enum log_level_e log_level_from_string(const char * s)
 {
   for (size_t i = 1; i < sizeof(LEVEL_STR) / sizeof(char*); i++) {
     if (strcmp(s, LEVEL_STR[i]) == 0) {

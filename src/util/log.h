@@ -38,6 +38,6 @@ void log_append(struct log_context_t * cxt, enum log_level_e level, char * forma
 
 void log_buffer(struct log_context_t * cxt, enum log_level_e level, uint8_t * buffer, size_t length);
 
-enum log_level_e log_level_from_string(char * s);
+enum log_level_e log_level_from_string(const char * s);
 
 #endif

@@ -448,7 +448,7 @@ bool worker_init(struct worker_t * worker, struct server_config_t * config)
   if (worker_use_tls(config)) {
     tls_init(config->h2_protocol_version_string);
 
-    worker->tls_ctx = tls_server_init(&config->tls_log, config->private_key_file, config->cert_file);
+    worker->tls_ctx = tls_server_init(&config->tls_log, config->private_key_path, config->certificate_path);
     ASSERT_OR_RETURN_FALSE(worker->tls_ctx);
   } else {
     worker->tls_ctx = NULL;

@@ -27,7 +27,9 @@ void print_version()
 void print_help(char * cmd)
 {
   fprintf(stdout, "Usage: %s [OPTION]...\n", cmd);
-  fprintf(stdout, "Example: %s -l https://%s:%d\n\n", cmd, SERVER_HOSTNAME, SERVER_PORT);
+  fprintf(stdout, "Example: %s -l https://%s:%d\n", cmd, SERVER_HOSTNAME, SECURE_SERVER_PORT);
+  fprintf(stdout, "Example: %s -f server.json\n\n", cmd);
+  fprintf(stdout, "  -f FILE\t\tlocation of JSON config file\n");
   fprintf(stdout, "  -l ADDRESS\t\tscheme, IP address and port: http://0.0.0.0:8080\n");
   fprintf(stdout, "  -p FILE\t\tlocation of a plugin shared library\n");
   fprintf(stdout, "  -k FILE\t\tlocation of private key file (PEM)\n");
@@ -37,7 +39,7 @@ void print_help(char * cmd)
   fprintf(stdout, "  -o FILE\t\tthe log file to append to\n");
   fprintf(stdout, "  -d\t\t\tstart as a daemon\n");
   fprintf(stdout, "  -h\t\t\this help message\n");
-  fprintf(stdout, "  -v\t\t\tversion information\n");
+  fprintf(stdout, "  -v\t\t\tversion information\n\n");
 
   print_version();
 }
@@ -81,15 +83,20 @@ int main(int argc, char ** argv)
   struct server_config_t config;
   server_config_args_parse(&config, argc, argv);
 
+  bool success = false;
+
   if (config.print_help) {
     print_help(argv[0]);
-    exit(EXIT_SUCCESS);
+    success = true;
+    goto finish;
   } else if (config.print_version) {
     print_version();
-    exit(EXIT_SUCCESS);
+    success = true;
+    goto finish;
   } else if (config.start_daemon) {
     daemonize(&config);
-    exit(EXIT_SUCCESS);
+    success = true;
+    goto finish;
   }
 
   enum log_level_e min_level = config.default_log_level;
@@ -103,7 +110,6 @@ int main(int argc, char ** argv)
   log_context_init(&config.tls_log, "TLS", log_file, min_level, true);
   log_context_init(&config.plugin_log, "PLUGIN", log_file, min_level, true);
 
-  bool success = false;
   if (config.start_worker) {
     success = run_as_worker(&config);
   } else {
@@ -113,6 +119,10 @@ int main(int argc, char ** argv)
   if (log_file != stdout) {
     fclose(log_file);
   }
+
+finish:
+
+  server_config_free(&config);
 
   exit(success ? EXIT_SUCCESS : EXIT_FAILURE);
 }

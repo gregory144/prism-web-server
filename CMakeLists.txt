@@ -39,6 +39,8 @@ check_symbol_exists(SSL_CTX_set_alpn_select_cb openssl/ssl.h HAVE_ALPN)
 list(REMOVE_ITEM CMAKE_REQUIRED_LIBRARIES ${OPENSSL_LIBRARIES})
 list(REMOVE_ITEM CMAKE_REQUIRED_INCLUDES ${OPENSSL_INCLUDE_DIR})
 
+find_package(Jansson)
+
 # for end to end tests
 find_package(Ruby)
 find_program(FOUND_NGHTTP nghttp)
