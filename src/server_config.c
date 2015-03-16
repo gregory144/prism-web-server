@@ -426,10 +426,9 @@ struct string_list_t * server_config_plugin_get_strings(void * config_context)
   l->num_strings = json_array_size(context);
   l->strings = malloc(sizeof(char *) * l->num_strings);
 
-  size_t index;
-  json_t * value;
-  json_array_foreach(context, index, value) {
-    l->strings[index] = (char *) json_string_value(value);
+  for (size_t i = 0; i < json_array_size(context); i++) {
+    json_t * value = json_array_get(context, i);
+    l->strings[i] = (char *) json_string_value(value);
   }
 
   return l;
@@ -449,16 +448,22 @@ void * server_config_plugin_get(void * config_context, char * key)
 #endif
 }
 
-void server_config_plugin_each(void * context, void * config_context, plugin_config_iterator iter)
+void server_config_plugin_each(void * context, void * config_context, plugin_config_iterator do_iter)
 {
 #ifdef JANSSON_FOUND
   json_t * context_j = config_context;
 
-  const char * key;
-  json_t * value;
-  json_object_foreach(context_j, key, value) {
-    iter(context, key, value);
+  void * iter = json_object_iter(context_j);
+  while (iter) {
+    const char * key = json_object_iter_key(iter);
+    json_t * value = json_object_iter_value(iter);
+
+    do_iter(context, key, value);
+
+    iter = json_object_iter_next(context_j, iter);
   }
+
+
 #endif
 }
 
