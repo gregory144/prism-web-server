@@ -46,11 +46,12 @@ With valgrind:
 
 For Ubuntu:
 
-    apt-get install build-essential cmake libssl-dev flex bison doxygen check
+    apt-get install build-essential cmake libssl-dev flex bison doxygen check libjansson-dev libjansson4
 
 * libuv (you'll have to build from source or find a package - there isn't one in the default repos - https://github.com/libuv/libuv)
 * pthreads
 * openssl libssl/libcrypto (1.0.2 for ALPN)
+* jansson for config file parsing (json library)
 * flex & bison
 * check unit test framework
 
