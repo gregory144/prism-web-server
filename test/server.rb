@@ -2,6 +2,7 @@ require 'tmpdir'
 require 'singleton'
 require 'timeout'
 require 'socket'
+require 'json'
 
 class Server
 
@@ -11,31 +12,44 @@ class Server
     @pids = []
 
     @hostname = "0.0.0.0"
-    @http_port, @https_port = find_open_ports
 
     @dir = Dir.mktmpdir("prism-end-to-end")
 
     @binary_path = ENV["PRISM_EXECUTABLE"]
     @files_plugin_path = ENV["FILES_PLUGIN_LIB"]
     @debug_plugin_path = ENV["DEBUG_PLUGIN_LIB"]
+    @fixtures_path = ENV["FIXTURES_PATH"]
 
     generate_self_signed_cert
   end
 
   def start
-    cmd = "#{@binary_path} -l #{http_uri} -l #{https_uri} -p #{@debug_plugin_path} -L INFO -o #{@dir}/server.log"
+    @http_debug_port, @https_debug_port = find_open_ports
+    generate_debug_config
+    cmd = "#{@binary_path} -f #{@dir}/debug-server.json"
     @pids.push(spawn(cmd, chdir: @dir))
 
     # wait for the server to start accepting connections
-    is_accepting_connections?(@hostname, @http_port)
-    is_accepting_connections?(@hostname, @https_port)
+    is_accepting_connections?(@hostname, @http_debug_port)
+    is_accepting_connections?(@hostname, @https_debug_port)
+    puts "Debug started on #{@http_debug_port} and #{@https_debug_port}"
+
+    @http_files_port, @https_files_port = find_open_ports
+    generate_files_config
+    copy_fixture_files
+    cmd = "#{@binary_path} -f #{@dir}/files-server.json"
+    @pids.push(spawn(cmd, chdir: @dir))
+
+    is_accepting_connections?(@hostname, @http_files_port)
+    is_accepting_connections?(@hostname, @https_files_port)
+    puts "Files started on #{@http_files_port} and #{@https_files_port}"
   end
 
   def kill
-    return if @pids.empty?
-    pid = @pids.pop
-    Process.kill('SIGTERM', pid)
-    Process.wait(pid)
+    @pids.each do |pid|
+      Process.kill('SIGTERM', pid)
+      Process.wait(pid)
+    end
   end
 
   def destroy_working_dir
@@ -46,12 +60,20 @@ class Server
     @dir
   end
 
-  def http_uri
-    "http://#{@hostname}:#{@http_port}"
+  def http_debug_uri
+    "http://#{@hostname}:#{@http_debug_port}"
   end
 
-  def https_uri
-    "https://#{@hostname}:#{@https_port}"
+  def https_debug_uri
+    "https://#{@hostname}:#{@https_debug_port}"
+  end
+
+  def http_files_uri
+    "http://#{@hostname}:#{@http_files_port}"
+  end
+
+  def https_files_uri
+    "https://#{@hostname}:#{@https_files_port}"
   end
 
   private
@@ -61,9 +83,77 @@ class Server
     Process.wait(openssl_pid)
   end
 
+  def generate_debug_config
+    config = {
+      private_key_path: "#{@dir}/key.pem",
+      certificate_path: "#{@dir}/cert.pem",
+
+      log_path: "#{@dir}/debug-server.log",
+      log_level: "INFO",
+
+      plugins: [
+        {
+          path: @debug_plugin_path,
+        }
+      ],
+
+      listen: [
+        {
+          secure: true,
+          port: @https_debug_port,
+          ip_address: @hostname
+        },
+        {
+          secure: false,
+          port: @http_debug_port,
+          ip_address: @hostname
+        }
+      ]
+    }
+    File.open("#{@dir}/debug-server.json", 'w') do |f|
+      f.write(JSON.generate(config))
+    end
+  end
+
+  def generate_files_config
+    config = {
+      private_key_path: "#{@dir}/key.pem",
+      certificate_path: "#{@dir}/cert.pem",
+
+      log_path: "#{@dir}/file-server.log",
+      log_level: "INFO",
+
+      plugins: [
+        {
+          path: @files_plugin_path,
+        }
+      ],
+
+      listen: [
+        {
+          secure: true,
+          port: @https_files_port,
+          ip_address: @hostname
+        },
+        {
+          secure: false,
+          port: @http_files_port,
+          ip_address: @hostname
+        }
+      ]
+    }
+    File.open("#{@dir}/files-server.json", 'w') do |f|
+      f.write(JSON.generate(config))
+    end
+  end
+
+  def copy_fixture_files
+    FileUtils.cp_r "#{@fixtures_path}/.", @dir, verbose: true
+  end
+
   def find_open_ports
     first = (10000..20000).find do |i|
-      is_port_open?(@hostname, i) && is_port_open?( @hostname, i + 1)
+      is_port_open?(@hostname, i) && is_port_open?(@hostname, i + 1)
     end
     [first, first + 1]
   end
@@ -75,7 +165,7 @@ class Server
           s = TCPServer.new(ip, port)
           s.close
           return true
-        rescue Errno::ECONNREFUSED, Errno::EHOSTUNREACH
+        rescue Errno::ECONNREFUSED, Errno::EHOSTUNREACH, Errno::EADDRINUSE
           return false
         end
       end

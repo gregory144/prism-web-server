@@ -11,13 +11,13 @@ class TestRubyHttp < Test::Unit::TestCase
 
   def test_http_1_1_get
     2000.times do
-      response = Net::HTTP.get_response(URI("#{$server.http_uri}/index.html"))
+      response = Net::HTTP.get_response(URI("#{$server.http_debug_uri}"))
       assert_equal "Hello Ruby", response.body.strip
     end
   end
 
   def test_https_1_1_get
-    uri = URI("#{$server.https_uri}/index.html")
+    uri = URI("#{$server.https_debug_uri}")
     100.times do
       response = open(uri, ssl_verify_mode: OpenSSL::SSL::VERIFY_NONE)
       body = response.readlines.join("")
