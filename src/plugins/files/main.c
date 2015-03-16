@@ -292,7 +292,6 @@ static void init_push_file(void * context, const char * key, void * value_contex
 
   char resolved_path[path_len];
   if (realpath(path, resolved_path)) {
-    log_append(fs->log, LOG_WARN, "Configured push for file: %s", resolved_path);
     hash_table_put(ht, strdup(resolved_path), values);
   } else {
     log_append(fs->log, LOG_WARN, "Unable to find file in push configuration: %s", key);
