@@ -568,7 +568,7 @@ binary_buffer_t * hpack_encode(hpack_context_t * const context, const header_lis
     char * value = iter.field->value;
     size_t value_length = iter.field->value_length;
 
-    log_append(context->log, LOG_TRACE, "Encoding Reponse Header: %s (%zu): %s (%zu)", name, name_length, value,
+    log_append(context->log, LOG_TRACE, "Encoding Response Header: %s (%zu): %s (%zu)", name, name_length, value,
                value_length);
 
     // 4.3.2 Literal Header Field without Indexing - New Name
