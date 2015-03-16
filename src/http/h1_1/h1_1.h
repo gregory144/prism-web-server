@@ -111,4 +111,6 @@ bool h1_1_push_promise(h1_1_t * h1_1, http_request_t * const request);
 
 http_response_t * h1_1_push_response_get(h1_1_t * h1_1, http_request_t * const request);
 
+bool h1_1_push(h1_1_t * h1_1, http_request_t * const request);
+
 #endif

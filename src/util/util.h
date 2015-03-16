@@ -39,6 +39,11 @@ typedef struct {
   size_t length;
 } string_and_length_t;
 
+struct string_list_t {
+  size_t num_strings;
+  char * * strings;
+};
+
 size_t roundup_to_power_of_2(size_t value);
 
 bool get_bit(const uint8_t * const buffer, const size_t total_bit_index);

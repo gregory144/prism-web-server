@@ -89,6 +89,16 @@ struct server_config_t {
 
 void server_config_args_parse(struct server_config_t * config, int argc, char ** argv);
 
+const char * server_config_plugin_get_string(void * config_context, char * key);
+
+void * server_config_plugin_get(void * config_context, char * key);
+
+typedef void (*plugin_config_iterator)(void * context, const char * key, void * value_context);
+
+void server_config_plugin_each(void * context, void * config_context, plugin_config_iterator iter);
+
+struct string_list_t * server_config_plugin_get_strings(void * config_context);
+
 void server_config_free(struct server_config_t * config);
 
 #endif

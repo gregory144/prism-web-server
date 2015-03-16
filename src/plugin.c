@@ -9,7 +9,7 @@
 #include "http/http.h"
 
 struct plugin_t * plugin_init(struct plugin_t * plugin, struct log_context_t * log, const char * plugin_file,
-                       struct worker_t * worker)
+                       void * config_context, struct worker_t * worker)
 {
   bool free_plugin = false;
 
@@ -19,6 +19,7 @@ struct plugin_t * plugin_init(struct plugin_t * plugin, struct log_context_t * l
   }
 
   plugin->log = log;
+  plugin->config_context = config_context;
   plugin->handlers = malloc(sizeof(struct plugin_handlers_t));
 
   plugin->data = NULL;

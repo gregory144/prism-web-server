@@ -97,4 +97,6 @@ bool http_push_promise(http_request_t * const request);
 
 http_response_t * http_push_response_get(http_request_t * const request);
 
+bool http_push(http_request_t * const request);
+
 #endif

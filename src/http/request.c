@@ -162,7 +162,7 @@ static void parse_parameters(multimap_t * const params, char * query_string)
 
 http_request_t * http_request_init(void * handler_data, struct log_context_t * log, header_list_t * const header_list)
 {
-  http_request_t * request = malloc(sizeof(http_request_t));
+  http_request_t * const request = malloc(sizeof(http_request_t));
 
   request->handler_data = handler_data;
   request->data = NULL;
@@ -176,51 +176,11 @@ http_request_t * http_request_init(void * handler_data, struct log_context_t * l
   request->method = NULL;
   request->scheme = NULL;
   request->authority = NULL;
+  request->headers = header_list;
 
-  if (header_list) {
-
-    request->headers = header_list;
-
-    char * method = http_request_header_get(request, ":method");
-
-    if (!method) {
-      log_append(request->log, LOG_ERROR, "Missing :method header");
-      http_request_free(request);
-      return NULL;
-    }
-
-    request->method = strdup(method);
-
-    char * scheme = http_request_header_get(request, ":scheme");
-
-    if (!scheme) {
-      log_append(request->log, LOG_ERROR, "Missing :scheme header");
-      http_request_free(request);
-      return NULL;
-    }
-
-    request->scheme = strdup(scheme);
-
-    if (!parse_path(request)) {
-      http_request_free(request);
-      return NULL;
-    }
-
-    parse_authority(request);
-    parse_parameters(request->params, request->query_string);
-
-    header_list_remove_pseudo_headers(header_list);
-
-  } else {
-
-    request->headers = header_list_init(NULL);
-
-    request->path = NULL;
-    request->query_string = NULL;
-    request->host = NULL;
-    request->method = NULL;
-    request->scheme = NULL;
-
+  if (!http_request_headers_finalize(request)) {
+    http_request_free(request);
+    return NULL;
   }
 
   return request;
@@ -236,6 +196,44 @@ void http_request_header_add(const http_request_t * const request, char * name, 
   COPY_STRING(value_copy, value, value_length);
 
   header_list_push(request->headers, name_copy, name_length, true, value_copy, value_length, true);
+}
+
+bool http_request_headers_finalize(http_request_t * const request) {
+  header_list_t * header_list = request->headers;
+  if (header_list) {
+
+    char * method = http_request_header_get(request, ":method");
+
+    if (!method) {
+      log_append(request->log, LOG_ERROR, "Missing :method header");
+      return NULL;
+    }
+
+    request->method = strdup(method);
+
+    char * scheme = http_request_header_get(request, ":scheme");
+
+    if (!scheme) {
+      log_append(request->log, LOG_ERROR, "Missing :scheme header");
+      return NULL;
+    }
+
+    request->scheme = strdup(scheme);
+
+    if (!parse_path(request)) {
+      return NULL;
+    }
+
+    parse_authority(request);
+    parse_parameters(request->params, request->query_string);
+
+    header_list_remove_pseudo_headers(header_list);
+
+  } else {
+    request->headers = header_list_init(NULL);
+  }
+
+  return request;
 }
 
 /**

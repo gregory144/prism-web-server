@@ -14,10 +14,12 @@
 #include "client.h"
 #include "worker.h"
 #include "plugin.h"
+#include "server_config.h"
 
 #include "log.h"
 #include "util.h"
 #include "multimap.h"
+#include "hash_table.h"
 #include "http/http.h"
 
 #define NUM_READ_BUFS 0x8
@@ -107,6 +109,8 @@ struct file_server_t {
 
   struct plugin_t * plugin;
 
+  hash_table_t push_files;
+
   multimap_t * type_map;
 
   struct content_type_t * default_content_type;
@@ -140,9 +144,14 @@ struct file_server_request_t {
 
   ssize_t bytes_read;
 
+  struct client_t * client;
+  http_request_t * request;
   http_response_t * response;
 
 } file_server_request_t;
+
+static void files_plugin_request_handler(struct plugin_t * plugin, struct client_t * client,
+    http_request_t * req, http_response_t * resp);
 
 static struct content_type_t * register_content_type(multimap_t * m,
     char * extension, char * type, char * subtype)
@@ -271,6 +280,25 @@ static void file_server_try_close_file(struct open_file_t * open_file)
   }
 }
 
+static void init_push_file(void * context, const char * key, void * value_context)
+{
+  struct file_server_t * fs = context;
+  hash_table_t * ht = &fs->push_files;
+  struct string_list_t * values = server_config_plugin_get_strings(value_context);
+
+  size_t path_len = PATH_MAX;
+  char path[path_len];
+  snprintf(path, path_len, "%s%s", fs->cwd, key);
+
+  char resolved_path[path_len];
+  if (realpath(path, resolved_path)) {
+    log_append(fs->log, LOG_WARN, "Configured push for file: %s", resolved_path);
+    hash_table_put(ht, strdup(resolved_path), values);
+  } else {
+    log_append(fs->log, LOG_WARN, "Unable to find file in push configuration: %s", key);
+  }
+}
+
 static void files_plugin_start(struct plugin_t * plugin)
 {
   struct file_server_t * file_server = plugin->data;
@@ -299,6 +327,11 @@ static void files_plugin_start(struct plugin_t * plugin)
   hash_table_init_with_string_keys(&file_server->open_files, open_file_removed_from_hash);
   file_server->open_files_count = 0;
 
+  void * root = server_config_plugin_get(plugin->config_context, "push_files");
+  if (root) {
+    server_config_plugin_each(file_server, root, init_push_file);
+  }
+
   log_append(plugin->log, LOG_INFO, "Files plugin started");
 }
 
@@ -315,6 +348,7 @@ static void files_plugin_stop(struct plugin_t * plugin)
   file_server->closing = true;
 
   multimap_free(file_server->type_map, noop, free);
+  hash_table_free(&file_server->push_files);
 
   if (hash_table_size(&file_server->open_files) > 0) {
     hash_table_free(&file_server->open_files);
@@ -646,7 +680,41 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
 
     http_response_write(response, NULL, 0, false);
 
+    size_t pushed_requests_length = 0;
+    http_request_t * pushed_requests[1024];
+
+    struct string_list_t * file_list = hash_table_get(&fs_request->file_server->push_files,
+        fs_request->open_file->path);
+    for (size_t i = 0; file_list && i < file_list->num_strings; i++) {
+      http_request_t * request = fs_request->request;
+      http_request_t * pushed_request = http_push_init(request);
+
+      if (pushed_request) {
+        http_request_header_add(pushed_request, ":method", "GET");
+        char * scheme = http_request_scheme(request);
+        http_request_header_add(pushed_request, ":scheme", scheme);
+        char * authority = http_request_authority(request);
+        http_request_header_add(pushed_request, ":authority", authority);
+        http_request_header_add(pushed_request, ":path", file_list->strings[i]);
+        log_append(fs_request->file_server->log, LOG_DEBUG,
+            "Sending push promise for %s: %s\n", fs_request->open_file->path, file_list->strings[i]);
+
+        if (!http_push_promise(pushed_request)) {
+          http_request_free(pushed_request);
+          log_append(fs_request->file_server->log, LOG_ERROR,
+              "Could not send push promise: %s\n", file_list->strings[i]);
+        } else {
+          pushed_requests[pushed_requests_length++] = pushed_request;
+          http_request_headers_finalize(pushed_request);
+        }
+      }
+    }
+
     file_server_read_file(fs_request, 0);
+
+    for (size_t i = 0 ; i < pushed_requests_length; i++) {
+      http_push(pushed_requests[i]);
+    }
   }
 
   uv_fs_req_cleanup(req);
@@ -711,6 +779,8 @@ static void files_plugin_request_handler(struct plugin_t * plugin, struct client
 {
   struct file_server_t * file_server = plugin->data;
   struct file_server_request_t * fs_request = malloc(sizeof(file_server_request_t));
+  fs_request->client = client;
+  fs_request->request = request;
   fs_request->response = response;
   struct worker_t * worker = client->worker;
   fs_request->loop = &worker->loop;
@@ -862,6 +932,13 @@ static bool files_plugin_handler(struct plugin_t * plugin, struct client_t * cli
   }
 }
 
+static void string_list_free(void * p)
+{
+  struct string_list_t * string_list = p;
+  free(string_list->strings);
+  free(string_list);
+}
+
 void plugin_initialize(struct plugin_t * plugin, struct worker_t * worker)
 {
   plugin->handlers->start = files_plugin_start;
@@ -878,5 +955,7 @@ void plugin_initialize(struct plugin_t * plugin, struct worker_t * worker)
   file_server->worker = worker;
 
   files_plugin_init_type_map(file_server);
+
+  hash_table_init_with_string_keys(&file_server->push_files, string_list_free);
 }
 

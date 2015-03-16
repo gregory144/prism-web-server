@@ -33,6 +33,8 @@ struct plugin_t {
 
   char * plugin_file;
 
+  void * config_context;
+
   uv_lib_t lib;
 
   struct plugin_handlers_t * handlers;
@@ -60,7 +62,7 @@ struct plugin_invoker_t {
 typedef void (*plugin_initializer)(struct plugin_t * plugin, struct worker_t * worker);
 
 struct plugin_t * plugin_init(struct plugin_t * plugin, struct log_context_t * log, const char * plugin_file,
-                       struct worker_t * worker);
+                       void * config_context, struct worker_t * worker);
 
 bool plugin_handler_va(struct plugin_t * plugin, struct client_t * client, enum plugin_callback_e cb, va_list args);
 

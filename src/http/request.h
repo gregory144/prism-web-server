@@ -35,6 +35,8 @@ http_request_t * http_request_init(void * handler_data, struct log_context_t * l
 
 void http_request_header_add(const http_request_t * const request, char * name, char * value);
 
+bool http_request_headers_finalize(http_request_t * const request);
+
 char * http_request_header_get(const http_request_t * const request, char * name);
 
 char * http_request_param_get(const http_request_t * const request, char * name);

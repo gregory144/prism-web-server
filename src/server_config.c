@@ -6,6 +6,7 @@
 
 #include "util/log.h"
 
+#include "util.h"
 #include "server_config.h"
 #include "plugin.h"
 #include "worker.h"
@@ -194,7 +195,7 @@ static bool parse_config_file(struct server_config_t * config)
 
     int port = get_int(address_j, "port", secure ? SECURE_SERVER_PORT : CLEARTEXT_SERVER_PORT);
     if (port < 1) {
-      fprintf(stderr, "invalid port for listen address #%lu: %d\n", i + 1, port);
+      fprintf(stderr, "Invalid port for listen address #%lu: %d\n", i + 1, port);
       return false;
     }
 
@@ -402,6 +403,63 @@ void server_config_args_parse(struct server_config_t * config, int argc, char **
     append_address(config, addr);
   }
 
+}
+
+const char * server_config_plugin_get_string(void * config_context, char * key)
+{
+#ifdef JANSSON_FOUND
+  json_t * context = config_context;
+  json_t * context_j = json_object_get(context, key);
+  if (context_j) {
+    return json_string_value(context_j);
+  }
+#endif
+  return NULL;
+}
+
+struct string_list_t * server_config_plugin_get_strings(void * config_context)
+{
+#ifdef JANSSON_FOUND
+  json_t * context = config_context;
+
+  struct string_list_t * l = malloc(sizeof(struct string_list_t));
+  l->num_strings = json_array_size(context);
+  l->strings = malloc(sizeof(char *) * l->num_strings);
+
+  size_t index;
+  json_t * value;
+  json_array_foreach(context, index, value) {
+    l->strings[index] = (char *) json_string_value(value);
+  }
+
+  return l;
+#else
+  return NULL;
+#endif
+}
+
+void * server_config_plugin_get(void * config_context, char * key)
+{
+#ifdef JANSSON_FOUND
+  json_t * context = config_context;
+  json_t * context_j = json_object_get(context, key);
+  return context_j;
+#else
+  return NULL;
+#endif
+}
+
+void server_config_plugin_each(void * context, void * config_context, plugin_config_iterator iter)
+{
+#ifdef JANSSON_FOUND
+  json_t * context_j = config_context;
+
+  const char * key;
+  json_t * value;
+  json_object_foreach(context_j, key, value) {
+    iter(context, key, value);
+  }
+#endif
 }
 
 void server_config_free(struct server_config_t * config)

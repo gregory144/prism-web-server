@@ -396,7 +396,7 @@ bool worker_init(struct worker_t * worker, struct server_config_t * config)
   while (plugin_config) {
     struct plugin_list_t * current = malloc(sizeof(struct plugin_list_t));
     current->plugin = plugin_init(NULL, &config->plugin_log, plugin_config->filename,
-                                  (struct worker_t *) worker);
+                                  plugin_config->config_context, (struct worker_t *) worker);
     current->next = NULL;
 
     if (!current->plugin) {

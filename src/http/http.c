@@ -510,3 +510,21 @@ http_response_t * http_push_response_get(http_request_t * const request)
   }
 }
 
+bool http_push(http_request_t * const request)
+{
+  http_request_data_t * req_data = request->handler_data;
+  void * data = req_data->data;
+  http_connection_t * connection = req_data->connection;
+
+  switch (connection->protocol) {
+    case H2:
+      return h2_push((h2_stream_t *) data, request);
+
+    case H1_1:
+      return h1_1_push((h1_1_t *) data, request);
+
+    default:
+      abort();
+  }
+}
+

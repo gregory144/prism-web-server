@@ -264,6 +264,8 @@ bool h2_push_promise(h2_stream_t * stream, http_request_t * const request);
 
 http_response_t * h2_push_response_get(h2_stream_t * stream, http_request_t * const request);
 
+bool h2_push(h2_stream_t * stream, http_request_t * const request);
+
 /* streams */
 
 h2_stream_t * h2_stream_get(h2_t * const h2, const uint32_t stream_id);

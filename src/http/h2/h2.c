@@ -2243,3 +2243,20 @@ http_response_t * h2_push_response_get(h2_stream_t * stream, http_request_t * co
   return pushed_response;
 }
 
+bool h2_push(h2_stream_t * stream, http_request_t * const request)
+{
+  h2_t * h2 = stream->h2;
+
+  http_response_t * response = h2_push_response_get(stream, request);
+
+  if (!plugin_invoke(h2->plugin_invoker, HANDLE_REQUEST, request, response)) {
+    http_response_free(response);
+    stream->response = NULL;
+
+    log_append(h2->log, LOG_ERROR, "No plugin handled this pushed request");
+    return false;
+  }
+
+  return true;
+}
+
