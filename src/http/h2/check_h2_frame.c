@@ -939,21 +939,29 @@ END_TEST
 START_TEST(test_h2_frame_parse_invalid_frame_type)
 {
   uint8_t buffer[] = {
-    0x0, 0x0, 0x0, 0xff, 0x0, 0x0, 0x0, 0x0, 0x0
+    0x0, 0x0, 0x4, 0xff, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x2, 0x3, 0x4
   };
   size_t buffer_position = 0;
   size_t buffer_length = sizeof(buffer) / sizeof(uint8_t);
 
   h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
-  ck_assert(ret == NULL);
+  ck_assert(ret != NULL);
 
-  ck_assert_uint_eq(buffer_position, 0);
+  ck_assert_uint_eq(buffer_position, 9 + 4);
   ck_assert_uint_eq(num_frames_parsed, 0);
 
-  ck_assert_uint_eq(num_errors, 1);
-  caught_error_t * ce = caught_errors[0];
-  ck_assert_uint_eq(ce->error_code, H2_ERROR_PROTOCOL_ERROR);
-  ck_assert_str_eq(ce->error_string, "Invalid frame type: 0xff");
+  ck_assert_uint_eq(num_errors, 0);
+
+  ck_assert_uint_eq(buffer_position, 9 + 4);
+  ck_assert_uint_eq(ret->length, 4);
+  ck_assert_uint_eq(ret->type, 0xff);
+  ck_assert_uint_eq(ret->flags, 0);
+  ck_assert_uint_eq(ret->stream_id, 0);
+  ck_assert_uint_eq(ret->data, buffer + 9);
+  ck_assert_uint_eq(ret->data[0], 0x1);
+  ck_assert_uint_eq(ret->data[1], 0x2);
+  ck_assert_uint_eq(ret->data[2], 0x3);
+  ck_assert_uint_eq(ret->data[3], 0x4);
 
   h2_frame_free(ret);
 }
@@ -1169,7 +1177,7 @@ START_TEST(test_h2_frame_parse_data_with_no_stream_id)
   h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
   ck_assert(ret == NULL);
 
-  ck_assert_uint_eq(buffer_position, 0);
+  ck_assert_uint_eq(buffer_position, 9 + 4);
   ck_assert_uint_eq(num_frames_parsed, 0);
 
   ck_assert_uint_eq(num_errors, 1);
@@ -1561,7 +1569,7 @@ START_TEST(test_h2_frame_parse_headers_with_no_stream_id)
   h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
   ck_assert(ret == NULL);
 
-  ck_assert_uint_eq(buffer_position, 0);
+  ck_assert_uint_eq(buffer_position, 9 + 4);
   ck_assert_uint_eq(num_frames_parsed, 0);
 
   ck_assert_uint_eq(num_errors, 1);
@@ -1678,7 +1686,7 @@ START_TEST(test_h2_frame_parse_priority_with_no_stream_id)
   h2_frame_t * ret = h2_frame_parse(&parser, buffer, buffer_length, &buffer_position);
   ck_assert(ret == NULL);
 
-  ck_assert_uint_eq(buffer_position, 0);
+  ck_assert_uint_eq(buffer_position, 9 + 5);
   ck_assert_uint_eq(num_frames_parsed, 0);
 
   ck_assert_uint_eq(num_errors, 1);

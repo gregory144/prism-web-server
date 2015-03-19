@@ -25,7 +25,8 @@ enum frame_type_e {
   FRAME_TYPE_PING,
   FRAME_TYPE_GOAWAY,
   FRAME_TYPE_WINDOW_UPDATE,
-  FRAME_TYPE_CONTINUATION
+  FRAME_TYPE_CONTINUATION,
+  FRAME_TYPE_UNKNOWN
 };
 
 #define FRAME_HEADER_SIZE 9 // octets
@@ -81,7 +82,9 @@ enum frame_type_e {
                                         \
   /* Stream identifier             */   \
   /* 31 bits                       */   \
-  uint32_t stream_id;
+  uint32_t stream_id;                   \
+                                        \
+  uint8_t * data;
 
 
 typedef struct {

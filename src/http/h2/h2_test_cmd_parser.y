@@ -136,6 +136,7 @@ typedef struct {
 %token TOKEN_GOAWAY
 %token TOKEN_WINDOW_UPDATE
 %token TOKEN_CONTINUATION
+%token TOKEN_UNKNOWN
 
 %token TOKEN_EXCLUSIVE
 %token TOKEN_STREAM_DEPENDENCY
@@ -173,6 +174,7 @@ typedef struct {
 %type <frame_bt> window_update_frame
 %type <frame_bt> sent_continuation_frame
 %type <frame_bt> received_continuation_frame
+%type <frame_bt> unknown_frame
 %type <frame_options_bt> frame_options
 %type <frame_priority_bt> frame_priority
 %type <settings_list_bt> settings_list
@@ -226,6 +228,7 @@ sent_frame
   | goaway_frame { $$ = $1; }
   | window_update_frame { $$ = $1; }
   | sent_continuation_frame { $$ = $1; }
+  | unknown_frame { $$ = $1; }
   ;
 
 received_frame
@@ -421,6 +424,17 @@ received_continuation_frame
       FRAME_TYPE_CONTINUATION, $2->flags, $2->stream_number);
     free($2);
     apply_headers(frame, ctx->receiving_context, $3);
+    $$ = (h2_frame_t *) frame;
+  }
+  ;
+
+unknown_frame
+  : TOKEN_UNKNOWN frame_options TOKEN_NUMBER {
+    h2_frame_t * frame =  h2_frame_init(
+      0xff, $2->flags, $2->stream_number);
+    frame->length = $3;
+    frame->data = NULL; // don't set up fake data
+    free($2);
     $$ = (h2_frame_t *) frame;
   }
   ;

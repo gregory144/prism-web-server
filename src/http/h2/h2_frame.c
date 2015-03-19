@@ -306,7 +306,8 @@ h2_frame_t * h2_frame_init(const uint8_t type, const uint8_t flags, const uint32
       break;
 
     default:
-      return NULL;
+      frame = malloc(sizeof(h2_frame_t));
+      break;
   }
 
   frame->type = type;
@@ -1069,30 +1070,35 @@ h2_frame_t * h2_frame_parse(const h2_frame_parser_t * const parser, uint8_t * co
     // get 31 bits
     uint32_t stream_id = get_bits32(pos + 5, 0x7FFFFFFF);
 
-    // is this a valid frame type?
-    if (!h2_frame_is_valid_frame_type(frame_type)) {
-      // TODO - ignore unknown frame types
-      // invalid frame type is always a connection error
-      parser->parse_error(parser->data, 0, H2_ERROR_PROTOCOL_ERROR, "Invalid frame type: 0x%x", frame_type);
-      return NULL;
-    }
-
     // TODO - if the previous frame type was headers, and headers haven't been completed,
     // this frame must be a continuation frame, or else this is a protocol error
 
     h2_frame_t * frame = h2_frame_init(frame_type, frame_flags, stream_id);
-    frame->length = frame_length;
-
-    if (frame == NULL) {
-      parser->parse_error(parser->data, 0, H2_ERROR_PROTOCOL_ERROR,
-        "Unhandled frame type: %s (0x%x)", frame_type_to_string(frame->type), frame->type);
+    if (!frame) {
+      log_append(parser->log, LOG_TRACE, "Not enough in buffer to read frame header");
       return NULL;
-    } else if (!h2_frame_is_valid(parser, frame)) {
+    }
+    frame->length = frame_length;
+    frame->data = pos + FRAME_HEADER_SIZE;
+    *buffer_position += FRAME_HEADER_SIZE;
+
+    // ignore unknown frame types
+    if (!h2_frame_is_valid_frame_type(frame_type)) {
+
+      *buffer_position += frame->length;
+
+      log_append(parser->log, LOG_INFO, "Unknown frame type received: 0x%x", frame_type);
+      return frame;
+    }
+
+    if (!h2_frame_is_valid(parser, frame)) {
+
+      *buffer_position += frame->length;
+
       free(frame);
       return NULL;
     }
 
-    *buffer_position += FRAME_HEADER_SIZE;
 
     plugin_invoke(parser->plugin_invoker, INCOMING_FRAME, frame, *buffer_position);
 
@@ -1156,6 +1162,7 @@ h2_frame_t * h2_frame_parse(const h2_frame_parser_t * const parser, uint8_t * co
 
       default:
         success = false;
+        break;
     }
 
     *buffer_position += frame->length;
