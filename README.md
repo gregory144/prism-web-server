@@ -70,14 +70,13 @@ For Ubuntu:
 * better error handling for libuv calls
 * doxygen documentation
 * complete spec compliance
-  * ignore unknown frame types
   * error on violation of incoming max concurrent streams
   * goaway on bad hpack indexes
 
 #### Up next
 
 * output data frame padding config option
-* runtime configuration from config file
+* watch config file and update without restart
 * access/error log
 * switch from heap based priority queue to linked list?
 
@@ -90,6 +89,6 @@ For Ubuntu:
 * fast huffman coding + decoding - more than one bit at a time
 * better hpack encoding algorithm - use indexing
 * stream priority
-* improve gzip compression to use deflateBound to predict size of output
 * files - cache file, if the file changes (libuv watch it), update the cache
-* use sendfile - plugin calls library to prepare for sendfile with callback, library tells plugin much much it can write to the socket
+
+* test - http_request_header_get after sending response headers - "accept-language" - does it get the right value?
