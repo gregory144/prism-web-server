@@ -7,7 +7,12 @@
 #include <ctype.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
+
+#if __MACH__
+#define PATH_MAX 1024
+#else
 #include <linux/limits.h>
+#endif
 
 #include <uv.h>
 
@@ -658,6 +663,8 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
     http_response_header_add(response, "content-length", content_length_s);
 
     // last modified header
+#if __MACH__
+#else
     time_t last_modified = req->statbuf.st_mtime;
 
     if (last_modified >= 0) {
@@ -666,6 +673,7 @@ static void file_server_uv_stat_cb(uv_fs_t * req)
       char * last_modified_s = date_rfc1123(last_modified_buf, last_modified_buf_length, last_modified);
       http_response_header_add(response, "last-modified", last_modified_s);
     }
+#endif
 
     http_response_header_add(response, "server", PACKAGE_STRING);
 

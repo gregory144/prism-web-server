@@ -1,5 +1,8 @@
 add_library(http_util log.c util.c base64url.c multimap.c binary_buffer.c hash_table.c blocking_queue.c atomic_int.c)
-target_link_libraries(http_util rt ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(http_util ${CMAKE_THREAD_LIBS_INIT})
+if(HAVE_LIBRT)
+  target_link_libraries(http_util rt)
+endif()
 
 add_executable(check_util check_util.c)
 target_link_libraries(check_util ${TEST_LIBS})

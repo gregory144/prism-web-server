@@ -4,6 +4,7 @@ project(prism C)
 # Point CMake at any custom modules we may ship
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 include(CheckSymbolExists)
+include(CheckLibraryExists)
 
 set(PROJECT_NAME prism)
 set(PROJECT_VERSION_MAJOR 0)
@@ -22,9 +23,14 @@ add_definitions(-std=c99)
 
 include_directories(SYSTEM ${_INCLUDE_DIRS})
 
+check_library_exists(rt clock_gettime "time.h" HAVE_LIBRT)
+
 find_package(Check REQUIRED)
 include_directories(${CHECK_INCLUDE_DIRS})
-set(TEST_LIBS m pthread rt ${CHECK_LIBRARIES})
+set(TEST_LIBS m pthread ${CHECK_LIBRARIES})
+if(HAVE_LIBRT)
+  list(APPEND TEST_LIBS rt)
+endif()
 check_symbol_exists(ck_assert_uint_eq check.h HAVE_UINT_ASSERTS)
 
 find_package(Threads REQUIRED)
@@ -77,8 +83,23 @@ endif(FOUND_GIT)
 # this only works in cmake 2.8.11 and above
 #string(TIMESTAMP BUILD_TIMESTAMP UTC)
 # so use the primitive version
-execute_process(COMMAND date --iso-8601=seconds -u OUTPUT_VARIABLE BUILD_TIMESTAMP_RAW)
+execute_process(COMMAND date -u +"%Y-%m-%dT%H:%M:%SZ" OUTPUT_VARIABLE BUILD_TIMESTAMP_RAW)
 string(STRIP ${BUILD_TIMESTAMP_RAW} BUILD_TIMESTAMP)
+
+include(CTest)
+find_program(CTEST_MEMORYCHECK_COMMAND valgrind)
+
+if(APPLE)
+  set(CMAKE_MACOSX_RPATH ON)
+  set(CMAKE_SKIP_BUILD_RPATH FALSE)
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+  set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+  set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+  list(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${CMAKE_INSTALL_PREFIX}/lib" isSystemDir)
+  if("${isSystemDir}" STREQUAL "-1")
+    set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+  endif()
+endif()
 
 include(CTest)
 find_program(CTEST_MEMORYCHECK_COMMAND valgrind)
