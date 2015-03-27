@@ -479,6 +479,9 @@ void assert_frames_equal(h2_frame_t * expected, h2_frame_t * actual)
         }
       }
       break;
+
+    default:
+      abort();
   }
 }
 

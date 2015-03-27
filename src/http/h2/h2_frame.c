@@ -250,9 +250,10 @@ char * frame_type_to_string(enum frame_type_e t)
 
     case FRAME_TYPE_CONTINUATION:
       return "CONTINUATION";
-  }
 
-  return "UNKNOWN";
+    default:
+      return "UNKNOWN";
+  }
 }
 
 bool h2_frame_flag_get(const h2_frame_t * const frame, int mask)

@@ -38,7 +38,7 @@ START_TEST(test_huffman_decode_single_char)
   ck_assert(huffman_decode(buf, 1, &result));
   ck_assert_int_eq(1, result.length);
   char * expected = "X";
-  char * r = result.value;
+  char * r = (char *) result.value;
   for (size_t i = 0; i < result.length; i++) {
     ck_assert_uint_eq(expected[i], r[i]);
   }
@@ -54,7 +54,7 @@ START_TEST(test_huffman_decode_single_char_with_eos)
   ck_assert(huffman_decode(buf, 1, &result));
   ck_assert_int_eq(1, result.length);
   char * expected = "=";
-  char * r = result.value;
+  char * r = (char *) result.value;
   for (size_t i = 0; i < result.length; i++) {
     ck_assert_uint_eq(expected[i], r[i]);
   }
@@ -70,7 +70,7 @@ START_TEST(test_huffman_decode_two_chars)
   ck_assert(huffman_decode(buf, 2, &result));
   ck_assert_int_eq(2, result.length);
   char * expected = "*,";
-  char * r = result.value;
+  char * r = (char *) result.value;
   for (size_t i = 0; i < result.length; i++) {
     ck_assert_uint_eq(expected[i], r[i]);
   }
@@ -86,7 +86,7 @@ START_TEST(test_huffman_decode_two_chars_with_eos)
   ck_assert(huffman_decode(buf, 2, &result));
   ck_assert_int_eq(2, result.length);
   char * expected = "NQ";
-  char * r = result.value;
+  char * r = (char *) result.value;
   for (size_t i = 0; i < result.length; i++) {
     ck_assert_uint_eq(expected[i], r[i]);
   }
